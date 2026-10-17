@@ -277,66 +277,84 @@ export const MotionStudioView: React.FC<MotionStudioViewProps> = ({
       </div>
 
       {/* NAVIGATION SUB-TABS */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3 text-xs font-bold">
-        <button
-          onClick={() => setActiveTab('presets')}
-          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
-            activeTab === 'presets'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          <Bookmark className="w-4 h-4" />
-          Biblioteca de Presets (8)
-        </button>
+      <div className="border-b border-slate-200 pb-3">
+        {/* Mobile Dropdown for small screens (< 640px) */}
+        <div className="sm:hidden">
+          <select
+            value={activeTab}
+            onChange={(e) => setActiveTab(e.target.value as any)}
+            className="w-full px-3.5 py-2.5 bg-indigo-600 text-white font-bold rounded-xl text-xs cursor-pointer focus:outline-none shadow-sm"
+          >
+            <option value="presets">Biblioteca de Presets (8)</option>
+            <option value="entrance">Animações de Entrada</option>
+            <option value="scroll">Rolagem & Parallax</option>
+            <option value="interactions">Interações & Micro-efeitos</option>
+            <option value="timing">Curvas & Desempenho</option>
+          </select>
+        </div>
 
-        <button
-          onClick={() => setActiveTab('entrance')}
-          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
-            activeTab === 'entrance'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          <Layers className="w-4 h-4" />
-          Animações de Entrada
-        </button>
+        {/* Desktop / Tablet Horizontal Scrollable Pills (>= 640px) */}
+        <div className="hidden sm:flex items-center gap-2 overflow-x-auto scrollbar-thin pb-1 text-xs font-bold">
+          <button
+            onClick={() => setActiveTab('presets')}
+            className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
+              activeTab === 'presets'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Bookmark className="w-4 h-4" />
+            Biblioteca de Presets (8)
+          </button>
 
-        <button
-          onClick={() => setActiveTab('scroll')}
-          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
-            activeTab === 'scroll'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          <Compass className="w-4 h-4" />
-          Rolagem & Parallax
-        </button>
+          <button
+            onClick={() => setActiveTab('entrance')}
+            className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
+              activeTab === 'entrance'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Layers className="w-4 h-4" />
+            Animações de Entrada
+          </button>
 
-        <button
-          onClick={() => setActiveTab('interactions')}
-          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
-            activeTab === 'interactions'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          <MousePointer className="w-4 h-4" />
-          Interações & Micro-efeitos
-        </button>
+          <button
+            onClick={() => setActiveTab('scroll')}
+            className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
+              activeTab === 'scroll'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Compass className="w-4 h-4" />
+            Rolagem & Parallax
+          </button>
 
-        <button
-          onClick={() => setActiveTab('timing')}
-          className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
-            activeTab === 'timing'
-              ? 'bg-indigo-600 text-white shadow-sm'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          <Gauge className="w-4 h-4" />
-          Curvas & Desempenho
-        </button>
+          <button
+            onClick={() => setActiveTab('interactions')}
+            className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
+              activeTab === 'interactions'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <MousePointer className="w-4 h-4" />
+            Interações & Micro-efeitos
+          </button>
+
+          <button
+            onClick={() => setActiveTab('timing')}
+            className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
+              activeTab === 'timing'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <Gauge className="w-4 h-4" />
+            Curvas & Desempenho
+          </button>
+        </div>
       </div>
 
       {/* TAB 1: PRESETS GALLERY */}
