@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Sparkles,
   Zap,
@@ -54,11 +54,23 @@ export const MotionStudioView: React.FC<MotionStudioViewProps> = ({
   onUpdateAppearance,
   onOpenPreview,
 }) => {
-  const currentMotion: MotionStudioSettings =
-    site.appearance?.motion || {
+  const rawMotion = site.appearance?.motion;
+  const currentMotion: MotionStudioSettings = useMemo(() => {
+    const base = {
       ...DEFAULT_MOTION_SETTINGS,
       presetId: site.templateId === 'otica_editorial' ? 'editorial_premium' : 'conversion',
     };
+    if (!rawMotion) return base;
+    return {
+      enabled: rawMotion.enabled ?? base.enabled,
+      presetId: rawMotion.presetId ?? base.presetId,
+      entrance: { ...base.entrance, ...(rawMotion.entrance || {}) },
+      scroll: { ...base.scroll, ...(rawMotion.scroll || {}) },
+      interactions: { ...base.interactions, ...(rawMotion.interactions || {}) },
+      transitions: { ...base.transitions, ...(rawMotion.transitions || {}) },
+      timing: { ...base.timing, ...(rawMotion.timing || {}) },
+    };
+  }, [rawMotion, site.templateId]);
 
   const [activeTab, setActiveTab] = useState<'presets' | 'entrance' | 'scroll' | 'interactions' | 'timing'>('presets');
   const [previewKey, setPreviewKey] = useState(0);
