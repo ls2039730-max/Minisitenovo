@@ -102,7 +102,7 @@ export const MotionStudioView: React.FC<MotionStudioViewProps> = ({
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-8 overflow-y-auto">
+    <div className="p-3 sm:p-6 md:p-8 max-w-6xl mx-auto space-y-6 sm:space-y-8 overflow-y-auto">
       {/* Toast Alert */}
       {savedToast && (
         <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-indigo-500/40 animate-in slide-in-from-bottom duration-300">
@@ -359,7 +359,7 @@ export const MotionStudioView: React.FC<MotionStudioViewProps> = ({
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             {Object.values(MOTION_PRESETS).map((preset) => {
               const isSelected = currentMotion.presetId === preset.id;
 
@@ -367,7 +367,7 @@ export const MotionStudioView: React.FC<MotionStudioViewProps> = ({
                 <div
                   key={preset.id}
                   onClick={() => handleApplyPreset(preset.id)}
-                  className={`rounded-2xl p-5 border-2 transition-all cursor-pointer flex flex-col justify-between space-y-4 group hover:shadow-md ${
+                  className={`rounded-2xl p-4 sm:p-5 border-2 transition-all cursor-pointer flex flex-col justify-between space-y-3 sm:space-y-4 group hover:shadow-md ${
                     isSelected
                       ? 'border-indigo-600 bg-indigo-50/40 ring-2 ring-indigo-500/20'
                       : 'border-slate-200 bg-white hover:border-slate-300'
