@@ -40,6 +40,7 @@ import { CartDrawer } from '../../cart/CartDrawer';
 import { CheckoutModal } from '../../checkout/CheckoutModal';
 import { OrderSuccessModal } from '../../checkout/OrderSuccessModal';
 import { calculateScheduleStatus } from '../../../constants/blockRegistry';
+import { MotionMarquee } from '../motion/MotionAdapter';
 
 interface PublicOticaEditorialViewProps {
   tenant: Tenant;
@@ -580,54 +581,8 @@ export const PublicOticaEditorialView: React.FC<PublicOticaEditorialViewProps> =
         </div>
       </section>
 
-      {/* 3. FAIXA TIPOGRÁFICA INFINITA (Infinite Marquee - Etapa 5) */}
-      <section className="py-4 bg-[#181818] border-y border-[#292929] overflow-hidden select-none">
-        <div className="flex whitespace-nowrap overflow-hidden">
-          <div className="flex animate-[marquee_25s_linear_infinite] shrink-0 items-center gap-8 font-black text-xs sm:text-sm tracking-[0.3em] uppercase text-[#A7A7A1]">
-            <span>ENCONTRE SEU ESTILO</span>
-            <span className="text-[#C7F36B]">✦</span>
-            <span>OLHE DIFERENTE</span>
-            <span className="text-[#C7F36B]">✦</span>
-            <span>VIVA SUA IDENTIDADE</span>
-            <span className="text-[#C7F36B]">✦</span>
-            <span>DESIGN AUTORAL</span>
-            <span className="text-[#C7F36B]">✦</span>
-            <span>PRECISÃO ÓTICA</span>
-            <span className="text-[#C7F36B]">✦</span>
-            <span>TITÂNIO & ACETATO NOBRE</span>
-            <span className="text-[#C7F36B]">✦</span>
-            <span>ENCONTRE SEU ESTILO</span>
-            <span className="text-[#C7F36B]">✦</span>
-            <span>OLHE DIFERENTE</span>
-            <span className="text-[#C7F36B]">✦</span>
-            <span>VIVA SUA IDENTIDADE</span>
-            <span className="text-[#C7F36B]">✦</span>
-          </div>
-          <div
-            aria-hidden="true"
-            className="flex animate-[marquee_25s_linear_infinite] shrink-0 items-center gap-8 font-black text-xs sm:text-sm tracking-[0.3em] uppercase text-[#A7A7A1]"
-          >
-            <span>ENCONTRE SEU ESTILO</span>
-            <span className="text-[#C7F36B]">✦</span>
-            <span>OLHE DIFERENTE</span>
-            <span className="text-[#C7F36B]">✦</span>
-            <span>VIVA SUA IDENTIDADE</span>
-            <span className="text-[#C7F36B]">✦</span>
-            <span>DESIGN AUTORAL</span>
-            <span className="text-[#C7F36B]">✦</span>
-            <span>PRECISÃO ÓTICA</span>
-            <span className="text-[#C7F36B]">✦</span>
-            <span>TITÂNIO & ACETATO NOBRE</span>
-            <span className="text-[#C7F36B]">✦</span>
-            <span>ENCONTRE SEU ESTILO</span>
-            <span className="text-[#C7F36B]">✦</span>
-            <span>OLHE DIFERENTE</span>
-            <span className="text-[#C7F36B]">✦</span>
-            <span>VIVA SUA IDENTIDADE</span>
-            <span className="text-[#C7F36B]">✦</span>
-          </div>
-        </div>
-      </section>
+      {/* 3. FAIXA TIPOGRÁFICA INFINITA (Dynamic Marquee from Motion Studio) */}
+      <MotionMarquee bgColor="#181818" textColor="#A7A7A1" />
 
       {/* 3.5. QUICK BUTTONS / NAVEGAÇÃO RÁPIDA (Configured in Site Builder) */}
       {sections

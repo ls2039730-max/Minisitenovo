@@ -286,14 +286,20 @@ interface MotionMarqueeProps {
   speed?: 'slow' | 'normal' | 'fast';
   bgColor?: string;
   textColor?: string;
+  direction?: 'left' | 'right';
+  fontSize?: 'xs' | 'sm' | 'base' | 'lg';
+  spacing?: 'compact' | 'normal' | 'spacious';
 }
 
 export const MotionMarquee: React.FC<MotionMarqueeProps> = ({
   text,
   className = '',
   speed,
-  bgColor = '#0f172a',
-  textColor = '#f8fafc',
+  bgColor,
+  textColor,
+  direction: propDirection,
+  fontSize: propFontSize,
+  spacing: propSpacing,
 }) => {
   const { settings, isReducedMotion } = useMotionStudio();
 
@@ -301,34 +307,64 @@ export const MotionMarquee: React.FC<MotionMarqueeProps> = ({
     return null;
   }
 
-  const activeText = text || settings.scroll.marqueeText || 'QUALIDADE CERTIFICADA • EXCLUSIVIDADE • LOCALHUB';
-  const activeSpeed = speed || settings.scroll.marqueeSpeed;
+  const activeText = text || settings.scroll.marqueeText || 'QUALIDADE CERTIFICADA • ATENDIMENTO EXCLUSIVO • LOCALHUB';
+  const activeSpeed = speed || settings.scroll.marqueeSpeed || 'normal';
+  const activeBg = bgColor || settings.scroll.marqueeBgColor || '#0f172a';
+  const activeColor = textColor || settings.scroll.marqueeTextColor || '#f8fafc';
+  const activeDirection = propDirection || settings.scroll.marqueeDirection || 'left';
+  const activeFontSize = propFontSize || settings.scroll.marqueeFontSize || 'sm';
+  const activeSpacing = propSpacing || settings.scroll.marqueeSpacing || 'normal';
 
   const durationSec = activeSpeed === 'fast' ? 14 : activeSpeed === 'slow' ? 36 : 22;
 
+  const fontClass =
+    activeFontSize === 'xs'
+      ? 'text-[10px] sm:text-xs'
+      : activeFontSize === 'base'
+      ? 'text-sm sm:text-base'
+      : activeFontSize === 'lg'
+      ? 'text-base sm:text-lg'
+      : 'text-xs sm:text-sm';
+
+  const gapClass =
+    activeSpacing === 'compact'
+      ? 'gap-5 sm:gap-6'
+      : activeSpacing === 'spacious'
+      ? 'gap-12 sm:gap-16'
+      : 'gap-8 sm:gap-10';
+
+  // Support list of messages or delimiter split
+  const rawList = (settings.scroll.marqueeMessages && settings.scroll.marqueeMessages.length > 0)
+    ? settings.scroll.marqueeMessages
+    : activeText.includes('•')
+    ? activeText.split('•').map((s) => s.trim()).filter(Boolean)
+    : [activeText];
+
+  // Repeat sequence 4 times so infinite marquee is completely seamless without blanks
+  const sequence = [...rawList, ...rawList, ...rawList, ...rawList];
+
   return (
     <div
-      className={`w-full overflow-hidden py-3 text-xs uppercase tracking-widest font-black select-none border-y border-white/10 ${className}`}
-      style={{ backgroundColor: bgColor, color: textColor }}
+      className={`w-full max-w-full overflow-hidden py-2.5 sm:py-3.5 uppercase tracking-widest font-black select-none border-y border-white/10 ${fontClass} ${className}`}
+      style={{ backgroundColor: activeBg, color: activeColor }}
     >
-      <div className="flex w-max items-center">
+      <div className="flex w-max items-center max-w-full">
         <motion.div
-          animate={{ x: ['0%', '-50%'] }}
+          animate={{ x: activeDirection === 'right' ? ['-50%', '0%'] : ['0%', '-50%'] }}
           transition={{
             repeat: Infinity,
             repeatType: 'loop',
             duration: durationSec,
             ease: 'linear',
           }}
-          className="flex items-center gap-10 whitespace-nowrap px-4 will-change-transform"
+          className={`flex items-center ${gapClass} whitespace-nowrap px-4 will-change-transform`}
         >
-          <span>{activeText}</span>
-          <span>•</span>
-          <span>{activeText}</span>
-          <span>•</span>
-          <span>{activeText}</span>
-          <span>•</span>
-          <span>{activeText}</span>
+          {sequence.map((msg, idx) => (
+            <React.Fragment key={idx}>
+              <span>{msg}</span>
+              <span className="opacity-60 text-xs">✦</span>
+            </React.Fragment>
+          ))}
         </motion.div>
       </div>
     </div>

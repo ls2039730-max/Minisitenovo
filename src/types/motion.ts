@@ -35,6 +35,12 @@ export interface MotionScrollSettings {
   continuousMarquee: boolean;
   marqueeSpeed: 'slow' | 'normal' | 'fast';
   marqueeText?: string;
+  marqueeMessages?: string[];
+  marqueeTextColor?: string;
+  marqueeBgColor?: string;
+  marqueeDirection?: 'left' | 'right';
+  marqueeFontSize?: 'xs' | 'sm' | 'base' | 'lg';
+  marqueeSpacing?: 'compact' | 'normal' | 'spacious';
 }
 
 export interface MotionInteractionsSettings {

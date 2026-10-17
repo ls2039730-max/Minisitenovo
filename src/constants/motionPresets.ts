@@ -18,6 +18,11 @@ export const DEFAULT_MOTION_SETTINGS: MotionStudioSettings = {
     continuousMarquee: true,
     marqueeSpeed: 'normal',
     marqueeText: 'QUALIDADE CERTIFICADA • ATENDIMENTO EXCLUSIVO • DESIGN EXCEPCIONAL • GARANTIA TOTAL',
+    marqueeTextColor: '#f8fafc',
+    marqueeBgColor: '#0f172a',
+    marqueeDirection: 'left',
+    marqueeFontSize: 'sm',
+    marqueeSpacing: 'normal',
   },
   interactions: {
     imageHoverEffect: 'zoom',

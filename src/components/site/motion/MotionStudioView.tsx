@@ -182,7 +182,7 @@ export const MotionStudioView: React.FC<MotionStudioViewProps> = ({
       </div>
 
       {/* LIVE SIMULATOR / INTERACTIVE PREVIEW */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2">
             <Film className="w-4 h-4 text-indigo-600" />
@@ -206,7 +206,7 @@ export const MotionStudioView: React.FC<MotionStudioViewProps> = ({
         {/* Sandbox Content Container */}
         <div
           key={previewKey}
-          className="relative rounded-2xl overflow-hidden bg-slate-950 text-white p-6 sm:p-8 space-y-6 border border-slate-800"
+          className="relative rounded-2xl overflow-x-hidden bg-slate-950 text-white p-4 sm:p-6 md:p-8 space-y-6 border border-slate-800"
         >
           <MotionStudioProvider settings={currentMotion}>
             {/* Simulation Marquee */}
@@ -277,7 +277,7 @@ export const MotionStudioView: React.FC<MotionStudioViewProps> = ({
       </div>
 
       {/* NAVIGATION SUB-TABS */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto scrollbar-none text-xs font-bold">
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3 text-xs font-bold">
         <button
           onClick={() => setActiveTab('presets')}
           className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
@@ -418,7 +418,7 @@ export const MotionStudioView: React.FC<MotionStudioViewProps> = ({
 
       {/* TAB 2: ENTRANCE ANIMATIONS */}
       {activeTab === 'entrance' && (
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-6">
+        <div className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-6 space-y-6">
           <div className="border-b border-slate-100 pb-4">
             <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
               <Layers className="w-4 h-4 text-indigo-600" />
@@ -569,7 +569,7 @@ export const MotionStudioView: React.FC<MotionStudioViewProps> = ({
 
       {/* TAB 3: SCROLL & PARALLAX */}
       {activeTab === 'scroll' && (
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-6">
+        <div className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-6 space-y-6">
           <div className="border-b border-slate-100 pb-4">
             <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
               <Compass className="w-4 h-4 text-indigo-600" />
@@ -741,7 +741,7 @@ export const MotionStudioView: React.FC<MotionStudioViewProps> = ({
 
       {/* TAB 4: INTERACTIONS & MICRO-EFFECTS */}
       {activeTab === 'interactions' && (
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-6">
+        <div className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-6 space-y-6">
           <div className="border-b border-slate-100 pb-4">
             <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
               <MousePointer className="w-4 h-4 text-indigo-600" />
@@ -902,7 +902,7 @@ export const MotionStudioView: React.FC<MotionStudioViewProps> = ({
 
       {/* TAB 5: TIMING, CURVES & ACCESSIBILITY */}
       {activeTab === 'timing' && (
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-6">
+        <div className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-6 space-y-6">
           <div className="border-b border-slate-100 pb-4">
             <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
               <Gauge className="w-4 h-4 text-indigo-600" />
