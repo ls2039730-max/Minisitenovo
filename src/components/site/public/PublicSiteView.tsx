@@ -781,12 +781,12 @@ const PublicSiteViewInner: React.FC<PublicSiteViewProps> = ({
 
             // Hero primary button logic (supports disabling WhatsApp button, ordering directly on site, or custom)
             const heroWhatsappDisabled = site?.settings?.heroWhatsappButtonEnabled === false;
-            const primaryExplicitlyDisabled = s.primaryButton?.enabled === false;
+            const primaryExplicitlyDisabled = s.primaryButton?.enabled === false || s.showWhatsappButton === false;
             const isSiteOrderBtn = s.primaryButton?.actionType === 'order_site' || s.primaryButton?.url === '#produtos';
             const isWhatsappTarget = (!s.primaryButton?.url || s.primaryButton?.url?.includes('wa.me') || (s.primaryButton?.text && s.primaryButton?.text?.toLowerCase().includes('whatsapp'))) && !isSiteOrderBtn;
 
             const shouldHidePrimary = primaryExplicitlyDisabled || (heroWhatsappDisabled && isWhatsappTarget);
-            const showPrimaryBtn = !shouldHidePrimary && s.primaryButton?.enabled !== false;
+            const showPrimaryBtn = !shouldHidePrimary && s.primaryButton?.enabled !== false && s.showWhatsappButton !== false;
             const showSecondaryBtn = s.secondaryButton?.enabled === true;
             const showAnyHeroBtn = showPrimaryBtn || showSecondaryBtn;
 
@@ -1066,6 +1066,7 @@ const PublicSiteViewInner: React.FC<PublicSiteViewProps> = ({
                     secondaryColor={secondaryColor}
                     accentColor={accentColor}
                     scheduleStatus={scheduleStatus}
+                    site={site}
                   />
                 )}
 

@@ -24,6 +24,7 @@ interface RestaurantGastronomyHeroProps {
   secondaryColor: string;
   accentColor: string;
   scheduleStatus: { isOpen: boolean; text: string; badgeClass: string } | null;
+  site?: SiteData | null;
 }
 
 /**
@@ -37,6 +38,7 @@ export const RestaurantGastronomyHero: React.FC<RestaurantGastronomyHeroProps> =
   secondaryColor,
   accentColor,
   scheduleStatus,
+  site,
 }) => {
   const s = section.settings || {};
 
@@ -45,6 +47,31 @@ export const RestaurantGastronomyHero: React.FC<RestaurantGastronomyHeroProps> =
     `Olá! Gostaria de consultar disponibilidade para reserva de mesa no ${tenant.name}. Poderia me informar os horários disponíveis?`
   );
   const waReservationUrl = cleanPhone ? `https://wa.me/55${cleanPhone}?text=${reservationMsg}` : '#contato';
+
+  // Primary button logic (WhatsApp / site order)
+  const heroWhatsappDisabled = site?.settings?.heroWhatsappButtonEnabled === false;
+  const isPrimaryExplicitlyDisabled = s.primaryButton?.enabled === false || s.showWhatsappButton === false;
+  const isSiteOrderBtn = s.primaryButton?.actionType === 'order_site' || s.primaryButton?.url === '#produtos';
+  const isWhatsappTarget = (!s.primaryButton?.url || s.primaryButton?.url?.includes('wa.me') || (s.primaryButton?.text && s.primaryButton?.text?.toLowerCase().includes('whatsapp'))) && !isSiteOrderBtn;
+
+  const shouldHidePrimary = isPrimaryExplicitlyDisabled || (heroWhatsappDisabled && isWhatsappTarget);
+  const showPrimaryBtn = !shouldHidePrimary && s.primaryButton?.enabled !== false && s.showWhatsappButton !== false;
+
+  // Secondary button logic (Cardápio / Conheça Mais)
+  const showSecondaryBtn = s.secondaryButton?.enabled === true;
+  const showAnyHeroBtn = showPrimaryBtn || showSecondaryBtn;
+
+  const primaryHref = isSiteOrderBtn
+    ? (s.primaryButton?.url || '#produtos')
+    : (s.primaryButton?.url || (cleanPhone ? waReservationUrl : '#contato'));
+
+  const primaryTarget = isSiteOrderBtn
+    ? undefined
+    : (s.primaryButton?.url?.startsWith('http') || (!s.primaryButton?.url && cleanPhone) ? '_blank' : undefined);
+
+  const primaryText = s.primaryButton?.text || (isSiteOrderBtn ? 'Fazer Pedido no Site' : 'Reservar Mesa');
+  const secondaryText = s.secondaryButton?.text || 'Ver Cardápio';
+  const secondaryHref = s.secondaryButton?.url || '#produtos';
 
   const coverImage =
     s.coverImage ||
@@ -98,29 +125,39 @@ export const RestaurantGastronomyHero: React.FC<RestaurantGastronomyHeroProps> =
         </PremiumScrollReveal>
 
         {/* Action CTAs */}
-        <PremiumScrollReveal direction="up" delay={0.5}>
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-            {cleanPhone && (
-              <a
-                href={waReservationUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-8 py-4 bg-gradient-to-r from-amber-600 via-amber-700 to-amber-600 hover:from-amber-500 hover:to-amber-600 text-stone-950 font-bold text-xs sm:text-sm tracking-[0.18em] uppercase transition-all duration-300 shadow-xl shadow-amber-950/40 rounded-none flex items-center gap-2.5 cursor-pointer hover:scale-102"
-              >
-                <Calendar className="w-4 h-4 text-stone-950" />
-                <span>Reservar Mesa</span>
-              </a>
-            )}
+        {showAnyHeroBtn && (
+          <PremiumScrollReveal direction="up" delay={0.5}>
+            <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+              {showPrimaryBtn && (
+                <a
+                  href={primaryHref}
+                  target={primaryTarget}
+                  rel={primaryTarget ? "noopener noreferrer" : undefined}
+                  className="px-8 py-4 bg-gradient-to-r from-amber-600 via-amber-700 to-amber-600 hover:from-amber-500 hover:to-amber-600 text-stone-950 font-bold text-xs sm:text-sm tracking-[0.18em] uppercase transition-all duration-300 shadow-xl shadow-amber-950/40 rounded-none flex items-center gap-2.5 cursor-pointer hover:scale-102"
+                >
+                  {isSiteOrderBtn ? (
+                    <ShoppingBag className="w-4 h-4 text-stone-950" />
+                  ) : isWhatsappTarget ? (
+                    <MessageCircle className="w-4 h-4 text-stone-950" />
+                  ) : (
+                    <Calendar className="w-4 h-4 text-stone-950" />
+                  )}
+                  <span>{primaryText}</span>
+                </a>
+              )}
 
-            <a
-              href="#produtos"
-              className="px-8 py-4 bg-stone-900/80 hover:bg-stone-800 border border-stone-700 hover:border-amber-400/50 text-stone-200 hover:text-amber-300 font-bold text-xs sm:text-sm tracking-[0.18em] uppercase transition-all duration-300 rounded-none backdrop-blur-md flex items-center gap-2 cursor-pointer"
-            >
-              <span>Ver Cardápio</span>
-              <ArrowRight className="w-4 h-4" />
-            </a>
-          </div>
-        </PremiumScrollReveal>
+              {showSecondaryBtn && (
+                <a
+                  href={secondaryHref}
+                  className="px-8 py-4 bg-stone-900/80 hover:bg-stone-800 border border-stone-700 hover:border-amber-400/50 text-stone-200 hover:text-amber-300 font-bold text-xs sm:text-sm tracking-[0.18em] uppercase transition-all duration-300 rounded-none backdrop-blur-md flex items-center gap-2 cursor-pointer"
+                >
+                  <span>{secondaryText}</span>
+                  <ArrowRight className="w-4 h-4" />
+                </a>
+              )}
+            </div>
+          </PremiumScrollReveal>
+        )}
 
         {/* Highlights row */}
         <PremiumScrollReveal direction="up" delay={0.65}>

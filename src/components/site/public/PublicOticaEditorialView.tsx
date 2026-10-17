@@ -517,31 +517,51 @@ export const PublicOticaEditorialView: React.FC<PublicOticaEditorialViewProps> =
               {heroSection?.settings?.subtitle || 'Óculos que expressam quem você é.'}
             </motion.p>
 
-            <motion.div
-              initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.9, delay: 0.6 }}
-              className="mt-10 flex flex-wrap items-center gap-4"
-            >
-              <a
-                href="#colecao"
-                className="px-8 py-4 bg-[#C7F36B] hover:bg-[#b5e655] text-black font-black text-xs sm:text-sm tracking-[0.2em] uppercase transition-all duration-300 rounded-none shadow-xl flex items-center gap-3 cursor-pointer group"
-              >
-                <span>EXPLORE A COLEÇÃO</span>
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </a>
+            {(() => {
+              const heroS = heroSection?.settings || {};
+              const heroWhatsappDisabled = site?.settings?.heroWhatsappButtonEnabled === false;
+              const primaryExplicitlyDisabled = heroS.primaryButton?.enabled === false;
+              const isSiteOrderBtn = heroS.primaryButton?.actionType === 'order_site' || heroS.primaryButton?.url === '#produtos' || heroS.primaryButton?.url === '#colecao';
+              const isWhatsappTarget = (!heroS.primaryButton?.url || heroS.primaryButton?.url?.includes('wa.me') || (heroS.primaryButton?.text && heroS.primaryButton?.text?.toLowerCase().includes('whatsapp'))) && !isSiteOrderBtn;
+              const shouldHidePrimary = primaryExplicitlyDisabled || (heroWhatsappDisabled && isWhatsappTarget);
+              const showPrimaryBtn = !shouldHidePrimary && heroS.primaryButton?.enabled !== false;
+              const showSecondaryBtn = heroS.secondaryButton?.enabled === true;
+              const showAnyBtn = showPrimaryBtn || showSecondaryBtn;
 
-              {cleanPhone && (
-                <a
-                  href={waBaseUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-8 py-4 bg-transparent border border-[#F8F8F5]/30 hover:border-[#C7F36B] hover:text-[#C7F36B] text-[#F8F8F5] font-bold text-xs sm:text-sm tracking-[0.2em] uppercase transition-all duration-300 rounded-none"
+              if (!showAnyBtn) return null;
+
+              return (
+                <motion.div
+                  initial={prefersReducedMotion ? false : { opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.9, delay: 0.6 }}
+                  className="mt-10 flex flex-wrap items-center gap-4"
                 >
-                  Consultar Armações
-                </a>
-              )}
-            </motion.div>
+                  {showPrimaryBtn && (
+                    <a
+                      href={heroS.primaryButton?.url || '#colecao'}
+                      target={heroS.primaryButton?.url?.startsWith('http') ? '_blank' : undefined}
+                      rel={heroS.primaryButton?.url?.startsWith('http') ? 'noopener noreferrer' : undefined}
+                      className="px-8 py-4 bg-[#C7F36B] hover:bg-[#b5e655] text-black font-black text-xs sm:text-sm tracking-[0.2em] uppercase transition-all duration-300 rounded-none shadow-xl flex items-center gap-3 cursor-pointer group"
+                    >
+                      <span>{heroS.primaryButton?.text || 'EXPLORE A COLEÇÃO'}</span>
+                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    </a>
+                  )}
+
+                  {showSecondaryBtn && (
+                    <a
+                      href={heroS.secondaryButton?.url || (cleanPhone ? waBaseUrl : '#contato')}
+                      target={heroS.secondaryButton?.url?.startsWith('http') || (!heroS.secondaryButton?.url && cleanPhone) ? '_blank' : undefined}
+                      rel="noopener noreferrer"
+                      className="px-8 py-4 bg-transparent border border-[#F8F8F5]/30 hover:border-[#C7F36B] hover:text-[#C7F36B] text-[#F8F8F5] font-bold text-xs sm:text-sm tracking-[0.2em] uppercase transition-all duration-300 rounded-none cursor-pointer"
+                    >
+                      {heroS.secondaryButton?.text || 'Consultar Armações'}
+                    </a>
+                  )}
+                </motion.div>
+              );
+            })()}
           </div>
 
           {/* Bottom Indicators */}
