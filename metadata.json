@@ -1,0 +1,6 @@
+{
+  "name": "LocalHub SaaS - Plataforma Multiempresa",
+  "description": "Plataforma SaaS multi-tenant para criação e gerenciamento de páginas digitais para negócios locais com isolamento completo e painéis Super Admin e Client Admin.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

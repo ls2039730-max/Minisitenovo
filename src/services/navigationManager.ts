@@ -1,0 +1,308 @@
+import React, { useEffect, useRef } from 'react';
+
+/**
+ * Overlay item descriptor for modals, drawers, slide-overs and dialogs.
+ */
+export interface OverlayItem {
+  id: string;
+  name?: string;
+  close: () => boolean | void; // returns false if close was prevented/interrupted
+  priority: number; // Higher numbers close first (e.g. nested confirmation dialog = 30, parent modal = 20)
+  createdAt: number;
+}
+
+export interface InternalRouteState {
+  type: 'client' | 'admin' | 'public_site' | 'table_catalog' | 'login';
+  tab?: string;
+  adminTab?: string;
+  tenantId?: string | null;
+  slug?: string | null;
+  url: string;
+}
+
+class NavigationManager {
+  private overlayStack: OverlayItem[] = [];
+  private internalHistory: InternalRouteState[] = [];
+  private initialized = false;
+  private isProgrammaticBack = false;
+  private isHandlingPop = false;
+
+  /**
+   * Initializes baseline history and global popstate interception.
+   * Safe to call multiple times (idempotent).
+   */
+  public init() {
+    if (this.initialized || typeof window === 'undefined') return;
+    this.initialized = true;
+
+    // Set baseline state if none exists so Android Back doesn't immediately bounce out of the app
+    try {
+      const currentState = window.history.state || {};
+      if (!currentState._lh_root) {
+        window.history.replaceState({ ...currentState, _lh_root: true }, '', window.location.href);
+        // Add one active buffer state so the first "Back" gesture on mobile stays inside LocalHub
+        window.history.pushState({ ...currentState, _lh_active: true }, '', window.location.href);
+      }
+    } catch (e) {
+      // Ignore if history state fails in restrictive contexts
+    }
+
+    window.addEventListener('popstate', this.handleGlobalPopState, { capture: true });
+  }
+
+  /**
+   * Destroys listeners (for cleanup / testing)
+   */
+  public destroy() {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('popstate', this.handleGlobalPopState, { capture: true });
+    }
+    this.overlayStack = [];
+    this.internalHistory = [];
+    this.initialized = false;
+    this.isProgrammaticBack = false;
+    this.isHandlingPop = false;
+  }
+
+  /**
+   * Registers an open modal, drawer or dialog.
+   * Pushes a lightweight history marker so browser/Android Back button closes it first.
+   * Returns an unregister cleanup function.
+   */
+  public registerOverlay(item: Omit<OverlayItem, 'createdAt'>): () => void {
+    if (typeof window === 'undefined') return () => {};
+
+    // Remove any existing entry with the same ID to prevent duplicates
+    this.overlayStack = this.overlayStack.filter((o) => o.id !== item.id);
+
+    const overlayItem: OverlayItem = {
+      ...item,
+      createdAt: Date.now(),
+    };
+
+    this.overlayStack.push(overlayItem);
+    // Sort descending by priority, then by creation time (LIFO)
+    this.overlayStack.sort((a, b) => {
+      if (b.priority !== a.priority) return b.priority - a.priority;
+      return b.createdAt - a.createdAt;
+    });
+
+    // Push overlay state to browser history
+    try {
+      const currentState = window.history.state || {};
+      window.history.pushState(
+        { ...currentState, _lh_overlay: item.id },
+        '',
+        window.location.href
+      );
+    } catch (e) {
+      // Fallback
+    }
+
+    let unregistered = false;
+
+    return () => {
+      if (unregistered) return;
+      unregistered = true;
+      this.unregisterOverlay(item.id);
+    };
+  }
+
+  /**
+   * Unregisters an overlay (called when component unmounts or closes via on-screen UI)
+   */
+  public unregisterOverlay(id: string) {
+    const existingIndex = this.overlayStack.findIndex((o) => o.id === id);
+    if (existingIndex === -1) return;
+
+    this.overlayStack.splice(existingIndex, 1);
+
+    // If overlay was closed via UI (not by browser popstate), revert the pushed history entry
+    if (!this.isHandlingPop && typeof window !== 'undefined') {
+      try {
+        const state = window.history.state;
+        if (state && state._lh_overlay === id) {
+          this.isProgrammaticBack = true;
+          window.history.back();
+        }
+      } catch (e) {
+        // Fallback
+      }
+    }
+  }
+
+  /**
+   * Closes the topmost active overlay.
+   * Returns true if an overlay was closed, false if stack was empty or close prevented.
+   */
+  public closeTopmostOverlay(): boolean {
+    if (this.overlayStack.length === 0) return false;
+
+    const topmost = this.overlayStack[0];
+    const preventDefault = topmost.close();
+    if (preventDefault === false) {
+      // Close was cancelled (e.g. unsaved changes confirm)
+      return false;
+    }
+
+    this.overlayStack.shift();
+    return true;
+  }
+
+  public hasActiveOverlays(): boolean {
+    return this.overlayStack.length > 0;
+  }
+
+  public getActiveOverlaysCount(): number {
+    return this.overlayStack.length;
+  }
+
+  /**
+   * Records an internal route transition in session memory.
+   * Avoids duplicate consecutive entries.
+   */
+  public recordRoute(route: InternalRouteState) {
+    const last = this.internalHistory[this.internalHistory.length - 1];
+    if (
+      last &&
+      last.type === route.type &&
+      last.tab === route.tab &&
+      last.adminTab === route.adminTab &&
+      last.tenantId === route.tenantId &&
+      last.slug === route.slug
+    ) {
+      return;
+    }
+    this.internalHistory.push(route);
+  }
+
+  public getPreviousRoute(): InternalRouteState | null {
+    if (this.internalHistory.length <= 1) return null;
+    return this.internalHistory[this.internalHistory.length - 2] || null;
+  }
+
+  public popCurrentRoute(): InternalRouteState | null {
+    return this.internalHistory.pop() || null;
+  }
+
+  public getHistoryLength(): number {
+    return this.internalHistory.length;
+  }
+
+  /**
+   * Centralized 'Go Back' action triggered by on-screen UI buttons (e.g. <ArrowLeft /> Voltar).
+   * Follows the exact same priority rules:
+   * 1. Close overlay if one is open.
+   * 2. Go back in history if internal navigation exists.
+   * 3. Fallback to valid module root if opened directly.
+   */
+  public goBack(fallbackAction?: () => void) {
+    if (typeof window === 'undefined') return;
+
+    // 1. If an overlay is open, close it first
+    if (this.hasActiveOverlays()) {
+      const closed = this.closeTopmostOverlay();
+      if (closed) return;
+    }
+
+    // 2. If there is internal history, use browser history
+    if (this.internalHistory.length > 1) {
+      window.history.back();
+      return;
+    }
+
+    // 3. If fallback action is provided (e.g. navigateSelectTenant(null) or navigateClientTab('home'))
+    if (fallbackAction) {
+      fallbackAction();
+      return;
+    }
+
+    // 4. Default browser back if history has depth
+    if (window.history.length > 1) {
+      window.history.back();
+    }
+  }
+
+  /**
+   * Intercepts browser / Android popstate event
+   */
+  private handleGlobalPopState = (event: PopStateEvent) => {
+    // If popstate was triggered by our own programmatic cleanup, consume and reset
+    if (this.isProgrammaticBack) {
+      this.isProgrammaticBack = false;
+      return;
+    }
+
+    this.isHandlingPop = true;
+
+    try {
+      // 1. PRIORITY 1: Close active overlay/modal/drawer without leaving the page
+      if (this.hasActiveOverlays()) {
+        const closed = this.closeTopmostOverlay();
+        if (closed) {
+          // Prevent other listeners from navigating
+          event.stopImmediatePropagation();
+          return;
+        }
+      }
+
+      // 2. PRIORITY 4: Prevent bouncing outside of LocalHub at root screen
+      const state = event.state || {};
+      if (state._lh_root && !state._lh_active && !this.hasActiveOverlays()) {
+        // User popped the active buffer and hit the root baseline
+        // If we have previous internal history, pop the current route
+        if (this.internalHistory.length > 1) {
+          this.internalHistory.pop();
+        }
+        // Re-push active state to prevent tab exit and keep user safely in the app
+        try {
+          window.history.pushState({ ...state, _lh_active: true }, '', window.location.href);
+        } catch (e) {
+          // Ignore
+        }
+      }
+    } finally {
+      this.isHandlingPop = false;
+    }
+  };
+}
+
+export const navigationManager = new NavigationManager();
+
+/**
+ * React hook to register any modal, drawer or overlay with the central Back button system.
+ * When the modal is open:
+ * - Pressing Android Back closes this modal without changing the page.
+ * - Pressing Browser Back closes this modal without changing the page.
+ * - Nested modals close in proper LIFO order (highest priority first).
+ * - Closing via UI button cleanly unregisters and discards the modal history entry.
+ */
+export function useBackHandler({
+  isOpen,
+  onClose,
+  priority = 10,
+  name,
+}: {
+  isOpen: boolean;
+  onClose: () => boolean | void;
+  priority?: number;
+  name?: string;
+}) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const unregister = navigationManager.registerOverlay({
+      id: name || `overlay_${Math.random().toString(36).substring(2, 9)}`,
+      name,
+      close: () => onCloseRef.current(),
+      priority,
+    });
+
+    return () => {
+      unregister();
+    };
+  }, [isOpen, priority, name]);
+}

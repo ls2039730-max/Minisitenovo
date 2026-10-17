@@ -1,0 +1,152 @@
+@import "tailwindcss";
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================================
+   REGRAS DE IMPRESSÃO A4 PROFISSIONAL (LocalHub SaaS)
+   ========================================================================== */
+@page {
+  size: A4 portrait;
+  margin: 8mm 6mm;
+}
+
+@media print {
+  html,
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Oculta tudo marcado com classe print:hidden e elementos externos de layout */
+  .print\:hidden,
+  aside,
+  header,
+  nav,
+  .print-controls-bar {
+    display: none !important;
+  }
+
+  /* Desfaz contenção de overflow, flex e posicionamento fixo em toda a árvore ancestral */
+  #root,
+  #root > div,
+  main,
+  .print-qr-overlay,
+  .print-qr-container,
+  .print-qr-body {
+    display: block !important;
+    position: static !important;
+    inset: auto !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    transform: none !important;
+    backdrop-filter: none !important;
+    float: none !important;
+  }
+
+  /* Folha A4 controlada com quebra de página garantida */
+  .print-page {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    clear: both !important;
+  }
+
+  .print-page:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* Grade de 3 colunas rigorosamente dimensionada para folha A4 */
+  .print-grid-3cols {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 3.5mm !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Cartão de mesa individual para recorte */
+  .print-card-item {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    -webkit-column-break-inside: avoid !important;
+    box-sizing: border-box !important;
+    background: #ffffff !important;
+    border: 1.5pt solid #0f172a !important;
+    border-radius: 3.5mm !important;
+    box-shadow: none !important;
+    text-align: center !important;
+    margin: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    overflow: hidden !important;
+  }
+
+  /* Alturas exatas e seguras para garantir que 3 ou 4 linhas caibam sem estourar nem cortar o rodapé */
+  .print-card-standard {
+    height: 76mm !important;
+    max-height: 76mm !important;
+    min-height: 76mm !important;
+    padding: 2.5mm !important;
+  }
+
+  .print-card-compact {
+    height: 56mm !important;
+    max-height: 56mm !important;
+    min-height: 56mm !important;
+    padding: 2mm !important;
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/uploads/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/p/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/site/(.*)",
+      "destination": "/api"
+    },
+    {
+      "source": "/((?!assets/|favicon\\.ico|robots\\.txt|.*\\.(?:js|css|png|jpg|jpeg|gif|svg|webp|ico|woff2?|ttf|map)).*)",
+      "destination": "/api"
+    }
+  ]
+}
