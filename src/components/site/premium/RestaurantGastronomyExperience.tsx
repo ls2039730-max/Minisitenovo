@@ -160,31 +160,34 @@ export const RestaurantGastronomyHero: React.FC<RestaurantGastronomyHeroProps> =
         )}
 
         {/* Highlights row */}
-        <PremiumScrollReveal direction="up" delay={0.65}>
-          <div className="mt-14 pt-8 border-t border-stone-800/80 grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-3xl mx-auto text-center sm:text-left">
-            <div className="flex items-center gap-3 justify-center sm:justify-start">
-              <Flame className="w-5 h-5 text-amber-500 shrink-0" />
-              <div className="text-xs">
-                <strong className="block text-stone-200 font-serif">Grelhados na Brasa</strong>
-                <span className="text-stone-400 text-[11px]">Cortes nobres certificados</span>
+        {(() => {
+          const defaultHighlights = [
+            { title: 'Grelhados na Brasa', subtitle: 'Cortes nobres certificados', icon: 'flame' },
+            { title: 'Insumos da Estação', subtitle: 'Preparo artesanal diário', icon: 'utensils' },
+            { title: 'Carta de Vinhos', subtitle: 'Harmonização pelo sommelier', icon: 'wine' },
+          ];
+          const list = s.highlights || defaultHighlights;
+          if (list.length === 0) return null;
+
+          return (
+            <PremiumScrollReveal direction="up" delay={0.65}>
+              <div className="mt-14 pt-8 border-t border-stone-800/80 grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-3xl mx-auto text-center sm:text-left">
+                {list.map((item: any, i: number) => {
+                  const IconComp = item.icon === 'utensils' ? UtensilsCrossed : item.icon === 'wine' ? Wine : Flame;
+                  return (
+                    <div key={i} className="flex items-center gap-3 justify-center sm:justify-start">
+                      <IconComp className="w-5 h-5 text-amber-500 shrink-0" />
+                      <div className="text-xs">
+                        <strong className="block text-stone-200 font-serif">{item.title}</strong>
+                        <span className="text-stone-400 text-[11px]">{item.subtitle}</span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            </div>
-            <div className="flex items-center gap-3 justify-center sm:justify-start">
-              <UtensilsCrossed className="w-5 h-5 text-amber-500 shrink-0" />
-              <div className="text-xs">
-                <strong className="block text-stone-200 font-serif">Insumos da Estação</strong>
-                <span className="text-stone-400 text-[11px]">Preparo artesanal diário</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 justify-center sm:justify-start">
-              <Wine className="w-5 h-5 text-amber-500 shrink-0" />
-              <div className="text-xs">
-                <strong className="block text-stone-200 font-serif">Carta de Vinhos</strong>
-                <span className="text-stone-400 text-[11px]">Harmonização pelo sommelier</span>
-              </div>
-            </div>
-          </div>
-        </PremiumScrollReveal>
+            </PremiumScrollReveal>
+          );
+        })()}
       </div>
     </section>
   );

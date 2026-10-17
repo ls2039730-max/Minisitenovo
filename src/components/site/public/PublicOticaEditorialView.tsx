@@ -582,7 +582,7 @@ export const PublicOticaEditorialView: React.FC<PublicOticaEditorialViewProps> =
       </section>
 
       {/* 3. FAIXA TIPOGRÁFICA INFINITA (Dynamic Marquee from Motion Studio) */}
-      <MotionMarquee bgColor="#181818" textColor="#A7A7A1" />
+      <MotionMarquee />
 
       {/* 3.5. QUICK BUTTONS / NAVEGAÇÃO RÁPIDA (Configured in Site Builder) */}
       {sections

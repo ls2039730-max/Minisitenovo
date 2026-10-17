@@ -741,7 +741,7 @@ const PublicSiteViewInner: React.FC<PublicSiteViewProps> = ({
 
       {/* Top Motion Progress Bar & Continuous Marquee Banner */}
       <MotionProgressBar color={primaryColor} />
-      <MotionMarquee bgColor={primaryColor} />
+      <MotionMarquee />
 
       {/* RENDER ALL SECTIONS IN SEQUENCE */}
       <main className="flex-1">

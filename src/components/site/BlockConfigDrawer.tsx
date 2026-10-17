@@ -262,6 +262,94 @@ export const BlockConfigDrawer: React.FC<BlockConfigDrawerProps> = ({
               />
             </div>
 
+            {/* DESTAQUES / BADGES DO BANNER */}
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="block font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                  <Star className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Itens de Destaque / Badges do Rodapé do Banner</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentList = settings.highlights || [
+                      { title: 'Grelhados na Brasa', subtitle: 'Cortes nobres certificados', icon: 'flame' },
+                      { title: 'Insumos da Estação', subtitle: 'Preparo artesanal diário', icon: 'utensils' },
+                      { title: 'Carta de Vinhos', subtitle: 'Harmonização pelo sommelier', icon: 'wine' },
+                    ];
+                    updateField('highlights', [...currentList, { title: 'Novo Destaque', subtitle: 'Descrição', icon: 'sparkles' }]);
+                  }}
+                  className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 hover:underline cursor-pointer"
+                >
+                  + Adicionar Destaque
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-500 leading-tight">
+                Edite, renomeie ou remova os destaques exibidos na base do banner principal (ex: Grelhados na Brasa, Insumos, Vinhos).
+              </p>
+
+              <div className="space-y-2.5 pt-1">
+                {(settings.highlights || [
+                  { title: 'Grelhados na Brasa', subtitle: 'Cortes nobres certificados', icon: 'flame' },
+                  { title: 'Insumos da Estação', subtitle: 'Preparo artesanal diário', icon: 'utensils' },
+                  { title: 'Carta de Vinhos', subtitle: 'Harmonização pelo sommelier', icon: 'wine' },
+                ]).map((item: any, idx: number) => (
+                  <div key={idx} className="p-3 bg-white border border-slate-200 rounded-xl space-y-2 relative group">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-bold uppercase text-indigo-600">Destaque #{idx + 1}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const list = [...(settings.highlights || [
+                            { title: 'Grelhados na Brasa', subtitle: 'Cortes nobres certificados', icon: 'flame' },
+                            { title: 'Insumos da Estação', subtitle: 'Preparo artesanal diário', icon: 'utensils' },
+                            { title: 'Carta de Vinhos', subtitle: 'Harmonização pelo sommelier', icon: 'wine' },
+                          ])];
+                          list.splice(idx, 1);
+                          updateField('highlights', list);
+                        }}
+                        className="text-[11px] font-bold text-rose-600 hover:text-rose-700 cursor-pointer"
+                      >
+                        Excluir
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={item.title || ''}
+                        onChange={(e) => {
+                          const list = [...(settings.highlights || [
+                            { title: 'Grelhados na Brasa', subtitle: 'Cortes nobres certificados', icon: 'flame' },
+                            { title: 'Insumos da Estação', subtitle: 'Preparo artesanal diário', icon: 'utensils' },
+                            { title: 'Carta de Vinhos', subtitle: 'Harmonização pelo sommelier', icon: 'wine' },
+                          ])];
+                          list[idx] = { ...list[idx], title: e.target.value };
+                          updateField('highlights', list);
+                        }}
+                        placeholder="Título (ex: Grelhados na Brasa)"
+                        className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-900"
+                      />
+                      <input
+                        type="text"
+                        value={item.subtitle || ''}
+                        onChange={(e) => {
+                          const list = [...(settings.highlights || [
+                            { title: 'Grelhados na Brasa', subtitle: 'Cortes nobres certificados', icon: 'flame' },
+                            { title: 'Insumos da Estação', subtitle: 'Preparo artesanal diário', icon: 'utensils' },
+                            { title: 'Carta de Vinhos', subtitle: 'Harmonização pelo sommelier', icon: 'wine' },
+                          ])];
+                          list[idx] = { ...list[idx], subtitle: e.target.value };
+                          updateField('highlights', list);
+                        }}
+                        placeholder="Subtítulo"
+                        className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="space-y-2">
               <label className="block font-bold text-slate-700">Tipo de Fundo do Banner (Hero)</label>
               <div className="grid grid-cols-3 gap-2">
