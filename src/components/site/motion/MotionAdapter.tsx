@@ -29,8 +29,20 @@ export const MotionStudioProvider: React.FC<MotionStudioProviderProps> = ({
   children,
 }) => {
   const systemReduced = useReducedMotion();
-  const settings = customSettings || DEFAULT_MOTION_SETTINGS;
-  const isReducedMotion = !!(settings.timing.respectReducedMotion && systemReduced);
+  const settings: MotionStudioSettings = useMemo(() => {
+    if (!customSettings) return DEFAULT_MOTION_SETTINGS;
+    return {
+      enabled: customSettings.enabled ?? DEFAULT_MOTION_SETTINGS.enabled,
+      presetId: customSettings.presetId ?? DEFAULT_MOTION_SETTINGS.presetId,
+      entrance: { ...DEFAULT_MOTION_SETTINGS.entrance, ...(customSettings.entrance || {}) },
+      scroll: { ...DEFAULT_MOTION_SETTINGS.scroll, ...(customSettings.scroll || {}) },
+      interactions: { ...DEFAULT_MOTION_SETTINGS.interactions, ...(customSettings.interactions || {}) },
+      transitions: { ...DEFAULT_MOTION_SETTINGS.transitions, ...(customSettings.transitions || {}) },
+      timing: { ...DEFAULT_MOTION_SETTINGS.timing, ...(customSettings.timing || {}) },
+    };
+  }, [customSettings]);
+
+  const isReducedMotion = !!(settings.timing?.respectReducedMotion && systemReduced);
 
   const duration = useMemo(() => {
     switch (settings.timing.speed) {
