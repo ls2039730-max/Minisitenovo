@@ -479,7 +479,7 @@ export const MotionStudioView: React.FC<MotionStudioViewProps> = ({
               <label className="text-xs font-bold text-slate-700 block">
                 Direção do Movimento
               </label>
-              <div className="grid grid-cols-5 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
                 {(['up', 'down', 'left', 'right', 'none'] as MotionDirection[]).map((dir) => (
                   <button
                     key={dir}
@@ -641,7 +641,7 @@ export const MotionStudioView: React.FC<MotionStudioViewProps> = ({
               <label className="text-xs font-bold text-slate-700 block">
                 Intensidade de Parallax nas Imagens de Fundo
               </label>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {(['none', 'subtle', 'medium', 'high'] as const).map((intensity) => (
                   <button
                     key={intensity}
@@ -689,44 +689,104 @@ export const MotionStudioView: React.FC<MotionStudioViewProps> = ({
               </label>
 
               {currentMotion.scroll.continuousMarquee && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pl-4 border-l-2 border-indigo-400">
-                  <div className="md:col-span-2 space-y-1">
-                    <label className="text-[11px] font-bold text-slate-700 block">
-                      Texto do Letreiro Contínuo
-                    </label>
-                    <input
-                      type="text"
-                      value={currentMotion.scroll.marqueeText || ''}
-                      onChange={(e) =>
-                        updateMotion({
-                          scroll: { ...currentMotion.scroll, marqueeText: e.target.value },
-                        })
-                      }
-                      placeholder="Ex: QUALIDADE GARANTIDA • ATENDIMENTO VIP • DELIVERY EXPRESS"
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-indigo-500 font-semibold"
-                    />
+                <div className="space-y-4 pl-4 border-l-2 border-indigo-400">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="md:col-span-2 space-y-1">
+                      <label className="text-[11px] font-bold text-slate-700 block">
+                        Texto do Letreiro Contínuo (Acima do Banner)
+                      </label>
+                      <input
+                        type="text"
+                        value={currentMotion.scroll.marqueeText || ''}
+                        onChange={(e) =>
+                          updateMotion({
+                            scroll: { ...currentMotion.scroll, marqueeText: e.target.value },
+                          })
+                        }
+                        placeholder="Ex: QUALIDADE GARANTIDA • ATENDIMENTO VIP • DELIVERY EXPRESS"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-indigo-500 font-semibold"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-700 block">
+                        Velocidade da Faixa
+                      </label>
+                      <select
+                        value={currentMotion.scroll.marqueeSpeed}
+                        onChange={(e) =>
+                          updateMotion({
+                            scroll: {
+                              ...currentMotion.scroll,
+                              marqueeSpeed: e.target.value as any,
+                            },
+                          })
+                        }
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-indigo-500 cursor-pointer"
+                      >
+                        <option value="slow">Relaxada (Slow - 36s)</option>
+                        <option value="normal">Normal (22s)</option>
+                        <option value="fast">Rápida (Fast - 14s)</option>
+                      </select>
+                    </div>
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-bold text-slate-700 block">
-                      Velocidade da Faixa
-                    </label>
-                    <select
-                      value={currentMotion.scroll.marqueeSpeed}
-                      onChange={(e) =>
-                        updateMotion({
-                          scroll: {
-                            ...currentMotion.scroll,
-                            marqueeSpeed: e.target.value as any,
-                          },
-                        })
-                      }
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-indigo-500 cursor-pointer"
-                    >
-                      <option value="slow">Relaxada (Slow - 36s)</option>
-                      <option value="normal">Normal (22s)</option>
-                      <option value="fast">Rápida (Fast - 14s)</option>
-                    </select>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-700 block">
+                        Cor do Texto da Faixa
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={currentMotion.scroll.marqueeTextColor || '#f8fafc'}
+                          onChange={(e) =>
+                            updateMotion({
+                              scroll: { ...currentMotion.scroll, marqueeTextColor: e.target.value },
+                            })
+                          }
+                          className="w-8 h-8 rounded-lg border border-slate-300 p-0.5 cursor-pointer"
+                        />
+                        <input
+                          type="text"
+                          value={currentMotion.scroll.marqueeTextColor || '#f8fafc'}
+                          onChange={(e) =>
+                            updateMotion({
+                              scroll: { ...currentMotion.scroll, marqueeTextColor: e.target.value },
+                            })
+                          }
+                          className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-700 block">
+                        Cor de Fundo da Faixa
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={currentMotion.scroll.marqueeBgColor || '#0f172a'}
+                          onChange={(e) =>
+                            updateMotion({
+                              scroll: { ...currentMotion.scroll, marqueeBgColor: e.target.value },
+                            })
+                          }
+                          className="w-8 h-8 rounded-lg border border-slate-300 p-0.5 cursor-pointer"
+                        />
+                        <input
+                          type="text"
+                          value={currentMotion.scroll.marqueeBgColor || '#0f172a'}
+                          onChange={(e) =>
+                            updateMotion({
+                              scroll: { ...currentMotion.scroll, marqueeBgColor: e.target.value },
+                            })
+                          }
+                          className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -825,7 +885,7 @@ export const MotionStudioView: React.FC<MotionStudioViewProps> = ({
               <label className="text-xs font-bold text-slate-700 block">
                 Resposta ao Toque nos Botões (Touch & Click)
               </label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {(['scale', 'glow', 'none'] as MotionButtonFeedback[]).map((feedback) => (
                   <button
                     key={feedback}
@@ -937,7 +997,7 @@ export const MotionStudioView: React.FC<MotionStudioViewProps> = ({
               <label className="text-xs font-bold text-slate-700 block">
                 Cadência / Velocidade Geral
               </label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {(['fast', 'balanced', 'cinematic'] as MotionSpeed[]).map((sp) => (
                   <button
                     key={sp}
