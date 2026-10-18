@@ -1640,19 +1640,29 @@ const PublicSiteViewInner: React.FC<PublicSiteViewProps> = ({
                       {s.subtitle && <p className="text-sm font-semibold opacity-75">{s.subtitle}</p>}
                       <p className="text-sm leading-relaxed opacity-85 whitespace-pre-line">{s.text}</p>
 
-                      {s.highlights && s.highlights.length > 0 && (
-                        <div className="pt-2 space-y-2">
-                          {s.highlights.map((h: any, idx: number) => (
-                            <div key={idx} className="flex items-start gap-2.5 text-xs">
-                              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                              <div>
-                                <strong className="font-bold">{h.title}:</strong>{' '}
-                                <span className="opacity-80">{h.desc}</span>
+                      {(() => {
+                        const defaultHighlights = [
+                          { title: 'Consultas Sem Pressa', desc: 'Tempo dedicado para esclarecer todas as suas dúvidas.' },
+                          { title: 'Equipamentos Modernos', desc: 'Exames e diagnósticos com alta precisão e segurança.' },
+                          { title: 'Acessibilidade Total', desc: 'Rampa de acesso, elevador e espaço adaptado para todos.' },
+                        ];
+                        const list = s.highlights !== undefined ? s.highlights : defaultHighlights;
+                        if (!list || list.length === 0) return null;
+
+                        return (
+                          <div className="pt-2 space-y-2">
+                            {list.map((h: any, idx: number) => (
+                              <div key={idx} className="flex items-start gap-2.5 text-xs">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                                <div>
+                                  <strong className="font-bold">{h.title}:</strong>{' '}
+                                  <span className="opacity-80">{h.desc}</span>
+                                </div>
                               </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {hasImg && !isLeft && (

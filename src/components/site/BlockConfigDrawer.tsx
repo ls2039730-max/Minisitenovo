@@ -36,6 +36,7 @@ import {
   Scissors,
   Heart,
   Tag,
+  CheckCircle2,
 } from 'lucide-react';
 import { SiteSection } from '../../types/site';
 import { BLOCK_REGISTRY } from '../../constants/blockRegistry';
@@ -844,6 +845,106 @@ export const BlockConfigDrawer: React.FC<BlockConfigDrawerProps> = ({
                 <option value="image_left">Imagem à Esquerda</option>
                 <option value="text_only">Somente Texto</option>
               </select>
+            </div>
+
+            {/* DIFERENCIAIS / CHECKLIST DA SEÇÃO SOBRE NÓS */}
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="block font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Diferenciais & Destaques (Checklist Verde)</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentList = settings.highlights ?? [
+                      { title: 'Consultas Sem Pressa', desc: 'Tempo dedicado para esclarecer todas as suas dúvidas.' },
+                      { title: 'Equipamentos Modernos', desc: 'Exames e diagnósticos com alta precisão e segurança.' },
+                      { title: 'Acessibilidade Total', desc: 'Rampa de acesso, elevador e espaço adaptado para todos.' },
+                    ];
+                    updateField('highlights', [...currentList, { title: 'Novo Diferencial', desc: 'Descrição do diferencial' }]);
+                  }}
+                  className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 hover:underline cursor-pointer"
+                >
+                  + Adicionar Item
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-500 leading-tight">
+                Edite, altere os textos ou exclua os 3 itens de destaque que aparecem com ícone de verificação verde na seção Sobre Nós (ex: Consultas Sem Pressa, Equipamentos Modernos, Acessibilidade Total).
+              </p>
+
+              <div className="space-y-2.5 pt-1">
+                {(settings.highlights ?? [
+                  { title: 'Consultas Sem Pressa', desc: 'Tempo dedicado para esclarecer todas as suas dúvidas.' },
+                  { title: 'Equipamentos Modernos', desc: 'Exames e diagnósticos com alta precisão e segurança.' },
+                  { title: 'Acessibilidade Total', desc: 'Rampa de acesso, elevador e espaço adaptado para todos.' },
+                ]).map((item: any, idx: number) => (
+                  <div key={idx} className="p-3 bg-white border border-slate-200 rounded-xl space-y-2 relative group shadow-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-bold uppercase text-emerald-700 flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        Diferencial #{idx + 1}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const currentList = settings.highlights ?? [
+                            { title: 'Consultas Sem Pressa', desc: 'Tempo dedicado para esclarecer todas as suas dúvidas.' },
+                            { title: 'Equipamentos Modernos', desc: 'Exames e diagnósticos com alta precisão e segurança.' },
+                            { title: 'Acessibilidade Total', desc: 'Rampa de acesso, elevador e espaço adaptado para todos.' },
+                          ];
+                          const list = [...currentList];
+                          list.splice(idx, 1);
+                          updateField('highlights', list);
+                        }}
+                        className="text-[11px] font-bold text-rose-600 hover:text-rose-700 cursor-pointer"
+                      >
+                        Excluir
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Título do Diferencial</label>
+                        <input
+                          type="text"
+                          value={item.title || ''}
+                          onChange={(e) => {
+                            const currentList = settings.highlights ?? [
+                              { title: 'Consultas Sem Pressa', desc: 'Tempo dedicado para esclarecer todas as suas dúvidas.' },
+                              { title: 'Equipamentos Modernos', desc: 'Exames e diagnósticos com alta precisão e segurança.' },
+                              { title: 'Acessibilidade Total', desc: 'Rampa de acesso, elevador e espaço adaptado para todos.' },
+                            ];
+                            const list = [...currentList];
+                            list[idx] = { ...list[idx], title: e.target.value };
+                            updateField('highlights', list);
+                          }}
+                          placeholder="Ex: Consultas Sem Pressa"
+                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Descrição</label>
+                        <textarea
+                          rows={2}
+                          value={item.desc || ''}
+                          onChange={(e) => {
+                            const currentList = settings.highlights ?? [
+                              { title: 'Consultas Sem Pressa', desc: 'Tempo dedicado para esclarecer todas as suas dúvidas.' },
+                              { title: 'Equipamentos Modernos', desc: 'Exames e diagnósticos com alta precisão e segurança.' },
+                              { title: 'Acessibilidade Total', desc: 'Rampa de acesso, elevador e espaço adaptado para todos.' },
+                            ];
+                            const list = [...currentList];
+                            list[idx] = { ...list[idx], desc: e.target.value };
+                            updateField('highlights', list);
+                          }}
+                          placeholder="Ex: Tempo dedicado para esclarecer todas as suas dúvidas."
+                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </>
         )}

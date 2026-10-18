@@ -56,9 +56,9 @@ export const MotionStudioView: React.FC<MotionStudioViewProps> = ({
 }) => {
   const rawMotion = site.appearance?.motion;
   const currentMotion: MotionStudioSettings = useMemo(() => {
-    const base = {
+    const base: MotionStudioSettings = {
       ...DEFAULT_MOTION_SETTINGS,
-      presetId: site.templateId === 'otica_editorial' ? 'editorial_premium' : 'conversion',
+      presetId: (site.templateId === 'otica_editorial' ? 'editorial_premium' : 'conversion') as MotionPresetId,
     };
     if (!rawMotion) return base;
     return {

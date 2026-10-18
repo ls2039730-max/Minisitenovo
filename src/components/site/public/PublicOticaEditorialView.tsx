@@ -651,31 +651,34 @@ export const PublicOticaEditorialView: React.FC<PublicOticaEditorialViewProps> =
               </p>
 
               {/* Pillars / Differential Points */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-6 border-t border-[#292929]">
-                <div>
-                  <span className="text-xs font-mono text-[#C7F36B] block mb-1">01 / DESIGN</span>
-                  <h4 className="font-bold text-sm text-[#F8F8F5] uppercase tracking-wider">Curadoria Autoral</h4>
-                  <p className="text-xs text-[#A7A7A1] mt-1 leading-relaxed">
-                    Armações exclusivas de designers independentes e marcas globais de prestígio.
-                  </p>
-                </div>
+              {(() => {
+                const defaultPillars = [
+                  { title: 'Curadoria Autoral', desc: 'Armações exclusivas de designers independentes e marcas globais de prestígio.', tag: '01 / DESIGN' },
+                  { title: 'Titânio & Acetato', desc: 'Resistência vitalícia, leveza milimétrica e acabamentos antialérgicos.', tag: '02 / MATERIAIS' },
+                  { title: 'Laboratório Digital', desc: 'Adaptação oftalmológica computadorizada com proteção de luz azul e antirreflexo.', tag: '03 / PRECISÃO' },
+                ];
+                const list = aboutSection?.settings?.highlights !== undefined
+                  ? aboutSection.settings.highlights
+                  : defaultPillars;
 
-                <div>
-                  <span className="text-xs font-mono text-[#C7F36B] block mb-1">02 / MATERIAIS</span>
-                  <h4 className="font-bold text-sm text-[#F8F8F5] uppercase tracking-wider">Titânio & Acetato</h4>
-                  <p className="text-xs text-[#A7A7A1] mt-1 leading-relaxed">
-                    Resistência vitalícia, leveza milimétrica e acabamentos antialérgicos.
-                  </p>
-                </div>
+                if (list.length === 0) return null;
 
-                <div>
-                  <span className="text-xs font-mono text-[#C7F36B] block mb-1">03 / PRECISÃO</span>
-                  <h4 className="font-bold text-sm text-[#F8F8F5] uppercase tracking-wider">Laboratório Digital</h4>
-                  <p className="text-xs text-[#A7A7A1] mt-1 leading-relaxed">
-                    Adaptação oftalmológica computadorizada com proteção de luz azul e antirreflexo.
-                  </p>
-                </div>
-              </div>
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-6 border-t border-[#292929]">
+                    {list.map((item: any, idx: number) => (
+                      <div key={idx}>
+                        <span className="text-xs font-mono text-[#C7F36B] block mb-1">
+                          {item.tag || `0${idx + 1} / DESTAQUE`}
+                        </span>
+                        <h4 className="font-bold text-sm text-[#F8F8F5] uppercase tracking-wider">{item.title}</h4>
+                        <p className="text-xs text-[#A7A7A1] mt-1 leading-relaxed">
+                          {item.desc}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Right Column: Editorial Visual Card */}

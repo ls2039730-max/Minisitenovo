@@ -227,38 +227,35 @@ export const RestaurantGastronomyAbout: React.FC<RestaurantGastronomyAboutProps>
                 `No ${tenant.name}, cada prato conta uma história. Nossa gastronomia resgata técnicas tradicionais aliadas à inventividade contemporânea, valorizando o produto em sua essência mais pura.`}
             </p>
 
-            {/* Three Culinary Pillars */}
-            <div className="pt-6 space-y-4 border-t border-stone-800">
-              <div className="flex items-start gap-3.5">
-                <div className="w-7 h-7 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0 mt-0.5 text-amber-400">
-                  <Check className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-serif font-bold text-stone-200">Ingredientes de Origem Controlada</h4>
-                  <p className="text-xs text-stone-400 mt-0.5">Parceria com pequenos produtores e ingredientes frescos diários.</p>
-                </div>
-              </div>
+            {/* Three Culinary Pillars / Highlights */}
+            {(() => {
+              const defaultPillars = [
+                { title: 'Ingredientes de Origem Controlada', desc: 'Parceria com pequenos produtores e ingredientes frescos diários.' },
+                { title: 'Ambiente & Hospitalidade Calorosa', desc: 'Salão desenhado para encontros memoráveis, reuniões e celebrações.' },
+                { title: 'Pratos Especiais & Sugestões do Chef', desc: 'Menu sazonal com receitas preparadas na hora pela nossa equipe.' },
+              ];
+              const list = aboutS.highlights !== undefined
+                ? aboutS.highlights
+                : defaultPillars;
 
-              <div className="flex items-start gap-3.5">
-                <div className="w-7 h-7 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0 mt-0.5 text-amber-400">
-                  <Check className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-serif font-bold text-stone-200">Ambiente & Hospitalidade Calorosa</h4>
-                  <p className="text-xs text-stone-400 mt-0.5">Salão desenhado para encontros memoráveis, reuniões e celebrações.</p>
-                </div>
-              </div>
+              if (list.length === 0) return null;
 
-              <div className="flex items-start gap-3.5">
-                <div className="w-7 h-7 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0 mt-0.5 text-amber-400">
-                  <Check className="w-4 h-4" />
+              return (
+                <div className="pt-6 space-y-4 border-t border-stone-800">
+                  {list.map((item: any, idx: number) => (
+                    <div key={idx} className="flex items-start gap-3.5">
+                      <div className="w-7 h-7 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0 mt-0.5 text-amber-400">
+                        <Check className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-serif font-bold text-stone-200">{item.title}</h4>
+                        <p className="text-xs text-stone-400 mt-0.5">{item.desc}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div>
-                  <h4 className="text-sm font-serif font-bold text-stone-200">Pratos Especiais & Sugestões do Chef</h4>
-                  <p className="text-xs text-stone-400 mt-0.5">Menu sazonal com receitas preparadas na hora pela nossa equipe.</p>
-                </div>
-              </div>
-            </div>
+              );
+            })()}
           </PremiumScrollReveal>
         </div>
 
