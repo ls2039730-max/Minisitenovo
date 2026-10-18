@@ -12,6 +12,7 @@ import {
 import { api } from '../../services/api';
 import type { ScheduleBlock } from '../../types/appointment';
 import type { Professional } from '../../types/service';
+import { useBackHandler } from '../../services/navigationManager';
 
 interface ScheduleBlockModalProps {
   isOpen: boolean;
@@ -28,6 +29,13 @@ export const ScheduleBlockModal: React.FC<ScheduleBlockModalProps> = ({
   onClose,
   onBlockSaved,
 }) => {
+  useBackHandler({
+    isOpen,
+    onClose,
+    priority: 20,
+    name: 'ScheduleBlockModal',
+  });
+
   const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);

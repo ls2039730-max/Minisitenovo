@@ -22,6 +22,7 @@ import { api } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import type { Appointment, AppointmentStatus, AvailableSlot } from '../../types/appointment';
 import type { Professional } from '../../types/service';
+import { useBackHandler } from '../../services/navigationManager';
 
 interface AppointmentDetailModalProps {
   isOpen: boolean;
@@ -40,6 +41,13 @@ export const AppointmentDetailModal: React.FC<AppointmentDetailModalProps> = ({
   onClose,
   onAppointmentUpdated,
 }) => {
+  useBackHandler({
+    isOpen: isOpen && !!appointment,
+    onClose,
+    priority: 20,
+    name: 'AppointmentDetailModal',
+  });
+
   const { isProfessional, linkedProfessional } = useAuth();
   const [internalNotes, setInternalNotes] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);

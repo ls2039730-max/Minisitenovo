@@ -18,7 +18,7 @@ import { useBackHandler } from '../../services/navigationManager';
 
 interface SuperAdminLayoutProps {
   currentTab: string;
-  onSelectTab: (tab: string) => void;
+  onSelectTab: (tab: string, replace?: boolean) => void;
   children: React.ReactNode;
 }
 
@@ -47,8 +47,9 @@ export const SuperAdminLayout: React.FC<SuperAdminLayoutProps> = ({
   ];
 
   const handleNavClick = (tabKey: string) => {
-    onSelectTab(tabKey);
+    const wasMenuOpen = mobileMenuOpen;
     setMobileMenuOpen(false);
+    onSelectTab(tabKey, wasMenuOpen);
   };
 
   return (

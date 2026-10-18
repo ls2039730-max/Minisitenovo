@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import type { Professional, Service, ServiceCategory } from '../../types/service';
+import { useBackHandler } from '../../services/navigationManager';
 
 interface ProfessionalServicesModalProps {
   isOpen: boolean;
@@ -28,6 +29,13 @@ export const ProfessionalServicesModal: React.FC<ProfessionalServicesModalProps>
   professional,
   onSaved,
 }) => {
+  useBackHandler({
+    isOpen,
+    onClose,
+    priority: 20,
+    name: 'ProfessionalServicesModal',
+  });
+
   const [allServices, setAllServices] = useState<Service[]>([]);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);

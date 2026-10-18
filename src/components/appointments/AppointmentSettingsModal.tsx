@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import type { AppointmentSettings, WeeklyBusinessHours, DaySchedule } from '../../types/appointment';
+import { useBackHandler } from '../../services/navigationManager';
 
 interface AppointmentSettingsModalProps {
   isOpen: boolean;
@@ -34,6 +35,13 @@ export const AppointmentSettingsModal: React.FC<AppointmentSettingsModalProps> =
   onClose,
   onSaved,
 }) => {
+  useBackHandler({
+    isOpen,
+    onClose,
+    priority: 20,
+    name: 'AppointmentSettingsModal',
+  });
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

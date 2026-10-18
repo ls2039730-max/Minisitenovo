@@ -19,6 +19,7 @@ import type {
   WeeklyBusinessHours,
   ProfessionalSchedule,
 } from '../../types/appointment';
+import { useBackHandler } from '../../services/navigationManager';
 
 interface ProfessionalAvailabilityModalProps {
   isOpen: boolean;
@@ -46,6 +47,20 @@ export const ProfessionalAvailabilityModal: React.FC<ProfessionalAvailabilityMod
   onSaved,
 }) => {
   const [activeTab, setActiveTab] = useState<'schedule' | 'policies'>('schedule');
+
+  useBackHandler({
+    isOpen,
+    onClose: () => {
+      if (activeTab === 'policies') {
+        setActiveTab('schedule');
+        return false;
+      }
+      onClose();
+    },
+    priority: 20,
+    name: 'ProfessionalAvailabilityModal',
+  });
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

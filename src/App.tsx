@@ -166,18 +166,23 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const navigateAdminTab = (tab: string) => {
+  const navigateAdminTab = (tab: string, replace = false) => {
     setAdminTab(tab);
     setSelectedTenantId(null);
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       params.set('adminTab', tab);
       params.delete('tenantId');
-      window.history.pushState({ role: 'SUPER_ADMIN', adminTab: tab }, '', `?${params.toString()}`);
+      const newUrl = `?${params.toString()}`;
+      if (replace) {
+        window.history.replaceState({ role: 'SUPER_ADMIN', adminTab: tab }, '', newUrl);
+      } else {
+        window.history.pushState({ role: 'SUPER_ADMIN', adminTab: tab }, '', newUrl);
+      }
     }
   };
 
-  const navigateSelectTenant = (id: string | null) => {
+  const navigateSelectTenant = (id: string | null, replace = false) => {
     setSelectedTenantId(id);
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -187,7 +192,12 @@ const AppContent: React.FC = () => {
       } else {
         params.delete('tenantId');
       }
-      window.history.pushState({ role: 'SUPER_ADMIN', adminTab: 'tenants', tenantId: id }, '', `?${params.toString()}`);
+      const newUrl = `?${params.toString()}`;
+      if (replace) {
+        window.history.replaceState({ role: 'SUPER_ADMIN', adminTab: 'tenants', tenantId: id }, '', newUrl);
+      } else {
+        window.history.pushState({ role: 'SUPER_ADMIN', adminTab: 'tenants', tenantId: id }, '', newUrl);
+      }
     }
   };
 
@@ -232,20 +242,86 @@ const AppContent: React.FC = () => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [isProfessional]);
 
-  // Ensure initial landing state is recorded in browser history & professionals go straight to appointments
+  // Ensure initial landing state is recorded in browser history & seeded so Back returns to root inside the app
   useEffect(() => {
+    if (!user) return;
+
     if (isProfessional && clientTab !== 'appointments') {
       navigateClientTab('appointments', true);
-    } else if (typeof window !== 'undefined' && !window.history.state) {
+    } else if (typeof window !== 'undefined' && (!window.history.state || window.history.state.isInitial)) {
       const params = new URLSearchParams(window.location.search);
-      const initialTab = isProfessional ? 'appointments' : (params.get('tab') || 'home');
-      window.history.replaceState(
-        { role: user?.role || 'GUEST', tab: initialTab, isInitial: true },
-        '',
-        window.location.href
-      );
+
+      if (user.role === 'CLIENT' && !isProfessional) {
+        const initialTab = params.get('tab') || 'home';
+        if (initialTab !== 'home' && !publicSlug && !tableParams) {
+          // Direct access or refresh on an internal tab: seed Home as baseline entry
+          const homeParams = new URLSearchParams(window.location.search);
+          homeParams.set('tab', 'home');
+          homeParams.delete('subTab');
+          homeParams.delete('preview');
+          homeParams.delete('section');
+          homeParams.delete('restaurantTab');
+          homeParams.delete('ordersTab');
+          const homeUrl = `?${homeParams.toString()}`;
+          window.history.replaceState(
+            { role: 'CLIENT', tab: 'home', isRoot: true },
+            '',
+            homeUrl
+          );
+          window.history.pushState(
+            { role: 'CLIENT', tab: initialTab, isDirectLanding: true },
+            '',
+            window.location.href
+          );
+        } else {
+          window.history.replaceState(
+            { role: 'CLIENT', tab: 'home', isRoot: true },
+            '',
+            window.location.href
+          );
+        }
+      } else if (user.role === 'SUPER_ADMIN') {
+        const initialAdminTab = params.get('adminTab') || 'dashboard';
+        const initialTenantId = params.get('tenantId');
+        if (initialTenantId) {
+          // Direct access to tenant detail: seed dashboard -> tenants -> detail
+          window.history.replaceState(
+            { role: 'SUPER_ADMIN', adminTab: 'dashboard', isRoot: true },
+            '',
+            '?adminTab=dashboard'
+          );
+          window.history.pushState(
+            { role: 'SUPER_ADMIN', adminTab: 'tenants' },
+            '',
+            '?adminTab=tenants'
+          );
+          window.history.pushState(
+            { role: 'SUPER_ADMIN', adminTab: 'tenants', tenantId: initialTenantId, isDirectLanding: true },
+            '',
+            window.location.href
+          );
+        } else if (initialAdminTab !== 'dashboard') {
+          // Direct access to an admin tab: seed dashboard as baseline
+          window.history.replaceState(
+            { role: 'SUPER_ADMIN', adminTab: 'dashboard', isRoot: true },
+            '',
+            '?adminTab=dashboard'
+          );
+          window.history.pushState(
+            { role: 'SUPER_ADMIN', adminTab: initialAdminTab, isDirectLanding: true },
+            '',
+            window.location.href
+          );
+        } else {
+          window.history.replaceState(
+            { role: 'SUPER_ADMIN', adminTab: 'dashboard', isRoot: true },
+            '',
+            window.location.href
+          );
+        }
+      }
     }
-  }, [isProfessional, clientTab, user?.role]);
+  }, [user, isProfessional, clientTab, publicSlug, tableParams]);
 
   // Fetch public site data if publicSlug is present
   useEffect(() => {
@@ -390,7 +466,7 @@ const AppContent: React.FC = () => {
     return (
       <SuperAdminLayout
         currentTab={selectedTenantId ? 'tenants' : adminTab}
-        onSelectTab={(tab) => navigateAdminTab(tab)}
+        onSelectTab={(tab, replace) => navigateAdminTab(tab, replace)}
       >
         {/* If a tenant is selected, show detail view */}
         {selectedTenantId ? (
@@ -562,7 +638,7 @@ const AppContent: React.FC = () => {
     return (
       <ClientLayout
         currentTab={clientTab}
-        onSelectTab={(tab) => navigateClientTab(tab)}
+        onSelectTab={(tab, replace) => navigateClientTab(tab, replace)}
         plans={plans}
       >
         {clientTab === 'home' && (

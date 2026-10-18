@@ -30,7 +30,7 @@ import { useBackHandler } from '../../services/navigationManager';
 
 interface ClientLayoutProps {
   currentTab: string;
-  onSelectTab: (tab: string) => void;
+  onSelectTab: (tab: string, replace?: boolean) => void;
   plans: Plan[];
   children: React.ReactNode;
 }
@@ -110,8 +110,9 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({
     if (isProfessional && tabKey !== 'appointments') {
       return;
     }
-    onSelectTab(tabKey);
+    const wasMenuOpen = mobileMenuOpen;
     setMobileMenuOpen(false);
+    onSelectTab(tabKey, wasMenuOpen);
   };
 
   const primaryColor = tenant?.appearance?.primaryColor || '#1e293b';
