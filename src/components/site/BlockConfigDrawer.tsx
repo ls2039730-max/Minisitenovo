@@ -38,6 +38,11 @@ import {
   Tag,
   CheckCircle2,
   Wine,
+  Video,
+  Film,
+  Maximize2,
+  Play,
+  Eye,
 } from 'lucide-react';
 import { SiteSection } from '../../types/site';
 import { BLOCK_REGISTRY } from '../../constants/blockRegistry';
@@ -756,23 +761,54 @@ export const BlockConfigDrawer: React.FC<BlockConfigDrawerProps> = ({
 
               {settings.showSubBannerVideo && (
                 <div className="space-y-3 pt-2.5 border-t border-slate-200">
-                  {/* Toggle to show/hide texts */}
-                  <div className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between">
-                    <div>
-                      <span className="block font-bold text-slate-800 text-xs">Exibir Textos Acima do Vídeo</span>
-                      <span className="text-[11px] text-slate-500">
-                        Desative para exibir somente o vídeo limpo, sem títulos.
+                  {/* Mode switcher for sub-banner video */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateField('showSubBannerVideoText', false);
+                        updateField('subBannerVideoBadge', '');
+                        updateField('subBannerVideoTitle', '');
+                        updateField('subBannerVideoDescription', '');
+                        updateField('subBannerVideoFullWidth', true);
+                      }}
+                      className={`p-2.5 rounded-xl text-left border transition-all cursor-pointer ${
+                        settings.showSubBannerVideoText === false || (!settings.subBannerVideoTitle && !settings.subBannerVideoBadge && !settings.subBannerVideoDescription)
+                          ? 'bg-indigo-50 border-indigo-500 ring-2 ring-indigo-200'
+                          : 'bg-white border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-bold text-xs text-slate-800 mb-0.5">
+                        <Film className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Apenas Vídeo</span>
+                      </div>
+                      <span className="text-[10px] text-slate-500 block leading-tight">
+                        Sem nenhum texto, ocupa 100% da tela de ponta a ponta.
                       </span>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={settings.showSubBannerVideoText !== false}
-                        onChange={(e) => updateField('showSubBannerVideoText', e.target.checked)}
-                        className="sr-only peer"
-                      />
-                      <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
-                    </label>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateField('showSubBannerVideoText', true);
+                        if (!settings.subBannerVideoTitle) {
+                          updateField('subBannerVideoTitle', 'Vídeo de Apresentação');
+                        }
+                      }}
+                      className={`p-2.5 rounded-xl text-left border transition-all cursor-pointer ${
+                        settings.showSubBannerVideoText !== false && (settings.subBannerVideoTitle || settings.subBannerVideoBadge || settings.subBannerVideoDescription)
+                          ? 'bg-indigo-50 border-indigo-500 ring-2 ring-indigo-200'
+                          : 'bg-white border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 font-bold text-xs text-slate-800 mb-0.5">
+                        <Video className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Vídeo com Textos</span>
+                      </div>
+                      <span className="text-[10px] text-slate-500 block leading-tight">
+                        Exibe título, selo ou descrição configuráveis.
+                      </span>
+                    </button>
                   </div>
 
                   <div>
@@ -795,7 +831,7 @@ export const BlockConfigDrawer: React.FC<BlockConfigDrawerProps> = ({
                         type="button"
                         onClick={() => updateField('subBannerVideoFullWidth', true)}
                         className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                          settings.subBannerVideoFullWidth === true || (settings.subBannerVideoFullWidth === undefined && (settings.showSubBannerVideoText === false || !settings.subBannerVideoTitle))
+                          settings.subBannerVideoFullWidth === true || settings.showSubBannerVideoText === false || (!settings.subBannerVideoTitle && !settings.subBannerVideoBadge && !settings.subBannerVideoDescription)
                             ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
                             : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                         }`}
@@ -806,7 +842,7 @@ export const BlockConfigDrawer: React.FC<BlockConfigDrawerProps> = ({
                         type="button"
                         onClick={() => updateField('subBannerVideoFullWidth', false)}
                         className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                          settings.subBannerVideoFullWidth === false || (settings.subBannerVideoFullWidth === undefined && settings.showSubBannerVideoText !== false && Boolean(settings.subBannerVideoTitle))
+                          settings.subBannerVideoFullWidth === false && settings.showSubBannerVideoText !== false && (Boolean(settings.subBannerVideoTitle) || Boolean(settings.subBannerVideoBadge))
                             ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
                             : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                         }`}
@@ -815,14 +851,55 @@ export const BlockConfigDrawer: React.FC<BlockConfigDrawerProps> = ({
                       </button>
                     </div>
                     <p className="text-[11px] text-slate-500">
-                      {(settings.subBannerVideoFullWidth === true || (settings.subBannerVideoFullWidth === undefined && (settings.showSubBannerVideoText === false || !settings.subBannerVideoTitle)))
+                      {(settings.subBannerVideoFullWidth === true || settings.showSubBannerVideoText === false || (!settings.subBannerVideoTitle && !settings.subBannerVideoBadge && !settings.subBannerVideoDescription))
                         ? 'O vídeo ocupará toda a largura da tela (100%), sem margens ou bordas laterais cortando.'
                         : 'O vídeo ficará centralizado em uma caixa com margens laterais.'}
                     </p>
                   </div>
 
-                  {settings.showSubBannerVideoText !== false && (
-                    <div className="space-y-2.5 pt-1">
+                  {settings.showSubBannerVideoText !== false ? (
+                    <div className="space-y-2.5 pt-2 border-t border-slate-200">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-700">Configuração dos Textos</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            updateField('showSubBannerVideoText', false);
+                            updateField('subBannerVideoBadge', '');
+                            updateField('subBannerVideoTitle', '');
+                            updateField('subBannerVideoDescription', '');
+                            updateField('subBannerVideoFullWidth', true);
+                          }}
+                          className="text-[10px] font-bold text-rose-600 hover:underline cursor-pointer"
+                        >
+                          Excluir Todos os Textos (Apenas Vídeo)
+                        </button>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[11px] font-bold text-slate-700">
+                            Selo Superior (Opcional)
+                          </label>
+                          {settings.subBannerVideoBadge ? (
+                            <button
+                              type="button"
+                              onClick={() => updateField('subBannerVideoBadge', '')}
+                              className="text-[10px] font-bold text-rose-600 hover:underline cursor-pointer"
+                            >
+                              Limpar selo
+                            </button>
+                          ) : null}
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Ex: Vídeo de Apresentação (deixe vazio para não exibir)"
+                          value={settings.subBannerVideoBadge || ''}
+                          onChange={(e) => updateField('subBannerVideoBadge', e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <label className="block text-[11px] font-bold text-slate-700">
@@ -870,6 +947,22 @@ export const BlockConfigDrawer: React.FC<BlockConfigDrawerProps> = ({
                           className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-indigo-500"
                         />
                       </div>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
+                      <span className="text-[11px] font-medium text-emerald-800">
+                        ✓ Vídeo limpo ativo: nenhum texto acima do vídeo, ocupando 100% da tela.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          updateField('showSubBannerVideoText', true);
+                          updateField('subBannerVideoTitle', 'Vídeo de Apresentação');
+                        }}
+                        className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer whitespace-nowrap ml-2"
+                      >
+                        + Adicionar Textos
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1265,20 +1358,128 @@ export const BlockConfigDrawer: React.FC<BlockConfigDrawerProps> = ({
 
         {/* GALLERY BLOCK */}
         {section.type === 'gallery' && (
-          <>
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Título da Galeria</label>
-              <input
-                type="text"
-                value={settings.title || ''}
-                onChange={(e) => updateField('title', e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
-              />
+          <div className="space-y-4">
+            {/* Mode / Header text toggle */}
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
+              <div>
+                <span className="block font-bold text-slate-800 text-xs">Exibir Textos Acima da Galeria</span>
+                <span className="text-[11px] text-slate-500">
+                  Desative para exibir somente a grade de fotos, sem títulos ou selos.
+                </span>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settings.showText !== false}
+                  onChange={(e) => updateField('showText', e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+              </label>
             </div>
+
+            {settings.showText !== false ? (
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">Textos da Seção</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updateField('showText', false);
+                      updateField('badge', '');
+                      updateField('title', '');
+                      updateField('subtitle', '');
+                    }}
+                    className="text-[11px] font-bold text-rose-600 hover:underline cursor-pointer"
+                  >
+                    Excluir Todos os Textos (Apenas Fotos)
+                  </button>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[11px] font-bold text-slate-700">Selo Superior (Opcional)</label>
+                    {settings.badge ? (
+                      <button
+                        type="button"
+                        onClick={() => updateField('badge', '')}
+                        className="text-[10px] font-bold text-rose-600 hover:underline cursor-pointer"
+                      >
+                        Limpar selo
+                      </button>
+                    ) : null}
+                  </div>
+                  <input
+                    type="text"
+                    value={settings.badge || ''}
+                    onChange={(e) => updateField('badge', e.target.value)}
+                    placeholder="Ex: Ambiente & Trabalhos (deixe vazio para não exibir)"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:border-indigo-500 text-xs font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[11px] font-bold text-slate-700">Título da Galeria (Opcional)</label>
+                    {settings.title ? (
+                      <button
+                        type="button"
+                        onClick={() => updateField('title', '')}
+                        className="text-[10px] font-bold text-rose-600 hover:underline cursor-pointer"
+                      >
+                        Limpar título
+                      </button>
+                    ) : null}
+                  </div>
+                  <input
+                    type="text"
+                    value={settings.title || ''}
+                    onChange={(e) => updateField('title', e.target.value)}
+                    placeholder="Ex: Nossa Galeria (deixe vazio para não exibir)"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:border-indigo-500 text-xs font-bold"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[11px] font-bold text-slate-700">Subtítulo / Descrição (Opcional)</label>
+                    {settings.subtitle ? (
+                      <button
+                        type="button"
+                        onClick={() => updateField('subtitle', '')}
+                        className="text-[10px] font-bold text-rose-600 hover:underline cursor-pointer"
+                      >
+                        Limpar subtítulo
+                      </button>
+                    ) : null}
+                  </div>
+                  <input
+                    type="text"
+                    value={settings.subtitle || ''}
+                    onChange={(e) => updateField('subtitle', e.target.value)}
+                    placeholder="Ex: Conheça nosso espaço e alguns dos nossos trabalhos (opcional)"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:border-indigo-500 text-xs"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
+                <span className="text-[11px] font-medium text-emerald-800">
+                  ✓ Galeria limpa ativa: apenas a grade de fotos será exibida, sem títulos ou selos.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => updateField('showText', true)}
+                  className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer whitespace-nowrap ml-2"
+                >
+                  + Adicionar Textos
+                </button>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block font-bold text-slate-700 mb-1 text-xs">Ajuste da Imagem (Enquadramento)</label>
+                <label className="block font-bold text-slate-700 mb-1 text-xs">Ajuste da Imagem</label>
                 <select
                   value={settings.imageFit || 'contain'}
                   onChange={(e) => updateField('imageFit', e.target.value)}
@@ -1288,8 +1489,8 @@ export const BlockConfigDrawer: React.FC<BlockConfigDrawerProps> = ({
                   <option value="cover">Preencher quadro (Cortar bordas)</option>
                   <option value="natural">Proporção natural da foto</option>
                 </select>
-                <p className="text-[10px] text-slate-600 mt-1">
-                  "Completa sem cortes" garante que nenhuma arte, texto ou borda da foto seja cortada.
+                <p className="text-[10px] text-slate-500 mt-1">
+                  "Completa sem cortes" garante que nenhuma arte ou borda seja cortada.
                 </p>
               </div>
 
@@ -1308,42 +1509,145 @@ export const BlockConfigDrawer: React.FC<BlockConfigDrawerProps> = ({
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="block font-bold text-slate-700">Fotos da Galeria</label>
-              <div className="grid grid-cols-2 gap-2">
-                {(settings.items || []).map((item: any, idx: number) => (
-                  <div key={item.id || idx} className="relative rounded-xl border border-slate-200 p-2 bg-slate-50 group">
-                    <div className="w-full h-24 rounded-lg mb-1.5 overflow-hidden bg-slate-100 flex items-center justify-center">
-                      <img
-                        src={item.url}
-                        alt=""
-                        className={`w-full h-full ${settings.imageFit === 'cover' ? 'object-cover' : 'object-contain'}`}
-                      />
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="Legenda da foto"
-                      value={item.caption || ''}
-                      onChange={(e) => {
-                        const newItems = [...(settings.items || [])];
-                        newItems[idx] = { ...newItems[idx], caption: e.target.value };
-                        updateField('items', newItems);
-                      }}
-                      className="w-full px-2 py-1 bg-white border border-slate-200 rounded-md text-[10px]"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const newItems = (settings.items || []).filter((_: any, i: number) => i !== idx);
-                        updateField('items', newItems);
-                      }}
-                      className="absolute top-3 right-3 p-1 bg-rose-600 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shadow-xs"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
+            {/* FOTOS DA GALERIA COM OPÇÃO CLARA DE EXCLUIR */}
+            <div className="space-y-3 pt-2 border-t border-slate-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="block font-bold text-slate-800 text-xs">
+                    Fotos da Galeria ({ (settings.items || []).length })
+                  </label>
+                  <span className="text-[10px] text-slate-500">
+                    Você pode alterar legendas, reordenar ou excluir qualquer foto individualmente.
+                  </span>
+                </div>
+                {(settings.items || []).length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm('Tem certeza que deseja excluir todas as fotos da galeria?')) {
+                        updateField('items', [], true);
+                      }
+                    }}
+                    className="text-[10px] font-bold text-rose-600 hover:underline cursor-pointer"
+                  >
+                    Excluir Todas as Fotos
+                  </button>
+                )}
               </div>
+
+              {(settings.items || []).length === 0 ? (
+                <div className="p-6 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+                  <Eye className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-slate-700">Nenhuma foto na galeria ainda</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Utilize o campo abaixo para enviar a primeira foto da sua galeria.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {(settings.items || []).map((item: any, idx: number) => (
+                    <div
+                      key={item.id || idx}
+                      className="rounded-2xl border border-slate-200 p-2.5 bg-white shadow-xs space-y-2 relative group hover:border-slate-300 transition-colors"
+                    >
+                      {/* Thumbnail container */}
+                      <div className="relative w-full h-28 rounded-xl overflow-hidden bg-slate-100 flex items-center justify-center border border-slate-100">
+                        <img
+                          src={item.url}
+                          alt={item.caption || `Foto ${idx + 1}`}
+                          className={`w-full h-full ${settings.imageFit === 'cover' ? 'object-cover' : 'object-contain'}`}
+                        />
+
+                        {/* Foto indicator badge */}
+                        <span className="absolute top-2 left-2 px-1.5 py-0.5 bg-black/70 text-white text-[10px] font-bold rounded-md backdrop-blur-xs">
+                          #{idx + 1}
+                        </span>
+
+                        {/* ALWAYS VISIBLE TOP-RIGHT DELETE BUTTON */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newItems = (settings.items || []).filter((_: any, i: number) => i !== idx);
+                            updateField('items', newItems, true);
+                          }}
+                          className="absolute top-2 right-2 p-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg shadow-md cursor-pointer transition-transform hover:scale-110 z-10 flex items-center justify-center"
+                          title="Excluir foto da galeria"
+                          aria-label="Excluir foto da galeria"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      {/* Caption input */}
+                      <div>
+                        <input
+                          type="text"
+                          placeholder="Legenda da foto (opcional)"
+                          value={item.caption || ''}
+                          onChange={(e) => {
+                            const newItems = [...(settings.items || [])];
+                            newItems[idx] = { ...newItems[idx], caption: e.target.value };
+                            updateField('items', newItems);
+                          }}
+                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:bg-white focus:border-indigo-500 text-xs"
+                        />
+                      </div>
+
+                      {/* Prominent EXCLUIR FOTA button */}
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newItems = (settings.items || []).filter((_: any, i: number) => i !== idx);
+                            updateField('items', newItems, true);
+                          }}
+                          className="flex-1 py-1.5 px-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-2xs"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                          <span>Excluir Foto</span>
+                        </button>
+
+                        {(settings.items || []).length > 1 && (
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              disabled={idx === 0}
+                              onClick={() => {
+                                if (idx === 0) return;
+                                const newItems = [...(settings.items || [])];
+                                const temp = newItems[idx - 1];
+                                newItems[idx - 1] = newItems[idx];
+                                newItems[idx] = temp;
+                                updateField('items', newItems, true);
+                              }}
+                              className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                              title="Mover foto para a esquerda / cima"
+                            >
+                              <ArrowLeft className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={idx === (settings.items || []).length - 1}
+                              onClick={() => {
+                                if (idx === (settings.items || []).length - 1) return;
+                                const newItems = [...(settings.items || [])];
+                                const temp = newItems[idx + 1];
+                                newItems[idx + 1] = newItems[idx];
+                                newItems[idx] = temp;
+                                updateField('items', newItems, true);
+                              }}
+                              className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                              title="Mover foto para a direita / baixo"
+                            >
+                              <ChevronDown className="w-3.5 h-3.5 -rotate-90" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div className="pt-2">
                 <ImageUpload
@@ -1354,35 +1658,66 @@ export const BlockConfigDrawer: React.FC<BlockConfigDrawerProps> = ({
                       ...(settings.items || []),
                       { id: `g-${Date.now()}`, url, caption: '' },
                     ];
-                    updateField('items', newItems);
+                    updateField('items', newItems, true);
                   }}
                   subfolder="gallery"
                 />
               </div>
             </div>
-          </>
+          </div>
         )}
 
         {/* VIDEO BLOCK */}
         {section.type === 'video' && (
           <div className="space-y-4">
-            {/* Toggle to show/hide texts */}
-            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
-              <div>
-                <span className="block font-bold text-slate-800 text-xs">Exibir Textos Acima do Vídeo</span>
-                <span className="text-[11px] text-slate-500">
-                  Desative para exibir somente o vídeo limpo, sem títulos ou selos.
+            {/* Mode selection buttons: Apenas Vídeo vs Vídeo com Textos */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  updateField('showText', false);
+                  updateField('badge', '');
+                  updateField('title', '');
+                  updateField('description', '');
+                  updateField('fullWidth', true);
+                }}
+                className={`p-3 rounded-2xl text-left border transition-all cursor-pointer ${
+                  settings.showText === false || (!settings.title && !settings.badge && !settings.description)
+                    ? 'bg-indigo-50 border-indigo-600 ring-2 ring-indigo-200 shadow-xs'
+                    : 'bg-white border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900 mb-1">
+                  <Film className="w-4 h-4 text-indigo-600" />
+                  <span>Apenas o Vídeo</span>
+                </div>
+                <span className="text-[11px] text-slate-500 block leading-tight">
+                  Sem nenhum texto acima. O vídeo ocupa todo o espaço da tela de ponta a ponta (100%).
                 </span>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.showText !== false}
-                  onChange={(e) => updateField('showText', e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-              </label>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  updateField('showText', true);
+                  if (!settings.title) {
+                    updateField('title', 'Conheça Mais Sobre Nós');
+                  }
+                }}
+                className={`p-3 rounded-2xl text-left border transition-all cursor-pointer ${
+                  settings.showText !== false && (Boolean(settings.title) || Boolean(settings.badge) || Boolean(settings.description))
+                    ? 'bg-indigo-50 border-indigo-600 ring-2 ring-indigo-200 shadow-xs'
+                    : 'bg-white border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900 mb-1">
+                  <Video className="w-4 h-4 text-indigo-600" />
+                  <span>Vídeo com Textos</span>
+                </div>
+                <span className="text-[11px] text-slate-500 block leading-tight">
+                  Personalize ou exclua individualmente títulos, selo ou descrição.
+                </span>
+              </button>
             </div>
 
             {/* Video File / URL Upload */}
@@ -1403,7 +1738,7 @@ export const BlockConfigDrawer: React.FC<BlockConfigDrawerProps> = ({
                   type="button"
                   onClick={() => updateField('fullWidth', true)}
                   className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                    settings.fullWidth === true || (settings.fullWidth === undefined && (settings.showText === false || !settings.title))
+                    settings.fullWidth === true || settings.showText === false || (!settings.title && !settings.badge && !settings.description)
                       ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
                       : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                   }`}
@@ -1414,7 +1749,7 @@ export const BlockConfigDrawer: React.FC<BlockConfigDrawerProps> = ({
                   type="button"
                   onClick={() => updateField('fullWidth', false)}
                   className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                    settings.fullWidth === false || (settings.fullWidth === undefined && settings.showText !== false && Boolean(settings.title))
+                    settings.fullWidth === false && settings.showText !== false && (Boolean(settings.title) || Boolean(settings.badge))
                       ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
                       : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                   }`}
@@ -1423,17 +1758,49 @@ export const BlockConfigDrawer: React.FC<BlockConfigDrawerProps> = ({
                 </button>
               </div>
               <p className="text-[11px] text-slate-500">
-                {(settings.fullWidth === true || (settings.fullWidth === undefined && (settings.showText === false || !settings.title)))
-                  ? 'O vídeo se expandirá de ponta a ponta na tela (100% da largura), sem margens ou bordas cortando.'
+                {(settings.fullWidth === true || settings.showText === false || (!settings.title && !settings.badge && !settings.description))
+                  ? 'O vídeo ocupará todo o espaço da tela de ponta a ponta (100% da largura), sem margens ou bordas laterais cortando.'
                   : 'O vídeo ficará centralizado em uma caixa com margens laterais.'}
               </p>
             </div>
 
+            {/* Altura / Proporção do Vídeo */}
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+              <label className="block font-bold text-slate-800 text-xs">Altura / Proporção de Exibição do Vídeo</label>
+              <select
+                value={settings.heightMode || 'standard'}
+                onChange={(e) => updateField('heightMode', e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800"
+              >
+                <option value="standard">Proporção Widescreen 16:9 (Padrão Original do Vídeo - Perfeito)</option>
+                <option value="cinema">Formato Cinema Expandido (75vh de altura - imersivo)</option>
+                <option value="screen">Tela Cheia Completa (90vh - cobre a altura quase total da tela)</option>
+              </select>
+              <p className="text-[10px] text-slate-500">
+                A proporção 16:9 widescreen é ideal para vídeos do YouTube e Vimeo pois preserva o formato natural sem faixas pretas.
+              </p>
+            </div>
+
+            {/* Poster image (optional thumbnail) */}
+            <div>
+              <ImageUpload
+                label="Imagem de Capa do Vídeo (Opcional)"
+                value={settings.posterUrl || ''}
+                onChange={(url) => updateField('posterUrl', url)}
+                subfolder="video"
+              />
+            </div>
+
             {/* Texts configuration (shown if showText !== false) */}
-            {settings.showText !== false && (
-              <div className="space-y-3 pt-2 border-t border-slate-200">
+            {settings.showText !== false && (Boolean(settings.title) || Boolean(settings.badge) || Boolean(settings.description)) ? (
+              <div className="space-y-3 pt-3 border-t border-slate-200">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-slate-700">Configuração dos Textos</span>
+                  <div>
+                    <span className="text-xs font-bold text-slate-800 block">Opções dos Textos do Vídeo</span>
+                    <span className="text-[10px] text-slate-500">
+                      Você pode excluir qualquer texto individualmente ou todos de uma vez.
+                    </span>
+                  </div>
                   <button
                     type="button"
                     onClick={() => {
@@ -1443,78 +1810,112 @@ export const BlockConfigDrawer: React.FC<BlockConfigDrawerProps> = ({
                       updateField('description', '');
                       updateField('fullWidth', true);
                     }}
-                    className="text-[11px] font-bold text-rose-600 hover:text-rose-700 hover:underline cursor-pointer"
+                    className="text-[11px] font-bold text-rose-600 hover:text-rose-700 hover:underline cursor-pointer flex items-center gap-1"
                   >
-                    Excluir Todos os Textos (Vídeo Limpo)
+                    <Trash2 className="w-3 h-3 text-rose-600" />
+                    <span>Excluir Todos os Textos</span>
                   </button>
                 </div>
 
-                <div>
-                  <div className="flex items-center justify-between mb-1">
+                {/* Selo Superior */}
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+                  <div className="flex items-center justify-between">
                     <label className="block font-bold text-slate-700 text-xs">Selo Superior (Opcional)</label>
                     {settings.badge ? (
                       <button
                         type="button"
                         onClick={() => updateField('badge', '')}
-                        className="text-[10px] font-bold text-rose-600 hover:underline cursor-pointer"
+                        className="text-[10px] font-bold text-rose-600 hover:underline cursor-pointer flex items-center gap-1"
                       >
-                        Limpar selo
+                        <Trash2 className="w-3 h-3" />
+                        <span>Excluir selo</span>
                       </button>
-                    ) : null}
+                    ) : (
+                      <span className="text-[10px] text-slate-400">Não exibido</span>
+                    )}
                   </div>
                   <input
                     type="text"
                     value={settings.badge || ''}
                     onChange={(e) => updateField('badge', e.target.value)}
                     placeholder="Ex: Vídeo em Destaque (deixe vazio para não exibir)"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:border-indigo-500 text-xs font-semibold"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:border-indigo-500 text-xs font-semibold"
                   />
-                  <p className="text-[10px] text-slate-400 mt-0.5">Texto em destaque acima do título (ex: VÍDEO EM DESTAQUE).</p>
+                  <p className="text-[10px] text-slate-400">Texto pequeno em destaque acima do título.</p>
                 </div>
 
-                <div>
-                  <div className="flex items-center justify-between mb-1">
+                {/* Título */}
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+                  <div className="flex items-center justify-between">
                     <label className="block font-bold text-slate-700 text-xs">Título do Vídeo (Opcional)</label>
                     {settings.title ? (
                       <button
                         type="button"
                         onClick={() => updateField('title', '')}
-                        className="text-[10px] font-bold text-rose-600 hover:underline cursor-pointer"
+                        className="text-[10px] font-bold text-rose-600 hover:underline cursor-pointer flex items-center gap-1"
                       >
-                        Limpar título
+                        <Trash2 className="w-3 h-3" />
+                        <span>Excluir título</span>
                       </button>
-                    ) : null}
+                    ) : (
+                      <span className="text-[10px] text-slate-400">Não exibido</span>
+                    )}
                   </div>
                   <input
                     type="text"
                     value={settings.title || ''}
                     onChange={(e) => updateField('title', e.target.value)}
                     placeholder="Ex: Conheça Mais Sobre Nós (deixe vazio para não exibir)"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:border-indigo-500 text-xs"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:border-indigo-500 text-xs font-bold"
                   />
                 </div>
 
-                <div>
-                  <div className="flex items-center justify-between mb-1">
+                {/* Descrição */}
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+                  <div className="flex items-center justify-between">
                     <label className="block font-bold text-slate-700 text-xs">Descrição / Subtítulo (Opcional)</label>
                     {settings.description ? (
                       <button
                         type="button"
                         onClick={() => updateField('description', '')}
-                        className="text-[10px] font-bold text-rose-600 hover:underline cursor-pointer"
+                        className="text-[10px] font-bold text-rose-600 hover:underline cursor-pointer flex items-center gap-1"
                       >
-                        Limpar descrição
+                        <Trash2 className="w-3 h-3" />
+                        <span>Excluir descrição</span>
                       </button>
-                    ) : null}
+                    ) : (
+                      <span className="text-[10px] text-slate-400">Não exibido</span>
+                    )}
                   </div>
                   <textarea
                     rows={2}
                     value={settings.description || ''}
                     onChange={(e) => updateField('description', e.target.value)}
                     placeholder="Texto descritivo opcional abaixo do título (deixe vazio para não exibir)..."
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:border-indigo-500 text-xs"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:border-indigo-500 text-xs"
                   />
                 </div>
+              </div>
+            ) : (
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between">
+                <div>
+                  <span className="block font-bold text-emerald-900 text-xs">
+                    ✓ Vídeo Limpo em Tela Cheia Ativo
+                  </span>
+                  <span className="text-[11px] text-emerald-700">
+                    O vídeo ocupará 100% de todo o espaço da tela sem nenhum texto acima.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateField('showText', true);
+                    updateField('title', 'Conheça Mais Sobre Nós');
+                  }}
+                  className="px-3 py-1.5 bg-white text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold hover:bg-emerald-100 cursor-pointer shadow-2xs whitespace-nowrap ml-3"
+                >
+                  + Adicionar Textos
+                </button>
               </div>
             )}
           </div>

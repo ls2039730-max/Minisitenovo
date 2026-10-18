@@ -117,6 +117,7 @@ interface AutoPlayVideoPlayerProps {
   posterUrl?: string;
   radiusClass?: string;
   fullWidth?: boolean;
+  heightMode?: 'standard' | 'cinema' | 'screen';
 }
 
 const AutoPlayVideoPlayer: React.FC<AutoPlayVideoPlayerProps> = ({
@@ -125,6 +126,7 @@ const AutoPlayVideoPlayer: React.FC<AutoPlayVideoPlayerProps> = ({
   posterUrl,
   radiusClass = 'rounded-2xl',
   fullWidth = false,
+  heightMode = 'standard',
 }) => {
   if (!url || !url.trim()) return null;
   const vInfo = getVideoEmbedInfo(url);
@@ -265,12 +267,22 @@ const AutoPlayVideoPlayer: React.FC<AutoPlayVideoPlayerProps> = ({
     }
   };
 
+  const heightClass = (() => {
+    if (heightMode === 'cinema') {
+      return 'h-[65vh] sm:h-[75vh] min-h-[420px]';
+    }
+    if (heightMode === 'screen') {
+      return 'h-[85vh] sm:h-[95vh] min-h-[500px]';
+    }
+    return 'aspect-video min-h-[280px] sm:min-h-[460px] md:min-h-[580px] lg:min-h-[720px]';
+  })();
+
   return (
     <div
       ref={containerRef}
       className={`relative w-full overflow-hidden bg-black ${
         fullWidth
-          ? 'aspect-video sm:aspect-[21/9] md:aspect-video min-h-[260px] sm:min-h-[420px] md:min-h-[540px] rounded-none border-0 shadow-none'
+          ? `${heightClass} rounded-none border-0 shadow-none`
           : `aspect-video shadow-2xl border border-slate-200/80 ${radiusClass}`
       }`}
     >
@@ -1222,29 +1234,32 @@ const PublicSiteViewInner: React.FC<PublicSiteViewProps> = ({
               {/* FEATURED VIDEO PLACED DIRECTLY BELOW THE MAIN BANNER (Not on top of the banner image) */}
               {Boolean(s.showSubBannerVideo) === true && s.subBannerVideoUrl && s.subBannerVideoUrl.trim() !== '' && (() => {
                 const showText = s.showSubBannerVideoText !== false;
+                const rawBadge = (s.subBannerVideoBadge || '').trim();
                 const rawTitle = (s.subBannerVideoTitle || '').trim();
                 const rawDesc = (s.subBannerVideoDescription || '').trim();
-                const hasAnyText = showText && (Boolean(rawTitle) || Boolean(rawDesc));
-                const isFullWidth = s.subBannerVideoFullWidth !== undefined ? Boolean(s.subBannerVideoFullWidth) : !hasAnyText;
+                const hasAnyText = showText && (Boolean(rawBadge) || Boolean(rawTitle) || Boolean(rawDesc));
+                const isFullWidth = !hasAnyText ? true : (s.subBannerVideoFullWidth !== undefined ? Boolean(s.subBannerVideoFullWidth) : false);
 
                 return (
                   <section
                     key={`${section.id}-sub-video`}
                     className={
                       isFullWidth
-                        ? 'w-full max-w-none px-0 py-0 overflow-hidden bg-black'
+                        ? 'w-full max-w-none px-0 py-0 m-0 overflow-hidden bg-black'
                         : 'py-6 sm:py-8 md:py-10 px-4 w-full bg-slate-50/80 border-b border-slate-200/60'
                     }
                   >
-                    <div className={isFullWidth ? 'w-full' : 'max-w-3xl mx-auto'}>
+                    <div className={isFullWidth ? 'w-full' : 'max-w-4xl mx-auto'}>
                       {hasAnyText && (
                         <div className={`text-center ${isFullWidth ? 'px-4 pt-8 pb-4' : 'mb-3 sm:mb-4'}`}>
-                          <span
-                            className="text-[11px] font-bold uppercase tracking-wider block mb-1"
-                            style={{ color: secondaryColor }}
-                          >
-                            Vídeo de Apresentação
-                          </span>
+                          {rawBadge && (
+                            <span
+                              className="text-[11px] font-bold uppercase tracking-wider block mb-1"
+                              style={{ color: secondaryColor }}
+                            >
+                              {rawBadge}
+                            </span>
+                          )}
                           {rawTitle && (
                             <h3 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
                               {rawTitle}
@@ -1260,8 +1275,9 @@ const PublicSiteViewInner: React.FC<PublicSiteViewProps> = ({
                       <AutoPlayVideoPlayer
                         url={s.subBannerVideoUrl}
                         title={rawTitle || 'Vídeo de Apresentação'}
-                        radiusClass={radiusClass}
+                        radiusClass={isFullWidth ? 'rounded-none' : radiusClass}
                         fullWidth={isFullWidth}
+                        heightMode={s.subBannerVideoHeightMode || (isFullWidth && !hasAnyText ? 'standard' : 'standard')}
                       />
                     </div>
                   </section>
@@ -1282,8 +1298,8 @@ const PublicSiteViewInner: React.FC<PublicSiteViewProps> = ({
           const rawDesc = (s.description || '').trim();
 
           const hasAnyHeader = showText && (Boolean(rawBadge) || Boolean(rawTitle) || Boolean(rawDesc));
-          // When there is no text above, default to full width occupying the entire screen, or when fullWidth is configured
-          const isFullWidth = s.fullWidth !== undefined ? Boolean(s.fullWidth) : !hasAnyHeader;
+          // When there is no text above, default to full width occupying the entire screen (100% edge-to-edge)
+          const isFullWidth = !hasAnyHeader ? true : (s.fullWidth !== undefined ? Boolean(s.fullWidth) : false);
 
           return (
             <section
@@ -1291,8 +1307,8 @@ const PublicSiteViewInner: React.FC<PublicSiteViewProps> = ({
               id="video"
               className={
                 isFullWidth
-                  ? 'w-full max-w-none px-0 py-0 overflow-hidden bg-black'
-                  : 'py-12 md:py-20 px-4 max-w-4xl mx-auto w-full'
+                  ? 'w-full max-w-none px-0 py-0 m-0 overflow-hidden bg-black'
+                  : 'py-12 md:py-20 px-4 max-w-5xl mx-auto w-full'
               }
             >
               {hasAnyHeader && (
@@ -1315,8 +1331,9 @@ const PublicSiteViewInner: React.FC<PublicSiteViewProps> = ({
                 url={s.videoUrl}
                 title={rawTitle || 'Vídeo Institucional'}
                 posterUrl={s.posterUrl}
-                radiusClass={radiusClass}
+                radiusClass={isFullWidth ? 'rounded-none' : radiusClass}
                 fullWidth={isFullWidth}
+                heightMode={s.heightMode || (isFullWidth && !hasAnyHeader ? 'standard' : 'standard')}
               />
             </section>
           );
@@ -1756,13 +1773,29 @@ const PublicSiteViewInner: React.FC<PublicSiteViewProps> = ({
             return (
               <PremiumScrollReveal key={section.id} direction="up" delay={0.1}>
                 <section id="galeria" className="py-16 md:py-24 px-4 max-w-6xl mx-auto w-full">
-                  <div className="text-center max-w-2xl mx-auto mb-10 space-y-2">
-                    <span className="text-xs font-bold uppercase tracking-wider" style={{ color: secondaryColor }}>
-                      Ambiente & Trabalhos
-                    </span>
-                    <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight">{s.title || 'Nossa Galeria'}</h2>
-                    {s.subtitle && <p className="text-xs sm:text-sm opacity-75">{s.subtitle}</p>}
-                  </div>
+                  {(() => {
+                    const showText = s.showText !== false;
+                    const rawBadge = (s.badge !== undefined ? s.badge : 'Ambiente & Trabalhos').trim();
+                    const rawTitle = (s.title !== undefined ? s.title : 'Nossa Galeria').trim();
+                    const rawSubtitle = (s.subtitle || '').trim();
+                    const hasAnyHeader = showText && (Boolean(rawBadge) || Boolean(rawTitle) || Boolean(rawSubtitle));
+
+                    if (!hasAnyHeader) return null;
+
+                    return (
+                      <div className="text-center max-w-2xl mx-auto mb-10 space-y-2">
+                        {rawBadge && (
+                          <span className="text-xs font-bold uppercase tracking-wider block" style={{ color: secondaryColor }}>
+                            {rawBadge}
+                          </span>
+                        )}
+                        {rawTitle && (
+                          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight">{rawTitle}</h2>
+                        )}
+                        {rawSubtitle && <p className="text-xs sm:text-sm opacity-75">{rawSubtitle}</p>}
+                      </div>
+                    );
+                  })()}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
                     {items.map((img: any, idx: number) => (
