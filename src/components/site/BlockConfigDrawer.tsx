@@ -37,6 +37,7 @@ import {
   Heart,
   Tag,
   CheckCircle2,
+  Wine,
 } from 'lucide-react';
 import { SiteSection } from '../../types/site';
 import { BLOCK_REGISTRY } from '../../constants/blockRegistry';
@@ -754,7 +755,26 @@ export const BlockConfigDrawer: React.FC<BlockConfigDrawerProps> = ({
               </div>
 
               {settings.showSubBannerVideo && (
-                <div className="space-y-2.5 pt-2.5 border-t border-slate-200">
+                <div className="space-y-3 pt-2.5 border-t border-slate-200">
+                  {/* Toggle to show/hide texts */}
+                  <div className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between">
+                    <div>
+                      <span className="block font-bold text-slate-800 text-xs">Exibir Textos Acima do Vídeo</span>
+                      <span className="text-[11px] text-slate-500">
+                        Desative para exibir somente o vídeo limpo, sem títulos.
+                      </span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={settings.showSubBannerVideoText !== false}
+                        onChange={(e) => updateField('showSubBannerVideoText', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                    </label>
+                  </div>
+
                   <div>
                     <VideoUpload
                       value={settings.subBannerVideoUrl || ''}
@@ -767,30 +787,267 @@ export const BlockConfigDrawer: React.FC<BlockConfigDrawerProps> = ({
                     </p>
                   </div>
 
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                      Título do Vídeo (Opcional)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ex: Conheça nosso espaço e atendimento"
-                      value={settings.subBannerVideoTitle || ''}
-                      onChange={(e) => updateField('subBannerVideoTitle', e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-indigo-500"
-                    />
+                  {/* Ocupação da Tela (Largura do Vídeo) */}
+                  <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-2">
+                    <label className="block font-bold text-slate-800 text-xs">Ocupação da Tela (Largura do Vídeo)</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => updateField('subBannerVideoFullWidth', true)}
+                        className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                          settings.subBannerVideoFullWidth === true || (settings.subBannerVideoFullWidth === undefined && (settings.showSubBannerVideoText === false || !settings.subBannerVideoTitle))
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        Ocupar Toda a Tela (100%)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateField('subBannerVideoFullWidth', false)}
+                        className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                          settings.subBannerVideoFullWidth === false || (settings.subBannerVideoFullWidth === undefined && settings.showSubBannerVideoText !== false && Boolean(settings.subBannerVideoTitle))
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        Caixa Centralizada
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      {(settings.subBannerVideoFullWidth === true || (settings.subBannerVideoFullWidth === undefined && (settings.showSubBannerVideoText === false || !settings.subBannerVideoTitle)))
+                        ? 'O vídeo ocupará toda a largura da tela (100%), sem margens ou bordas laterais cortando.'
+                        : 'O vídeo ficará centralizado em uma caixa com margens laterais.'}
+                    </p>
                   </div>
 
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                      Descrição de Apoio (Opcional)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ex: Assista ao vídeo de 1 minuto e tire suas dúvidas"
-                      value={settings.subBannerVideoDescription || ''}
-                      onChange={(e) => updateField('subBannerVideoDescription', e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-indigo-500"
-                    />
+                  {settings.showSubBannerVideoText !== false && (
+                    <div className="space-y-2.5 pt-1">
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[11px] font-bold text-slate-700">
+                            Título do Vídeo (Opcional)
+                          </label>
+                          {settings.subBannerVideoTitle ? (
+                            <button
+                              type="button"
+                              onClick={() => updateField('subBannerVideoTitle', '')}
+                              className="text-[10px] font-bold text-rose-600 hover:underline cursor-pointer"
+                            >
+                              Limpar título
+                            </button>
+                          ) : null}
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Ex: Conheça nosso espaço e atendimento (deixe vazio para não exibir)"
+                          value={settings.subBannerVideoTitle || ''}
+                          onChange={(e) => updateField('subBannerVideoTitle', e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-indigo-500 font-semibold"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[11px] font-bold text-slate-700">
+                            Descrição de Apoio (Opcional)
+                          </label>
+                          {settings.subBannerVideoDescription ? (
+                            <button
+                              type="button"
+                              onClick={() => updateField('subBannerVideoDescription', '')}
+                              className="text-[10px] font-bold text-rose-600 hover:underline cursor-pointer"
+                            >
+                              Limpar descrição
+                            </button>
+                          ) : null}
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Ex: Assista ao vídeo de 1 minuto e tire suas dúvidas"
+                          value={settings.subBannerVideoDescription || ''}
+                          onChange={(e) => updateField('subBannerVideoDescription', e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* DESTAQUES / PILARES DO BANNER PRINCIPAL (ex: Grelhados na Brasa, Insumos da Estação, Carta de Vinhos) */}
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                    <Flame className="w-4 h-4 text-amber-500" />
+                    Destaques do Banner (Badges com Ícones)
+                  </span>
+                  <p className="text-[11px] text-slate-500">
+                    Edite ou exclua os selos do banner (ex: "Grelhados na Brasa", "Insumos da Estação", "Carta de Vinhos").
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.showHighlights !== false && (settings.highlights === undefined || (Array.isArray(settings.highlights) && settings.highlights.length > 0))}
+                    onChange={(e) => {
+                      if (!e.target.checked) {
+                        updateField('showHighlights', false);
+                      } else {
+                        updateField('showHighlights', true);
+                        if (!settings.highlights || settings.highlights.length === 0) {
+                          updateField('highlights', [
+                            { title: 'Grelhados na Brasa', subtitle: 'Cortes nobres certificados', icon: 'flame' },
+                            { title: 'Insumos da Estação', subtitle: 'Preparo artesanal diário', icon: 'utensils' },
+                            { title: 'Carta de Vinhos', subtitle: 'Harmonização pelo sommelier', icon: 'wine' },
+                          ]);
+                        }
+                      }
+                    }}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                </label>
+              </div>
+
+              {settings.showHighlights !== false && (
+                <div className="space-y-3 pt-2.5 border-t border-slate-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-700">Lista de Destaques</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const currentList = settings.highlights ?? [
+                            { title: 'Grelhados na Brasa', subtitle: 'Cortes nobres certificados', icon: 'flame' },
+                            { title: 'Insumos da Estação', subtitle: 'Preparo artesanal diário', icon: 'utensils' },
+                            { title: 'Carta de Vinhos', subtitle: 'Harmonização pelo sommelier', icon: 'wine' },
+                          ];
+                          updateField('showHighlights', true);
+                          updateField('highlights', [
+                            ...currentList,
+                            { title: 'Novo Destaque', subtitle: 'Descrição do diferencial', icon: 'sparkles' },
+                          ]);
+                        }}
+                        className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 hover:underline cursor-pointer"
+                      >
+                        + Adicionar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          updateField('highlights', []);
+                          updateField('showHighlights', false);
+                        }}
+                        className="text-[11px] font-bold text-rose-600 hover:text-rose-700 hover:underline cursor-pointer"
+                      >
+                        Excluir Todos
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {(settings.highlights ?? [
+                      { title: 'Grelhados na Brasa', subtitle: 'Cortes nobres certificados', icon: 'flame' },
+                      { title: 'Insumos da Estação', subtitle: 'Preparo artesanal diário', icon: 'utensils' },
+                      { title: 'Carta de Vinhos', subtitle: 'Harmonização pelo sommelier', icon: 'wine' },
+                    ]).map((item: any, idx: number) => (
+                      <div key={idx} className="p-3 bg-white border border-slate-200 rounded-xl space-y-2 relative shadow-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase text-amber-700 flex items-center gap-1">
+                            <Star className="w-3 h-3 text-amber-500" />
+                            Destaque #{idx + 1}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const currentList = settings.highlights ?? [
+                                { title: 'Grelhados na Brasa', subtitle: 'Cortes nobres certificados', icon: 'flame' },
+                                { title: 'Insumos da Estação', subtitle: 'Preparo artesanal diário', icon: 'utensils' },
+                                { title: 'Carta de Vinhos', subtitle: 'Harmonização pelo sommelier', icon: 'wine' },
+                              ];
+                              const list = [...currentList];
+                              list.splice(idx, 1);
+                              updateField('highlights', list);
+                              if (list.length === 0) {
+                                updateField('showHighlights', false);
+                              }
+                            }}
+                            className="text-[11px] font-bold text-rose-600 hover:text-rose-700 cursor-pointer"
+                          >
+                            Excluir
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Título</label>
+                            <input
+                              type="text"
+                              value={item.title || ''}
+                              onChange={(e) => {
+                                const currentList = settings.highlights ?? [
+                                  { title: 'Grelhados na Brasa', subtitle: 'Cortes nobres certificados', icon: 'flame' },
+                                  { title: 'Insumos da Estação', subtitle: 'Preparo artesanal diário', icon: 'utensils' },
+                                  { title: 'Carta de Vinhos', subtitle: 'Harmonização pelo sommelier', icon: 'wine' },
+                                ];
+                                const list = [...currentList];
+                                list[idx] = { ...list[idx], title: e.target.value };
+                                updateField('highlights', list);
+                              }}
+                              placeholder="Ex: Grelhados na Brasa"
+                              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-900"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Ícone</label>
+                            <select
+                              value={item.icon || 'flame'}
+                              onChange={(e) => {
+                                const currentList = settings.highlights ?? [
+                                  { title: 'Grelhados na Brasa', subtitle: 'Cortes nobres certificados', icon: 'flame' },
+                                  { title: 'Insumos da Estação', subtitle: 'Preparo artesanal diário', icon: 'utensils' },
+                                  { title: 'Carta de Vinhos', subtitle: 'Harmonização pelo sommelier', icon: 'wine' },
+                                ];
+                                const list = [...currentList];
+                                list[idx] = { ...list[idx], icon: e.target.value };
+                                updateField('highlights', list);
+                              }}
+                              className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800"
+                            >
+                              <option value="flame">🔥 Fogo / Brasa</option>
+                              <option value="utensils">🍴 Talheres / Gastronomia</option>
+                              <option value="wine">🍷 Taça / Vinho</option>
+                              <option value="sparkles">✨ Brilho / Especial</option>
+                              <option value="star">⭐ Estrela</option>
+                              <option value="award">🏆 Selo / Prêmio</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Subtítulo / Descrição Curta</label>
+                          <input
+                            type="text"
+                            value={item.subtitle || item.desc || ''}
+                            onChange={(e) => {
+                              const currentList = settings.highlights ?? [
+                                { title: 'Grelhados na Brasa', subtitle: 'Cortes nobres certificados', icon: 'flame' },
+                                { title: 'Insumos da Estação', subtitle: 'Preparo artesanal diário', icon: 'utensils' },
+                                { title: 'Carta de Vinhos', subtitle: 'Harmonização pelo sommelier', icon: 'wine' },
+                              ];
+                              const list = [...currentList];
+                              list[idx] = { ...list[idx], subtitle: e.target.value, desc: e.target.value };
+                              updateField('highlights', list);
+                            }}
+                            placeholder="Ex: Cortes nobres certificados"
+                            className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800"
+                          />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -850,101 +1107,158 @@ export const BlockConfigDrawer: React.FC<BlockConfigDrawerProps> = ({
             {/* DIFERENCIAIS / CHECKLIST DA SEÇÃO SOBRE NÓS */}
             <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
               <div className="flex items-center justify-between">
-                <label className="block font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Diferenciais & Destaques (Checklist Verde)</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const currentList = settings.highlights ?? [
-                      { title: 'Consultas Sem Pressa', desc: 'Tempo dedicado para esclarecer todas as suas dúvidas.' },
-                      { title: 'Equipamentos Modernos', desc: 'Exames e diagnósticos com alta precisão e segurança.' },
-                      { title: 'Acessibilidade Total', desc: 'Rampa de acesso, elevador e espaço adaptado para todos.' },
-                    ];
-                    updateField('highlights', [...currentList, { title: 'Novo Diferencial', desc: 'Descrição do diferencial' }]);
-                  }}
-                  className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 hover:underline cursor-pointer"
-                >
-                  + Adicionar Item
-                </button>
-              </div>
-              <p className="text-[11px] text-slate-500 leading-tight">
-                Edite, altere os textos ou exclua os 3 itens de destaque que aparecem com ícone de verificação verde na seção Sobre Nós (ex: Consultas Sem Pressa, Equipamentos Modernos, Acessibilidade Total).
-              </p>
-
-              <div className="space-y-2.5 pt-1">
-                {(settings.highlights ?? [
-                  { title: 'Consultas Sem Pressa', desc: 'Tempo dedicado para esclarecer todas as suas dúvidas.' },
-                  { title: 'Equipamentos Modernos', desc: 'Exames e diagnósticos com alta precisão e segurança.' },
-                  { title: 'Acessibilidade Total', desc: 'Rampa de acesso, elevador e espaço adaptado para todos.' },
-                ]).map((item: any, idx: number) => (
-                  <div key={idx} className="p-3 bg-white border border-slate-200 rounded-xl space-y-2 relative group shadow-xs">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] font-bold uppercase text-emerald-700 flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                        Diferencial #{idx + 1}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const currentList = settings.highlights ?? [
+                <div>
+                  <label className="block font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Diferenciais & Destaques (Checklist Verde)</span>
+                  </label>
+                  <p className="text-[11px] text-slate-500 leading-tight">
+                    Edite, altere ou exclua os 3 itens de destaque que aparecem na seção Sobre Nós.
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.showHighlights !== false && (settings.highlights === undefined || (Array.isArray(settings.highlights) && settings.highlights.length > 0))}
+                    onChange={(e) => {
+                      if (!e.target.checked) {
+                        updateField('showHighlights', false);
+                      } else {
+                        updateField('showHighlights', true);
+                        if (!settings.highlights || settings.highlights.length === 0) {
+                          const isGastronomy = (settings.title && /cozinha|mesa|prato|sabor|gastronom/i.test(settings.title)) ||
+                            (settings.text && /cozinha|mesa|prato|sabor|gastronom|restaurante/i.test(settings.text));
+                          updateField('highlights', isGastronomy ? [
+                            { title: 'Ingredientes de Origem Controlada', desc: 'Parceria com pequenos produtores e ingredientes frescos diários.' },
+                            { title: 'Ambiente & Hospitalidade Calorosa', desc: 'Salão desenhado para encontros memoráveis, reuniões e celebrações.' },
+                            { title: 'Pratos Especiais & Sugestões do Chef', desc: 'Menu sazonal com receitas preparadas na hora pela nossa equipe.' },
+                          ] : [
                             { title: 'Consultas Sem Pressa', desc: 'Tempo dedicado para esclarecer todas as suas dúvidas.' },
                             { title: 'Equipamentos Modernos', desc: 'Exames e diagnósticos com alta precisão e segurança.' },
                             { title: 'Acessibilidade Total', desc: 'Rampa de acesso, elevador e espaço adaptado para todos.' },
-                          ];
-                          const list = [...currentList];
-                          list.splice(idx, 1);
-                          updateField('highlights', list);
+                          ]);
+                        }
+                      }
+                    }}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                </label>
+              </div>
+
+              {settings.showHighlights !== false && (
+                <div className="space-y-3 pt-2 border-t border-slate-200">
+                  {/* Action buttons */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-700">Itens em Exibição</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const isGastronomy = (settings.title && /cozinha|mesa|prato|sabor|gastronom/i.test(settings.title)) ||
+                            (settings.text && /cozinha|mesa|prato|sabor|gastronom|restaurante/i.test(settings.text));
+                          const currentList = settings.highlights ?? (isGastronomy ? [
+                            { title: 'Ingredientes de Origem Controlada', desc: 'Parceria com pequenos produtores e ingredientes frescos diários.' },
+                            { title: 'Ambiente & Hospitalidade Calorosa', desc: 'Salão desenhado para encontros memoráveis, reuniões e celebrações.' },
+                            { title: 'Pratos Especiais & Sugestões do Chef', desc: 'Menu sazonal com receitas preparadas na hora pela nossa equipe.' },
+                          ] : [
+                            { title: 'Consultas Sem Pressa', desc: 'Tempo dedicado para esclarecer todas as suas dúvidas.' },
+                            { title: 'Equipamentos Modernos', desc: 'Exames e diagnósticos com alta precisão e segurança.' },
+                            { title: 'Acessibilidade Total', desc: 'Rampa de acesso, elevador e espaço adaptado para todos.' },
+                          ]);
+                          updateField('showHighlights', true);
+                          updateField('highlights', [...currentList, { title: 'Novo Diferencial', desc: 'Descrição do diferencial' }]);
                         }}
-                        className="text-[11px] font-bold text-rose-600 hover:text-rose-700 cursor-pointer"
+                        className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 hover:underline cursor-pointer"
                       >
-                        Excluir
+                        + Adicionar Item
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          updateField('highlights', []);
+                          updateField('showHighlights', false);
+                        }}
+                        className="text-[11px] font-bold text-rose-600 hover:text-rose-700 hover:underline cursor-pointer"
+                      >
+                        Excluir Todos
                       </button>
                     </div>
-                    <div className="space-y-2">
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Título do Diferencial</label>
-                        <input
-                          type="text"
-                          value={item.title || ''}
-                          onChange={(e) => {
-                            const currentList = settings.highlights ?? [
-                              { title: 'Consultas Sem Pressa', desc: 'Tempo dedicado para esclarecer todas as suas dúvidas.' },
-                              { title: 'Equipamentos Modernos', desc: 'Exames e diagnósticos com alta precisão e segurança.' },
-                              { title: 'Acessibilidade Total', desc: 'Rampa de acesso, elevador e espaço adaptado para todos.' },
-                            ];
-                            const list = [...currentList];
-                            list[idx] = { ...list[idx], title: e.target.value };
-                            updateField('highlights', list);
-                          }}
-                          placeholder="Ex: Consultas Sem Pressa"
-                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-900"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Descrição</label>
-                        <textarea
-                          rows={2}
-                          value={item.desc || ''}
-                          onChange={(e) => {
-                            const currentList = settings.highlights ?? [
-                              { title: 'Consultas Sem Pressa', desc: 'Tempo dedicado para esclarecer todas as suas dúvidas.' },
-                              { title: 'Equipamentos Modernos', desc: 'Exames e diagnósticos com alta precisão e segurança.' },
-                              { title: 'Acessibilidade Total', desc: 'Rampa de acesso, elevador e espaço adaptado para todos.' },
-                            ];
-                            const list = [...currentList];
-                            list[idx] = { ...list[idx], desc: e.target.value };
-                            updateField('highlights', list);
-                          }}
-                          placeholder="Ex: Tempo dedicado para esclarecer todas as suas dúvidas."
-                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700"
-                        />
-                      </div>
-                    </div>
                   </div>
-                ))}
-              </div>
+
+                  <div className="space-y-2.5 pt-1">
+                    {(() => {
+                      const isGastronomy = (settings.title && /cozinha|mesa|prato|sabor|gastronom/i.test(settings.title)) ||
+                        (settings.text && /cozinha|mesa|prato|sabor|gastronom|restaurante/i.test(settings.text));
+                      const defaultItems = isGastronomy ? [
+                        { title: 'Ingredientes de Origem Controlada', desc: 'Parceria com pequenos produtores e ingredientes frescos diários.' },
+                        { title: 'Ambiente & Hospitalidade Calorosa', desc: 'Salão desenhado para encontros memoráveis, reuniões e celebrações.' },
+                        { title: 'Pratos Especiais & Sugestões do Chef', desc: 'Menu sazonal com receitas preparadas na hora pela nossa equipe.' },
+                      ] : [
+                        { title: 'Consultas Sem Pressa', desc: 'Tempo dedicado para esclarecer todas as suas dúvidas.' },
+                        { title: 'Equipamentos Modernos', desc: 'Exames e diagnósticos com alta precisão e segurança.' },
+                        { title: 'Acessibilidade Total', desc: 'Rampa de acesso, elevador e espaço adaptado para todos.' },
+                      ];
+                      const list = settings.highlights ?? defaultItems;
+
+                      return list.map((item: any, idx: number) => (
+                        <div key={idx} className="p-3 bg-white border border-slate-200 rounded-xl space-y-2 relative group shadow-xs">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-bold uppercase text-emerald-700 flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              Diferencial #{idx + 1}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const currentList = [...list];
+                                currentList.splice(idx, 1);
+                                updateField('highlights', currentList);
+                                if (currentList.length === 0) {
+                                  updateField('showHighlights', false);
+                                }
+                              }}
+                              className="text-[11px] font-bold text-rose-600 hover:text-rose-700 cursor-pointer"
+                            >
+                              Excluir
+                            </button>
+                          </div>
+                          <div className="space-y-2">
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Título do Diferencial</label>
+                              <input
+                                type="text"
+                                value={item.title || ''}
+                                onChange={(e) => {
+                                  const currentList = [...list];
+                                  currentList[idx] = { ...currentList[idx], title: e.target.value };
+                                  updateField('highlights', currentList);
+                                }}
+                                placeholder="Ex: Ingredientes de Origem Controlada"
+                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-900"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Descrição</label>
+                              <textarea
+                                rows={2}
+                                value={item.desc || item.subtitle || ''}
+                                onChange={(e) => {
+                                  const currentList = [...list];
+                                  currentList[idx] = { ...currentList[idx], desc: e.target.value, subtitle: e.target.value };
+                                  updateField('highlights', currentList);
+                                }}
+                                placeholder="Ex: Parceria com pequenos produtores e ingredientes frescos diários."
+                                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </div>
+              )}
             </div>
           </>
         )}
@@ -1051,16 +1365,27 @@ export const BlockConfigDrawer: React.FC<BlockConfigDrawerProps> = ({
 
         {/* VIDEO BLOCK */}
         {section.type === 'video' && (
-          <>
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Título do Vídeo</label>
-              <input
-                type="text"
-                value={settings.title || ''}
-                onChange={(e) => updateField('title', e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
-              />
+          <div className="space-y-4">
+            {/* Toggle to show/hide texts */}
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between">
+              <div>
+                <span className="block font-bold text-slate-800 text-xs">Exibir Textos Acima do Vídeo</span>
+                <span className="text-[11px] text-slate-500">
+                  Desative para exibir somente o vídeo limpo, sem títulos ou selos.
+                </span>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settings.showText !== false}
+                  onChange={(e) => updateField('showText', e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+              </label>
             </div>
+
+            {/* Video File / URL Upload */}
             <div>
               <VideoUpload
                 value={settings.videoUrl || ''}
@@ -1069,16 +1394,130 @@ export const BlockConfigDrawer: React.FC<BlockConfigDrawerProps> = ({
                 helperText="Escolha entre link do YouTube/Vimeo ou envio de arquivo MP4/WebM do dispositivo (até 50MB)."
               />
             </div>
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Descrição</label>
-              <textarea
-                rows={2}
-                value={settings.description || ''}
-                onChange={(e) => updateField('description', e.target.value)}
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
-              />
+
+            {/* Ocupação da Tela (Largura do Vídeo) */}
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+              <label className="block font-bold text-slate-800 text-xs">Ocupação da Tela (Largura do Vídeo)</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => updateField('fullWidth', true)}
+                  className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                    settings.fullWidth === true || (settings.fullWidth === undefined && (settings.showText === false || !settings.title))
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  Ocupar Toda a Tela (100%)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateField('fullWidth', false)}
+                  className={`py-2 px-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                    settings.fullWidth === false || (settings.fullWidth === undefined && settings.showText !== false && Boolean(settings.title))
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  Caixa Centralizada
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                {(settings.fullWidth === true || (settings.fullWidth === undefined && (settings.showText === false || !settings.title)))
+                  ? 'O vídeo se expandirá de ponta a ponta na tela (100% da largura), sem margens ou bordas cortando.'
+                  : 'O vídeo ficará centralizado em uma caixa com margens laterais.'}
+              </p>
             </div>
-          </>
+
+            {/* Texts configuration (shown if showText !== false) */}
+            {settings.showText !== false && (
+              <div className="space-y-3 pt-2 border-t border-slate-200">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-700">Configuração dos Textos</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updateField('showText', false);
+                      updateField('badge', '');
+                      updateField('title', '');
+                      updateField('description', '');
+                      updateField('fullWidth', true);
+                    }}
+                    className="text-[11px] font-bold text-rose-600 hover:text-rose-700 hover:underline cursor-pointer"
+                  >
+                    Excluir Todos os Textos (Vídeo Limpo)
+                  </button>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700 text-xs">Selo Superior (Opcional)</label>
+                    {settings.badge ? (
+                      <button
+                        type="button"
+                        onClick={() => updateField('badge', '')}
+                        className="text-[10px] font-bold text-rose-600 hover:underline cursor-pointer"
+                      >
+                        Limpar selo
+                      </button>
+                    ) : null}
+                  </div>
+                  <input
+                    type="text"
+                    value={settings.badge || ''}
+                    onChange={(e) => updateField('badge', e.target.value)}
+                    placeholder="Ex: Vídeo em Destaque (deixe vazio para não exibir)"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:border-indigo-500 text-xs font-semibold"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-0.5">Texto em destaque acima do título (ex: VÍDEO EM DESTAQUE).</p>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700 text-xs">Título do Vídeo (Opcional)</label>
+                    {settings.title ? (
+                      <button
+                        type="button"
+                        onClick={() => updateField('title', '')}
+                        className="text-[10px] font-bold text-rose-600 hover:underline cursor-pointer"
+                      >
+                        Limpar título
+                      </button>
+                    ) : null}
+                  </div>
+                  <input
+                    type="text"
+                    value={settings.title || ''}
+                    onChange={(e) => updateField('title', e.target.value)}
+                    placeholder="Ex: Conheça Mais Sobre Nós (deixe vazio para não exibir)"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:border-indigo-500 text-xs"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700 text-xs">Descrição / Subtítulo (Opcional)</label>
+                    {settings.description ? (
+                      <button
+                        type="button"
+                        onClick={() => updateField('description', '')}
+                        className="text-[10px] font-bold text-rose-600 hover:underline cursor-pointer"
+                      >
+                        Limpar descrição
+                      </button>
+                    ) : null}
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={settings.description || ''}
+                    onChange={(e) => updateField('description', e.target.value)}
+                    placeholder="Texto descritivo opcional abaixo do título (deixe vazio para não exibir)..."
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:border-indigo-500 text-xs"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {/* QUICK BUTTONS BLOCK */}

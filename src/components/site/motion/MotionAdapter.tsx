@@ -315,7 +315,7 @@ export const MotionMarquee: React.FC<MotionMarqueeProps> = ({
 }) => {
   const { settings, isReducedMotion } = useMotionStudio();
 
-  if (!settings.enabled || isReducedMotion || !settings.scroll.continuousMarquee) {
+  if (!settings.enabled || !settings.scroll.continuousMarquee) {
     return null;
   }
 
@@ -362,7 +362,7 @@ export const MotionMarquee: React.FC<MotionMarqueeProps> = ({
     >
       <div className="flex w-max items-center max-w-full">
         <motion.div
-          animate={{ x: activeDirection === 'right' ? ['-50%', '0%'] : ['0%', '-50%'] }}
+          animate={isReducedMotion ? undefined : { x: activeDirection === 'right' ? ['-50%', '0%'] : ['0%', '-50%'] }}
           transition={{
             repeat: Infinity,
             repeatType: 'loop',

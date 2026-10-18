@@ -161,25 +161,26 @@ export const RestaurantGastronomyHero: React.FC<RestaurantGastronomyHeroProps> =
 
         {/* Highlights row */}
         {(() => {
+          if (s.showHighlights === false) return null;
           const defaultHighlights = [
             { title: 'Grelhados na Brasa', subtitle: 'Cortes nobres certificados', icon: 'flame' },
             { title: 'Insumos da Estação', subtitle: 'Preparo artesanal diário', icon: 'utensils' },
             { title: 'Carta de Vinhos', subtitle: 'Harmonização pelo sommelier', icon: 'wine' },
           ];
-          const list = s.highlights || defaultHighlights;
-          if (list.length === 0) return null;
+          const list = s.highlights !== undefined ? s.highlights : defaultHighlights;
+          if (!list || list.length === 0) return null;
 
           return (
             <PremiumScrollReveal direction="up" delay={0.65}>
               <div className="mt-14 pt-8 border-t border-stone-800/80 grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-3xl mx-auto text-center sm:text-left">
                 {list.map((item: any, i: number) => {
-                  const IconComp = item.icon === 'utensils' ? UtensilsCrossed : item.icon === 'wine' ? Wine : Flame;
+                  const IconComp = item.icon === 'utensils' ? UtensilsCrossed : item.icon === 'wine' ? Wine : item.icon === 'sparkles' ? Sparkles : Flame;
                   return (
                     <div key={i} className="flex items-center gap-3 justify-center sm:justify-start">
                       <IconComp className="w-5 h-5 text-amber-500 shrink-0" />
                       <div className="text-xs">
                         <strong className="block text-stone-200 font-serif">{item.title}</strong>
-                        <span className="text-stone-400 text-[11px]">{item.subtitle}</span>
+                        <span className="text-stone-400 text-[11px]">{item.subtitle || item.desc}</span>
                       </div>
                     </div>
                   );
@@ -229,6 +230,7 @@ export const RestaurantGastronomyAbout: React.FC<RestaurantGastronomyAboutProps>
 
             {/* Three Culinary Pillars / Highlights */}
             {(() => {
+              if (aboutS.showHighlights === false) return null;
               const defaultPillars = [
                 { title: 'Ingredientes de Origem Controlada', desc: 'Parceria com pequenos produtores e ingredientes frescos diários.' },
                 { title: 'Ambiente & Hospitalidade Calorosa', desc: 'Salão desenhado para encontros memoráveis, reuniões e celebrações.' },
@@ -238,7 +240,7 @@ export const RestaurantGastronomyAbout: React.FC<RestaurantGastronomyAboutProps>
                 ? aboutS.highlights
                 : defaultPillars;
 
-              if (list.length === 0) return null;
+              if (!list || list.length === 0) return null;
 
               return (
                 <div className="pt-6 space-y-4 border-t border-stone-800">

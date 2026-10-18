@@ -226,8 +226,8 @@ export const MotionStudioView: React.FC<MotionStudioViewProps> = ({
               <MotionMarquee
                 text={currentMotion.scroll.marqueeText}
                 speed={currentMotion.scroll.marqueeSpeed}
-                bgColor="#1e1b4b"
-                textColor="#a5b4fc"
+                bgColor={currentMotion.scroll.marqueeBgColor || '#1e1b4b'}
+                textColor={currentMotion.scroll.marqueeTextColor || '#a5b4fc'}
               />
             )}
 

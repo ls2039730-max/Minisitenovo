@@ -467,6 +467,9 @@ export const PublicOticaEditorialView: React.FC<PublicOticaEditorialViewProps> =
         </AnimatePresence>
       </header>
 
+      {/* Top Dynamic Marquee from Motion Studio (Above Hero Banner) */}
+      <MotionMarquee />
+
       {/* 2. HERO DE CAMPANHA (Seção A) */}
       <section className="relative min-h-[92vh] flex items-center justify-center overflow-hidden bg-[#101010]">
         {/* Background Editorial Image */}
@@ -580,9 +583,6 @@ export const PublicOticaEditorialView: React.FC<PublicOticaEditorialViewProps> =
           </div>
         </div>
       </section>
-
-      {/* 3. FAIXA TIPOGRÁFICA INFINITA (Dynamic Marquee from Motion Studio) */}
-      <MotionMarquee />
 
       {/* 3.5. QUICK BUTTONS / NAVEGAÇÃO RÁPIDA (Configured in Site Builder) */}
       {sections

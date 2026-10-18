@@ -116,6 +116,7 @@ interface AutoPlayVideoPlayerProps {
   title?: string;
   posterUrl?: string;
   radiusClass?: string;
+  fullWidth?: boolean;
 }
 
 const AutoPlayVideoPlayer: React.FC<AutoPlayVideoPlayerProps> = ({
@@ -123,6 +124,7 @@ const AutoPlayVideoPlayer: React.FC<AutoPlayVideoPlayerProps> = ({
   title,
   posterUrl,
   radiusClass = 'rounded-2xl',
+  fullWidth = false,
 }) => {
   if (!url || !url.trim()) return null;
   const vInfo = getVideoEmbedInfo(url);
@@ -266,7 +268,11 @@ const AutoPlayVideoPlayer: React.FC<AutoPlayVideoPlayerProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`relative w-full aspect-video overflow-hidden shadow-2xl border border-slate-200/80 bg-black/90 ${radiusClass}`}
+      className={`relative w-full overflow-hidden bg-black ${
+        fullWidth
+          ? 'aspect-video sm:aspect-[21/9] md:aspect-video min-h-[260px] sm:min-h-[420px] md:min-h-[540px] rounded-none border-0 shadow-none'
+          : `aspect-video shadow-2xl border border-slate-200/80 ${radiusClass}`
+      }`}
     >
       {vInfo.type === 'youtube' || vInfo.type === 'vimeo' ? (
         <iframe
@@ -1214,38 +1220,53 @@ const PublicSiteViewInner: React.FC<PublicSiteViewProps> = ({
                 )}
 
               {/* FEATURED VIDEO PLACED DIRECTLY BELOW THE MAIN BANNER (Not on top of the banner image) */}
-              {Boolean(s.showSubBannerVideo) === true && s.subBannerVideoUrl && s.subBannerVideoUrl.trim() !== '' && (
-                <section
-                  key={`${section.id}-sub-video`}
-                  className="py-6 sm:py-8 md:py-10 px-4 w-full bg-slate-50/80 border-b border-slate-200/60"
-                >
-                  <div className="max-w-3xl mx-auto">
-                    {s.subBannerVideoTitle && (
-                      <div className="text-center mb-3 sm:mb-4">
-                        <span
-                          className="text-[11px] font-bold uppercase tracking-wider block mb-1"
-                          style={{ color: secondaryColor }}
-                        >
-                          Vídeo de Apresentação
-                        </span>
-                        <h3 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
-                          {s.subBannerVideoTitle}
-                        </h3>
-                        {s.subBannerVideoDescription && (
-                          <p className="text-xs sm:text-sm text-slate-600 max-w-xl mx-auto mt-1">
-                            {s.subBannerVideoDescription}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                    <AutoPlayVideoPlayer
-                      url={s.subBannerVideoUrl}
-                      title={s.subBannerVideoTitle || 'Vídeo de Apresentação'}
-                      radiusClass={radiusClass}
-                    />
-                  </div>
-                </section>
-              )}
+              {Boolean(s.showSubBannerVideo) === true && s.subBannerVideoUrl && s.subBannerVideoUrl.trim() !== '' && (() => {
+                const showText = s.showSubBannerVideoText !== false;
+                const rawTitle = (s.subBannerVideoTitle || '').trim();
+                const rawDesc = (s.subBannerVideoDescription || '').trim();
+                const hasAnyText = showText && (Boolean(rawTitle) || Boolean(rawDesc));
+                const isFullWidth = s.subBannerVideoFullWidth !== undefined ? Boolean(s.subBannerVideoFullWidth) : !hasAnyText;
+
+                return (
+                  <section
+                    key={`${section.id}-sub-video`}
+                    className={
+                      isFullWidth
+                        ? 'w-full max-w-none px-0 py-0 overflow-hidden bg-black'
+                        : 'py-6 sm:py-8 md:py-10 px-4 w-full bg-slate-50/80 border-b border-slate-200/60'
+                    }
+                  >
+                    <div className={isFullWidth ? 'w-full' : 'max-w-3xl mx-auto'}>
+                      {hasAnyText && (
+                        <div className={`text-center ${isFullWidth ? 'px-4 pt-8 pb-4' : 'mb-3 sm:mb-4'}`}>
+                          <span
+                            className="text-[11px] font-bold uppercase tracking-wider block mb-1"
+                            style={{ color: secondaryColor }}
+                          >
+                            Vídeo de Apresentação
+                          </span>
+                          {rawTitle && (
+                            <h3 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
+                              {rawTitle}
+                            </h3>
+                          )}
+                          {rawDesc && (
+                            <p className="text-xs sm:text-sm text-slate-600 max-w-xl mx-auto mt-1">
+                              {rawDesc}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      <AutoPlayVideoPlayer
+                        url={s.subBannerVideoUrl}
+                        title={rawTitle || 'Vídeo de Apresentação'}
+                        radiusClass={radiusClass}
+                        fullWidth={isFullWidth}
+                      />
+                    </div>
+                  </section>
+                );
+              })()}
             </React.Fragment>
           );
         }
@@ -1253,21 +1274,49 @@ const PublicSiteViewInner: React.FC<PublicSiteViewProps> = ({
         // --- 1B. STANDALONE VIDEO SECTION ---
         if (section.type === 'video') {
           if (!s.videoUrl || !s.videoUrl.trim()) return null;
+
+          // Check if texts are enabled or if all fields were intentionally left blank
+          const showText = s.showText !== false;
+          const rawBadge = (s.badge || '').trim();
+          const rawTitle = (s.title || '').trim();
+          const rawDesc = (s.description || '').trim();
+
+          const hasAnyHeader = showText && (Boolean(rawBadge) || Boolean(rawTitle) || Boolean(rawDesc));
+          // When there is no text above, default to full width occupying the entire screen, or when fullWidth is configured
+          const isFullWidth = s.fullWidth !== undefined ? Boolean(s.fullWidth) : !hasAnyHeader;
+
           return (
-            <section key={section.id} id="video" className="py-12 md:py-20 px-4 max-w-4xl mx-auto w-full">
-              <div className="text-center max-w-2xl mx-auto mb-6 sm:mb-8 space-y-2">
-                <span className="text-xs font-bold uppercase tracking-wider" style={{ color: secondaryColor }}>
-                  Vídeo em Destaque
-                </span>
-                <h2 className="text-2xl sm:text-3xl font-black tracking-tight">{s.title || 'Conheça Mais Sobre Nós'}</h2>
-                {s.description && <p className="text-xs sm:text-sm opacity-80 leading-relaxed">{s.description}</p>}
-              </div>
+            <section
+              key={section.id}
+              id="video"
+              className={
+                isFullWidth
+                  ? 'w-full max-w-none px-0 py-0 overflow-hidden bg-black'
+                  : 'py-12 md:py-20 px-4 max-w-4xl mx-auto w-full'
+              }
+            >
+              {hasAnyHeader && (
+                <div className={`text-center max-w-2xl mx-auto space-y-2 ${isFullWidth ? 'px-4 pt-8 sm:pt-12 pb-6' : 'mb-6 sm:mb-8'}`}>
+                  {rawBadge && (
+                    <span className="text-xs font-bold uppercase tracking-wider block" style={{ color: secondaryColor }}>
+                      {rawBadge}
+                    </span>
+                  )}
+                  {rawTitle && (
+                    <h2 className="text-2xl sm:text-3xl font-black tracking-tight">{rawTitle}</h2>
+                  )}
+                  {rawDesc && (
+                    <p className="text-xs sm:text-sm opacity-80 leading-relaxed">{rawDesc}</p>
+                  )}
+                </div>
+              )}
 
               <AutoPlayVideoPlayer
                 url={s.videoUrl}
-                title={s.title || 'Vídeo Institucional'}
+                title={rawTitle || 'Vídeo Institucional'}
                 posterUrl={s.posterUrl}
                 radiusClass={radiusClass}
+                fullWidth={isFullWidth}
               />
             </section>
           );
@@ -1641,6 +1690,7 @@ const PublicSiteViewInner: React.FC<PublicSiteViewProps> = ({
                       <p className="text-sm leading-relaxed opacity-85 whitespace-pre-line">{s.text}</p>
 
                       {(() => {
+                        if (s.showHighlights === false) return null;
                         const defaultHighlights = [
                           { title: 'Consultas Sem Pressa', desc: 'Tempo dedicado para esclarecer todas as suas dúvidas.' },
                           { title: 'Equipamentos Modernos', desc: 'Exames e diagnósticos com alta precisão e segurança.' },
@@ -1656,7 +1706,7 @@ const PublicSiteViewInner: React.FC<PublicSiteViewProps> = ({
                                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
                                 <div>
                                   <strong className="font-bold">{h.title}:</strong>{' '}
-                                  <span className="opacity-80">{h.desc}</span>
+                                  <span className="opacity-80">{h.desc || h.subtitle}</span>
                                 </div>
                               </div>
                             ))}
