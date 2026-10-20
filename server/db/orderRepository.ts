@@ -25,6 +25,7 @@ import {
   getCurrentDayOfWeek,
   getDayName,
 } from '../../src/utils/productAvailability.js';
+import { calculateScheduleStatus } from '../../src/utils/businessHours.js';
 
 // Rate limiting and idempotency memory storage
 interface RateLimitEntry {
@@ -430,23 +431,8 @@ export class OrderRepository {
     if (rawSite && rawSite.published_data?.sections) {
       const hoursSection = rawSite.published_data.sections.find((s: any) => s.type === 'business_hours');
       if (hoursSection?.settings?.schedule) {
-        // Evaluate schedule: simplified live check
-        const now = new Date();
-        const days = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
-        const dayKey = days[now.getDay()];
-        const todaySched = hoursSection.settings.schedule[dayKey];
-        if (todaySched && todaySched.isOpen === false) {
-          isOpen = false;
-        } else if (todaySched && todaySched.open && todaySched.close) {
-          const [openH, openM] = todaySched.open.split(':').map(Number);
-          const [closeH, closeM] = todaySched.close.split(':').map(Number);
-          const currentMins = now.getHours() * 60 + now.getMinutes();
-          const openMins = openH * 60 + openM;
-          const closeMins = closeH * 60 + closeM;
-          if (currentMins < openMins || currentMins >= closeMins) {
-            isOpen = false;
-          }
-        }
+        const scheduleStatus = calculateScheduleStatus(hoursSection.settings.schedule);
+        isOpen = scheduleStatus.isOpen;
       }
     }
 

@@ -456,69 +456,19 @@ export const BLOCK_REGISTRY: Record<SectionType, SectionDefinition> = {
 };
 
 /**
- * Calculates human-readable business status based on schedule:
- * e.g., "Aberto agora · Fecha às 18:00" or "Fechado agora · Abre às 08:00"
+ * Centralized business hours and schedule status utilities:
  */
-export function calculateScheduleStatus(schedule: any): {
-  isOpen: boolean;
-  text: string;
-  badgeClass: string;
-} {
-  if (!schedule) {
-    return { isOpen: false, text: 'Horário sob consulta', badgeClass: 'bg-slate-100 text-slate-700' };
-  }
-
-  const daysMap: Array<'dom' | 'seg' | 'ter' | 'qua' | 'qui' | 'sex' | 'sab'> = [
-    'dom',
-    'seg',
-    'ter',
-    'qua',
-    'qui',
-    'sex',
-    'sab',
-  ];
-  const now = new Date();
-  const currentDayKey = daysMap[now.getDay()];
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-  const dayConfig = schedule[currentDayKey];
-
-  if (!dayConfig || !dayConfig.isOpen) {
-    return {
-      isOpen: false,
-      text: 'Fechado agora',
-      badgeClass: 'bg-rose-50 text-rose-700 border-rose-200',
-    };
-  }
-
-  const parseMins = (timeStr?: string) => {
-    if (!timeStr) return -1;
-    const [h, m] = timeStr.split(':').map((x) => parseInt(x, 10));
-    return (h || 0) * 60 + (m || 0);
-  };
-
-  const openMin = parseMins(dayConfig.openTime);
-  const closeMin = parseMins(dayConfig.closeTime);
-
-  if (currentMinutes >= openMin && currentMinutes < closeMin) {
-    return {
-      isOpen: true,
-      text: `Aberto agora · Fecha às ${dayConfig.closeTime}`,
-      badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    };
-  }
-
-  if (currentMinutes < openMin) {
-    return {
-      isOpen: false,
-      text: `Fechado agora · Abre às ${dayConfig.openTime}`,
-      badgeClass: 'bg-amber-50 text-amber-700 border-amber-200',
-    };
-  }
-
-  return {
-    isOpen: false,
-    text: 'Fechado no momento',
-    badgeClass: 'bg-slate-100 text-slate-700 border-slate-200',
-  };
-}
+export {
+  calculateScheduleStatus,
+  normalizeSchedule,
+  DAY_KEYS,
+  DAY_NAMES,
+  SHORT_DAY_NAMES,
+  getSaoPauloTime,
+} from '../utils/businessHours';
+export type {
+  DayKey,
+  NormalizedDaySchedule,
+  NormalizedWeeklySchedule,
+  ScheduleStatus,
+} from '../utils/businessHours';

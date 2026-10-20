@@ -51,6 +51,12 @@ import { VideoUpload } from '../common/VideoUpload';
 import { api } from '../../services/api';
 import { ProductCategory } from '../../types/product';
 import { ServiceCategory } from '../../types/service';
+import {
+  normalizeSchedule,
+  DAY_KEYS,
+  DAY_NAMES,
+  DayKey,
+} from '../../utils/businessHours';
 
 interface BlockConfigDrawerProps {
   section: SiteSection | null;
@@ -2526,64 +2532,66 @@ export const BlockConfigDrawer: React.FC<BlockConfigDrawerProps> = ({
 
             <div className="space-y-2">
               <label className="block font-bold text-slate-700">Horários Semanais</label>
-              {['seg', 'ter', 'qua', 'qui', 'sex', 'sab', 'dom'].map((dayKey) => {
-                const dayLabels: Record<string, string> = {
-                  seg: 'Segunda-feira',
-                  ter: 'Terça-feira',
-                  qua: 'Quarta-feira',
-                  qui: 'Quinta-feira',
-                  sex: 'Sexta-feira',
-                  sab: 'Sábado',
-                  dom: 'Domingo',
-                };
-                const day = settings.schedule?.[dayKey] || { isOpen: true, openTime: '08:00', closeTime: '18:00' };
+              {(() => {
+                const normalizedCurrent = normalizeSchedule(settings.schedule);
 
-                return (
-                  <div key={dayKey} className="p-2.5 rounded-xl border border-slate-200 bg-slate-50/60 flex items-center justify-between gap-2">
-                    <span className="font-semibold text-slate-800 w-24 shrink-0">{dayLabels[dayKey]}</span>
-                    <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-600">
-                      <input
-                        type="checkbox"
-                        checked={day.isOpen}
-                        onChange={(e) => {
-                          const newSched = { ...settings.schedule };
-                          newSched[dayKey] = { ...day, isOpen: e.target.checked };
-                          updateField('schedule', newSched);
-                        }}
-                        className="rounded-sm text-indigo-600"
-                      />
-                      Aberto
-                    </label>
-                    {day.isOpen ? (
-                      <div className="flex items-center gap-1">
+                const handleUpdateDay = (
+                  dayKey: DayKey,
+                  patch: Partial<{ isOpen: boolean; openTime: string; closeTime: string }>
+                ) => {
+                  const fullSched: Record<string, { isOpen: boolean; openTime: string; closeTime: string }> = {};
+                  for (const k of DAY_KEYS) {
+                    fullSched[k] = {
+                      isOpen: normalizedCurrent[k].isOpen,
+                      openTime: normalizedCurrent[k].openTime,
+                      closeTime: normalizedCurrent[k].closeTime,
+                    };
+                  }
+                  fullSched[dayKey] = {
+                    ...fullSched[dayKey],
+                    ...patch,
+                  };
+                  updateField('schedule', fullSched);
+                };
+
+                return DAY_KEYS.map((dayKey) => {
+                  const day = normalizedCurrent[dayKey];
+
+                  return (
+                    <div key={dayKey} className="p-2.5 rounded-xl border border-slate-200 bg-slate-50/60 flex items-center justify-between gap-2">
+                      <span className="font-semibold text-slate-800 w-24 shrink-0">{DAY_NAMES[dayKey]}</span>
+                      <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-600">
                         <input
-                          type="time"
-                          value={day.openTime || '08:00'}
-                          onChange={(e) => {
-                            const newSched = { ...settings.schedule };
-                            newSched[dayKey] = { ...day, openTime: e.target.value };
-                            updateField('schedule', newSched);
-                          }}
-                          className="px-1.5 py-1 bg-white border border-slate-200 rounded-md text-[11px]"
+                          type="checkbox"
+                          checked={day.isOpen}
+                          onChange={(e) => handleUpdateDay(dayKey, { isOpen: e.target.checked })}
+                          className="rounded-sm text-indigo-600"
                         />
-                        <span className="text-slate-400">às</span>
-                        <input
-                          type="time"
-                          value={day.closeTime || '18:00'}
-                          onChange={(e) => {
-                            const newSched = { ...settings.schedule };
-                            newSched[dayKey] = { ...day, closeTime: e.target.value };
-                            updateField('schedule', newSched);
-                          }}
-                          className="px-1.5 py-1 bg-white border border-slate-200 rounded-md text-[11px]"
-                        />
-                      </div>
-                    ) : (
-                      <span className="text-[11px] text-rose-500 font-semibold">Fechado</span>
-                    )}
-                  </div>
-                );
-              })}
+                        Aberto
+                      </label>
+                      {day.isOpen ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="time"
+                            value={day.openTime || '08:00'}
+                            onChange={(e) => handleUpdateDay(dayKey, { openTime: e.target.value })}
+                            className="px-1.5 py-1 bg-white border border-slate-200 rounded-md text-[11px]"
+                          />
+                          <span className="text-slate-400">às</span>
+                          <input
+                            type="time"
+                            value={day.closeTime || (dayKey === 'sab' ? '12:00' : '18:00')}
+                            onChange={(e) => handleUpdateDay(dayKey, { closeTime: e.target.value })}
+                            className="px-1.5 py-1 bg-white border border-slate-200 rounded-md text-[11px]"
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-rose-500 font-semibold">Fechado</span>
+                      )}
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </>
         )}

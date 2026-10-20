@@ -37,7 +37,11 @@ import {
 } from 'lucide-react';
 import { SiteData, SiteSection } from '../../../types/site';
 import { Tenant } from '../../../types/saas';
-import { calculateScheduleStatus } from '../../../constants/blockRegistry';
+import {
+  calculateScheduleStatus,
+  normalizeSchedule,
+  DAY_KEYS,
+} from '../../../constants/blockRegistry';
 import { PublicProductCatalogSection } from './PublicProductCatalogSection';
 import { PublicServicesSection } from './PublicServicesSection';
 import { PublicTeamSection } from './PublicTeamSection';
@@ -1893,17 +1897,8 @@ const PublicSiteViewInner: React.FC<PublicSiteViewProps> = ({
 
           // --- 6. BUSINESS HOURS ---
           if (section.type === 'business_hours') {
-            const sched = s.schedule || {};
-            const dayOrder = ['seg', 'ter', 'qua', 'qui', 'sex', 'sab', 'dom'];
-            const dayNames: Record<string, string> = {
-              seg: 'Segunda-feira',
-              ter: 'Terça-feira',
-              qua: 'Quarta-feira',
-              qui: 'Quinta-feira',
-              sex: 'Sexta-feira',
-              sab: 'Sábado',
-              dom: 'Domingo',
-            };
+            const normalizedWeekly = normalizeSchedule(s.schedule);
+            const sectionScheduleStatus = calculateScheduleStatus(s.schedule);
 
             return (
               <section key={section.id} id="horarios" className="py-14 md:py-20 px-4 max-w-4xl mx-auto w-full">
@@ -1922,28 +1917,28 @@ const PublicSiteViewInner: React.FC<PublicSiteViewProps> = ({
                       : 'border-black/10 bg-black/[0.01]'
                   }`}
                 >
-                  {scheduleStatus && (
+                  {sectionScheduleStatus && (
                     <div
                       className={`mb-4 pb-4 border-b flex items-center justify-between ${
                         isDarkTheme ? 'border-white/10' : 'border-black/10'
                       }`}
                     >
                       <span className="text-xs font-semibold opacity-75">Status Atual:</span>
-                      <span className={`px-2.5 py-1 text-xs font-bold border rounded-full ${scheduleStatus.badgeClass}`}>
-                        {scheduleStatus.text}
+                      <span className={`px-2.5 py-1 text-xs font-bold border rounded-full ${sectionScheduleStatus.badgeClass}`}>
+                        {sectionScheduleStatus.text}
                       </span>
                     </div>
                   )}
 
                   <div className={`divide-y text-xs ${isDarkTheme ? 'divide-white/10' : 'divide-black/5'}`}>
-                    {dayOrder.map((dk) => {
-                      const day = sched[dk];
+                    {DAY_KEYS.map((dk) => {
+                      const day = normalizedWeekly[dk];
                       return (
                         <div key={dk} className="py-2.5 flex items-center justify-between">
-                          <span className="font-semibold">{dayNames[dk]}</span>
-                          {day?.isOpen ? (
+                          <span className="font-semibold">{day.label}</span>
+                          {day.isOpen ? (
                             <span className="font-bold opacity-85">
-                              {day.openTime} às {day.closeTime}
+                              {day.formattedText}
                             </span>
                           ) : (
                             <span className="text-rose-500 font-semibold">Fechado</span>
