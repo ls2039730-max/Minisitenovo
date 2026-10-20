@@ -92,7 +92,7 @@ export class SaasRepository {
       if (signInError && signInError.message?.toLowerCase().includes('email not confirmed')) {
         console.log(`[AUTH] 'Email not confirmed' detected for ${cleanEmail}. Auto-confirming via service role...`);
         try {
-          const { data: usersData } = await supabaseAdmin.auth.admin.listUsers();
+          const { data: usersData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 } as any);
           const target = usersData?.users?.find(
             (u: any) => u.email?.toLowerCase().trim() === cleanEmail
           );
@@ -130,7 +130,7 @@ export class SaasRepository {
 
         try {
           console.log(`[AUTH] Auto-healing / verifying account (${cleanEmail}) in real Supabase...`);
-          const { data: usersData } = await supabaseAdmin.auth.admin.listUsers();
+          const { data: usersData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 } as any);
           let target = usersData?.users?.find(
             (u: any) => u.email?.toLowerCase().trim() === cleanEmailLower
           );
@@ -253,6 +253,14 @@ export class SaasRepository {
       .eq('user_id', authUser.id);
 
     let tu = tuList && tuList.length > 0 ? tuList[0] : null;
+
+    if (tu && tu.status === 'invited') {
+      await supabaseAdmin
+        .from('tenant_users')
+        .update({ status: 'active', updated_at: new Date().toISOString() })
+        .eq('id', tu.id);
+      tu.status = 'active';
+    }
 
     if (!tu) {
       const emailLower = authUser.email?.toLowerCase().trim() || '';

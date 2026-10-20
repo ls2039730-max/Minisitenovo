@@ -1,5 +1,5 @@
-import { SectionCategory, SectionDefinition, SectionType } from '../types/site';
-import { Tenant } from '../types/saas';
+import { SectionCategory, SectionDefinition, SectionType } from '../types/site.js';
+import { Tenant } from '../types/saas.js';
 
 export const SECTION_CATEGORIES: Record<SectionCategory, { label: string; description: string }> = {
   info: {
@@ -465,10 +465,10 @@ export {
   DAY_NAMES,
   SHORT_DAY_NAMES,
   getSaoPauloTime,
-} from '../utils/businessHours';
+} from '../utils/businessHours.js';
 export type {
   DayKey,
   NormalizedDaySchedule,
   NormalizedWeeklySchedule,
   ScheduleStatus,
-} from '../utils/businessHours';
+} from '../utils/businessHours.js';

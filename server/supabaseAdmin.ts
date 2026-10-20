@@ -2,7 +2,11 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { SYSTEM_FEATURES } from '../src/utils/features.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export const SUPABASE_URL =
   process.env.SUPABASE_URL ||
@@ -1718,7 +1722,7 @@ export interface ISupabaseAdminClient {
       updateUserById(id: string, attributes: any): Promise<{ data: { user: any }; error: any }>;
       getUserById(id: string): Promise<{ data: { user: any }; error: any }>;
       inviteUserByEmail(email: string, options?: any): Promise<{ data: { user: any }; error: any }>;
-      listUsers(): Promise<{ data: { users: any[] }; error: any }>;
+      listUsers(params?: any): Promise<{ data: { users: any[] }; error: any }>;
     };
   };
   storage: {

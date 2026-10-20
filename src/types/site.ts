@@ -1,4 +1,4 @@
-import { Tenant } from './saas';
+import { Tenant } from './saas.js';
 
 export type SiteTemplateId = 'moderno' | 'minimalista' | 'elegante' | 'impacto' | 'otica_editorial';
 
@@ -47,8 +47,8 @@ export interface SiteSeo {
   allowIndexing: boolean;
 }
 
-import { MotionStudioSettings } from './motion';
-export * from './motion';
+import { MotionStudioSettings } from './motion.js';
+export * from './motion.js';
 
 export interface SiteAppearance {
   templateId: SiteTemplateId;

@@ -8,10 +8,14 @@ import express from 'express';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { apiRouter } from '../server/routes.js';
 import { bootstrapDatabaseIfNeeded } from '../server/db/bootstrap.js';
 import { handlePublicSiteHtml, extractSlugFromUrl, getBaseHtml } from '../server/seoRenderer.js';
 import { repo } from '../server/db/repository.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
