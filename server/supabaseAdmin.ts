@@ -153,6 +153,24 @@ class LocalSupabaseStore {
 
   private loadFromDisk() {
     try {
+      // On serverless environments (Vercel/AWS Lambda), copy bundled data/local_store.json to /tmp if not yet present
+      if (!fs.existsSync(this.storeFilePath)) {
+        const bundledPaths = [
+          path.resolve(process.cwd(), 'data', 'local_store.json'),
+          path.resolve(__dirname, '..', 'data', 'local_store.json'),
+        ];
+        for (const bp of bundledPaths) {
+          if (fs.existsSync(bp)) {
+            const dir = path.dirname(this.storeFilePath);
+            if (!fs.existsSync(dir)) {
+              fs.mkdirSync(dir, { recursive: true });
+            }
+            fs.copyFileSync(bp, this.storeFilePath);
+            break;
+          }
+        }
+      }
+
       if (fs.existsSync(this.storeFilePath)) {
         const raw = fs.readFileSync(this.storeFilePath, 'utf-8');
         const parsed = JSON.parse(raw);

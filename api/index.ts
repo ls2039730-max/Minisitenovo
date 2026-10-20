@@ -1,10 +1,16 @@
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+if (typeof (globalThis as any).require === 'undefined') {
+  (globalThis as any).require = require;
+}
+
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import fs from 'fs';
 import { apiRouter } from '../server/routes.js';
 import { bootstrapDatabaseIfNeeded } from '../server/db/bootstrap.js';
-import { handlePublicSiteHtml, extractSlugFromUrl } from '../server/seoRenderer.js';
+import { handlePublicSiteHtml, extractSlugFromUrl, getBaseHtml } from '../server/seoRenderer.js';
 import { repo } from '../server/db/repository.js';
 
 const app = express();
@@ -33,8 +39,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// Trigger bootstrap on cold start
-bootstrapDatabaseIfNeeded().catch((e) => console.error('[BOOTSTRAP] Startup error on Vercel:', e));
+// Trigger bootstrap on cold start safely without blocking request flow
+setTimeout(() => {
+  bootstrapDatabaseIfNeeded().catch((e) => console.error('[BOOTSTRAP] Startup error on Vercel:', e));
+}, 0);
 
 // 1. Dynamic Tenant OpenGraph / Social Sharing routes:
 app.get(['/p/:slug', '/p/:slug/*', '/site/:slug', '/site/:slug/*'], (req, res, next) => {
@@ -83,6 +91,8 @@ app.get('*', async (req, res) => {
   }
   const possiblePaths = [
     path.resolve(process.cwd(), 'dist', 'index.html'),
+    path.resolve(__dirname, '..', 'dist', 'index.html'),
+    path.resolve(__dirname, 'dist', 'index.html'),
     path.resolve(process.cwd(), 'index.html'),
   ];
   for (const p of possiblePaths) {
@@ -90,7 +100,8 @@ app.get('*', async (req, res) => {
       return res.sendFile(p);
     }
   }
-  res.status(200).send('<!doctype html><html><head><title>LocalHub</title></head><body><div id="root"></div></body></html>');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.status(200).send(getBaseHtml());
 });
 
 export default app;
