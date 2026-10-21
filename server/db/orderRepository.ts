@@ -952,7 +952,7 @@ export class OrderRepository {
       if (origin && hasValidCoordinates(origin)) {
         // Geocode destination if coordinates not already present
         if (!hasValidCoordinates(enrichedAddr)) {
-          const destGeo = await geocodeAddressServer(enrichedAddr);
+          const destGeo = await geocodeAddressServer(enrichedAddr, origin);
           if (
             destGeo.success &&
             typeof destGeo.latitude === 'number' &&
