@@ -15,6 +15,7 @@ import { Professional, ProfessionalPayload } from '../src/types/service.js';
 import { canTenantOperate, resolveSlugFromHost, validateSlug } from './tenantResolver.js';
 import { storageService } from './storage/storageService.js';
 import { handlePublicSiteHtml } from './seoRenderer.js';
+import { geocodeAddressServer, lookupPostalCodeServer } from './services/routingService.js';
 
 export const apiRouter = Router();
 
@@ -1280,6 +1281,49 @@ apiRouter.patch('/site/public/:slug/orders/:id/whatsapp-sent', async (req: Reque
   }
 });
 
+// Public CEP Lookup Proxy (ViaCEP + BrasilAPI fallback)
+apiRouter.get('/site/public/:slug/cep/:cep', async (req: Request, res: Response) => {
+  try {
+    const data = await lookupPostalCodeServer(req.params.cep);
+    return res.json({ success: true, data });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao consultar CEP.' });
+  }
+});
+
+// Public Delivery Quote Calculation (Cart & Checkout)
+apiRouter.post('/site/public/:slug/delivery/quote', async (req: Request, res: Response) => {
+  try {
+    const { slug } = req.params;
+    const tenant = await repo.getTenantBySlug(slug);
+    if (!tenant) {
+      return res.status(404).json({ success: false, error: `Estabelecimento "${slug}" não encontrado.` });
+    }
+
+    const features = await repo.resolveTenantFeatures(tenant.id);
+    if (!features.delivery) {
+      return res.json({
+        success: true,
+        data: {
+          isCovered: false,
+          fee: 0,
+          pricingMode: 'neighborhood',
+          errorCode: 'DELIVERY_DISABLED',
+          reason: 'A opção de entrega não está habilitada para este estabelecimento.',
+        },
+      });
+    }
+
+    const quote = await orderRepo.evaluateDeliveryQuote(tenant.id, req.body);
+    return res.json({ success: true, data: quote });
+  } catch (err: any) {
+    return res.status(400).json({
+      success: false,
+      error: err.message || 'Erro ao calcular taxa de entrega.',
+    });
+  }
+});
+
 // ==========================================
 // 19. CLIENT ADMIN: ORDERS MANAGEMENT (ETAPA 3B)
 // ==========================================
@@ -1451,6 +1495,78 @@ apiRouter.put('/delivery/rules/reorder', authenticate, requireFeature('shopping_
     return res.json({ success: true, message: 'Ordem das regras atualizada.' });
   } catch (err: any) {
     return res.status(400).json({ success: false, error: err.message || 'Erro ao reordenar regras.' });
+  }
+});
+
+// Admin CEP Lookup
+apiRouter.get('/delivery/cep/:cep', authenticate, requireFeature('shopping_cart'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const data = await lookupPostalCodeServer(req.params.cep);
+    return res.json({ success: true, data });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao consultar CEP.' });
+  }
+});
+
+// Admin Geocode Origin Address
+apiRouter.post('/delivery/geocode-origin', authenticate, requireFeature('shopping_cart'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const addressInput = req.body?.address || req.body || {};
+    // Force fresh geocoding without using stale coordinates
+    const result = await geocodeAddressServer({
+      ...addressInput,
+      latitude: null,
+      longitude: null,
+    });
+
+    if (!result.success || typeof result.latitude !== 'number' || typeof result.longitude !== 'number') {
+      return res.status(400).json({
+        success: false,
+        error:
+          result.error ||
+          'Não foi possível geocodificar o endereço informado. Verifique o CEP, logradouro, número, bairro, cidade e UF.',
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        latitude: result.latitude,
+        longitude: result.longitude,
+        formattedAddress: result.formattedAddress,
+        precision: result.precision,
+        provider: result.provider,
+      },
+      message: 'Coordenadas geográficas obtidas com sucesso!',
+    });
+  } catch (err: any) {
+    return res.status(400).json({
+      success: false,
+      error: err.message || 'Falha ao geocodificar endereço de origem.',
+    });
+  }
+});
+
+// Admin Delivery Freight Simulator
+apiRouter.post('/delivery/simulate', authenticate, requireFeature('shopping_cart'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const { address, subtotal, selectedRuleId, overrideSettings } = req.body || {};
+    const quote = await orderRepo.evaluateDeliveryQuote(
+      tenantId,
+      {
+        address: address || {},
+        subtotal: Number(subtotal || 0),
+        selectedRuleId: selectedRuleId || null,
+      },
+      overrideSettings
+    );
+    return res.json({ success: true, data: quote });
+  } catch (err: any) {
+    return res.status(400).json({
+      success: false,
+      error: err.message || 'Erro ao simular cálculo de entrega.',
+    });
   }
 });
 

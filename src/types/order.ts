@@ -51,12 +51,42 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethodType, string> = {
 
 export type DeliveryRuleType = 'fixed' | 'neighborhood' | 'cep_range';
 
+export type DeliveryPricingMode = 'km' | 'neighborhood' | 'neighborhood_km';
+
+export type DistanceCalculationMethod = 'road_route' | 'straight_line';
+
+export interface DeliveryOriginAddress {
+  cep: string;
+  street: string;
+  number: string;
+  complement?: string | null;
+  neighborhood: string;
+  city: string;
+  state: string;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
+export interface DeliveryKmConfig {
+  baseFee: number;
+  pricePerKm: number;
+  minDistanceKm: number;
+  maxDistanceKm: number;
+  distanceMethod: DistanceCalculationMethod;
+  roundDistanceUp: boolean;
+  minDeliveryFee?: number | null;
+  freeDeliveryAbove?: number | null;
+}
+
 export interface DeliverySettings {
   tenantId: string;
   ordersEnabled: boolean;
   acceptOrdersWhenClosed: boolean;
   pickupEnabled: boolean;
   deliveryEnabled: boolean;
+  pricingMode?: DeliveryPricingMode;
+  originAddress?: DeliveryOriginAddress | null;
+  kmConfig?: DeliveryKmConfig | null;
   minimumOrder: number;
   freeDeliveryAbove?: number | null;
   pickupInstructions?: string | null;
@@ -72,14 +102,79 @@ export interface DeliveryRule {
   type: DeliveryRuleType;
   name: string;
   neighborhood?: string | null;
+  city?: string | null;
+  state?: string | null;
   cepStart?: string | null;
   cepEnd?: string | null;
   fee: number;
   minimumOrder?: number | null;
+  freeDeliveryAbove?: number | null;
+  estimatedTime?: string | null;
+  includedDistanceKm?: number | null;
+  extraKmFee?: number | null;
   isActive: boolean;
   position: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export type DeliveryErrorCode =
+  | 'DELIVERY_DISABLED'
+  | 'INCOMPLETE_ADDRESS'
+  | 'ORIGIN_NOT_CONFIGURED'
+  | 'GEOCODE_FAILED'
+  | 'ROUTE_FAILED'
+  | 'OUT_OF_RANGE_KM'
+  | 'NEIGHBORHOOD_NOT_FOUND'
+  | 'NEIGHBORHOOD_INACTIVE'
+  | 'CITY_MISMATCH'
+  | 'AMBIGUOUS_NEIGHBORHOOD'
+  | 'NO_RULES_CONFIGURED';
+
+export interface DeliveryQuoteBreakdown {
+  baseFee: number;
+  variableFee: number;
+  extraKm?: number;
+  formulaText?: string;
+}
+
+export interface DeliveryQuoteResponse {
+  isCovered: boolean;
+  fee: number;
+  originalFee?: number;
+  isFreeDelivery?: boolean;
+  pricingMode: DeliveryPricingMode;
+  distanceKm?: number | null;
+  billedDistanceKm?: number | null;
+  distanceMethodUsed?: DistanceCalculationMethod | null;
+  ruleApplied?: DeliveryRule | null;
+  ruleName?: string | null;
+  estimatedTime?: string | null;
+  minimumOrder?: number;
+  freeDeliveryAbove?: number | null;
+  reason?: string;
+  errorCode?: DeliveryErrorCode;
+  ambiguousRules?: DeliveryRule[];
+  originSummary?: string;
+  destinationSummary?: string;
+  destinationCoordinates?: { latitude: number; longitude: number } | null;
+  breakdown?: DeliveryQuoteBreakdown;
+}
+
+export interface DeliveryQuoteRequest {
+  address: {
+    cep?: string;
+    street?: string;
+    number?: string;
+    complement?: string;
+    neighborhood?: string;
+    city?: string;
+    state?: string;
+    latitude?: number | null;
+    longitude?: number | null;
+  };
+  subtotal?: number;
+  selectedRuleId?: string | null;
 }
 
 export interface PaymentMethodConfig {
@@ -134,6 +229,7 @@ export interface ValidatedCartResponse {
     name: string;
     slug: string;
     address?: string;
+    originAddress?: DeliveryOriginAddress | null;
   };
   deliverySettings: DeliverySettings;
   deliveryRules: DeliveryRule[];
@@ -155,6 +251,10 @@ export interface OrderDeliveryAddress {
   state: string;
   reference?: string | null;
   deliveryRuleId?: string | null;
+  pricingMode?: DeliveryPricingMode | null;
+  distanceKm?: number | null;
+  appliedRuleName?: string | null;
+  deliveryBreakdown?: string | null;
 }
 
 export interface OrderItem {
@@ -210,7 +310,11 @@ export interface CreateOrderPayload {
     city: string;
     state: string;
     reference?: string;
+    selectedRuleId?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
   };
+  expectedDeliveryFee?: number;
   paymentMethod: PaymentMethodType;
   changeFor?: number;
   notes?: string;
@@ -242,4 +346,6 @@ export interface CepLookupResult {
   city: string;
   state: string;
   found: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
 }

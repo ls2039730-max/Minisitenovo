@@ -1051,6 +1051,13 @@ export class SaasRepository {
     if (payload.ownerEmail) tenantPatch.owner_email = payload.ownerEmail.toLowerCase().trim();
     if (payload.ownerPhone) tenantPatch.owner_phone = payload.ownerPhone;
     if (payload.notes !== undefined) tenantPatch.notes = payload.notes;
+    if (payload.cep !== undefined) tenantPatch.cep = payload.cep;
+    if (payload.street !== undefined) tenantPatch.street = payload.street;
+    if (payload.number !== undefined) tenantPatch.number = payload.number;
+    if (payload.complement !== undefined) tenantPatch.complement = payload.complement;
+    if (payload.neighborhood !== undefined) tenantPatch.neighborhood = payload.neighborhood;
+    if (payload.city !== undefined) tenantPatch.city = payload.city;
+    if (payload.state !== undefined) tenantPatch.state = payload.state;
 
     if (requester.role === 'SUPER_ADMIN') {
       if (payload.planId) tenantPatch.plan_id = payload.planId;
@@ -1468,6 +1475,13 @@ export class SaasRepository {
       ownerEmail: t.owner_email,
       ownerPhone: t.owner_phone,
       subdomain: t.subdomain,
+      cep: t.cep || undefined,
+      street: t.street || undefined,
+      number: t.number || undefined,
+      complement: t.complement || undefined,
+      neighborhood: t.neighborhood || undefined,
+      city: t.city || undefined,
+      state: t.state || undefined,
       notes: t.notes || undefined,
       deletedAt: t.deleted_at || null,
       appearance: {

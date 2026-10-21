@@ -248,9 +248,24 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
             {/* Delivery Address (if applicable) */}
             {order.fulfillmentType === 'delivery' && order.deliveryAddress && (
               <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-2 text-xs">
-                <div className="flex items-center gap-2 text-indigo-600 font-bold">
-                  <MapPin className="w-4 h-4" />
-                  <span>Endereço de Entrega</span>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 text-indigo-600 font-bold">
+                    <MapPin className="w-4 h-4" />
+                    <span>Endereço de Entrega</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {order.deliveryAddress.distanceKm !== null &&
+                      order.deliveryAddress.distanceKm !== undefined && (
+                        <span className="px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 font-bold text-[10px]">
+                          Distância: {Number(order.deliveryAddress.distanceKm).toFixed(1).replace('.', ',')} km
+                        </span>
+                      )}
+                    {order.deliveryAddress.appliedRuleName && (
+                      <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-700 font-semibold text-[10px]">
+                        Regra: {order.deliveryAddress.appliedRuleName}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <p className="text-slate-700">
                   {order.deliveryAddress.street}, nº {order.deliveryAddress.number}
@@ -261,6 +276,11 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                 {order.deliveryAddress.reference && (
                   <p className="text-[11px] text-slate-500 italic">
                     Referência: {order.deliveryAddress.reference}
+                  </p>
+                )}
+                {order.deliveryAddress.deliveryBreakdown && (
+                  <p className="text-[11px] text-indigo-600 font-medium pt-1 border-t border-slate-100">
+                    Cálculo do frete: {order.deliveryAddress.deliveryBreakdown}
                   </p>
                 )}
               </div>

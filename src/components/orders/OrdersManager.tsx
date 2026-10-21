@@ -149,7 +149,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({ tenant }) => {
             }`}
           >
             <Sliders className="w-3.5 h-3.5" />
-            <span>Configurações</span>
+            <span>Entrega e Taxas de Entrega</span>
           </button>
         </div>
       </div>

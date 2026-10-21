@@ -6,6 +6,9 @@ import {
   OrderStatus,
   DeliverySettings,
   DeliveryRule,
+  DeliveryOriginAddress,
+  DeliveryQuoteRequest,
+  DeliveryQuoteResponse,
   PaymentMethodConfig,
   ValidatedCartResponse,
   CartItemInput,
@@ -558,6 +561,20 @@ class ApiService {
     return res.data;
   }
 
+  async calculateDeliveryQuote(
+    slug: string,
+    payload: DeliveryQuoteRequest
+  ): Promise<DeliveryQuoteResponse> {
+    const res = await this.request<{ success: boolean; data: DeliveryQuoteResponse }>(
+      `/api/site/public/${slug}/delivery/quote`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    );
+    return res.data;
+  }
+
   async createOrder(
     slug: string,
     payload: CreateOrderPayload
@@ -689,6 +706,47 @@ class ApiService {
       method: 'PUT',
       body: JSON.stringify({ ruleIds }),
     });
+  }
+
+  async geocodeOriginAddress(
+    address: Partial<DeliveryOriginAddress>
+  ): Promise<{
+    latitude: number;
+    longitude: number;
+    formattedAddress?: string;
+    precision?: string;
+    provider?: string;
+  }> {
+    const res = await this.request<{
+      success: boolean;
+      data: {
+        latitude: number;
+        longitude: number;
+        formattedAddress?: string;
+        precision?: string;
+        provider?: string;
+      };
+    }>('/api/delivery/geocode-origin', {
+      method: 'POST',
+      body: JSON.stringify({ address }),
+    });
+    return res.data;
+  }
+
+  async simulateDeliveryFee(payload: {
+    address: Partial<DeliveryOriginAddress>;
+    subtotal?: number;
+    selectedRuleId?: string | null;
+    overrideSettings?: Partial<DeliverySettings>;
+  }): Promise<DeliveryQuoteResponse> {
+    const res = await this.request<{ success: boolean; data: DeliveryQuoteResponse }>(
+      '/api/delivery/simulate',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    );
+    return res.data;
   }
 
   // ==========================================

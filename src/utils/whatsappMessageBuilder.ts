@@ -37,10 +37,15 @@ export function buildWhatsAppOrderMessage(order: Order, tenantName: string): str
   lines.push('💰 *RESUMO*');
   lines.push(`Subtotal: ${formatCurrencyBRL(safeSubtotal)}`);
   if (order.fulfillmentType === 'delivery') {
+    const addr = order.deliveryAddress;
+    const distInfo =
+      addr?.distanceKm !== null && addr?.distanceKm !== undefined
+        ? ` (${Number(addr.distanceKm).toFixed(1).replace('.', ',')} km)`
+        : '';
     lines.push(
       safeDeliveryFee === 0
-        ? 'Entrega: GRÁTIS'
-        : `Entrega: ${formatCurrencyBRL(safeDeliveryFee)}`
+        ? `Entrega${distInfo}: GRÁTIS`
+        : `Entrega${distInfo}: ${formatCurrencyBRL(safeDeliveryFee)}`
     );
   }
   lines.push(`*TOTAL: ${formatCurrencyBRL(safeTotal)}*`);
@@ -55,6 +60,12 @@ export function buildWhatsAppOrderMessage(order: Order, tenantName: string): str
     lines.push(`Cidade: ${addr.city}/${addr.state}`);
     lines.push(`CEP: ${addr.cep}`);
     if (addr.reference) lines.push(`Ponto de Referência: ${addr.reference}`);
+    if (addr.distanceKm !== null && addr.distanceKm !== undefined) {
+      lines.push(`Distância calculada: ${Number(addr.distanceKm).toFixed(2).replace('.', ',')} km`);
+    }
+    if (addr.appliedRuleName) {
+      lines.push(`Regra de entrega: ${addr.appliedRuleName}`);
+    }
   } else {
     lines.push('📍 *RETIRADA NO LOCAL*');
   }

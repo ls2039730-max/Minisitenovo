@@ -183,7 +183,7 @@ async function runTests() {
         updatedAt: '',
       },
     ];
-    const deliveryCalc = calculateDeliveryFee(109.99, { cep: '28000000', neighborhood: 'Centro' }, mockSettings, mockRules);
+    const deliveryCalc = calculateDeliveryFee('delivery', 109.99, mockSettings, mockRules, { cep: '28000000', neighborhood: 'Centro' });
     assert.equal(deliveryCalc.isCovered, true);
     assert.equal(deliveryCalc.fee, 10.0);
 

@@ -16,11 +16,11 @@ import {
   ArrowLeft,
   Loader2,
   RefreshCw,
+  Navigation,
 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { Tenant } from '../../types/saas';
 import {
-  FulfillmentType,
   PaymentMethodType,
   CreateOrderPayload,
   PaymentMethodConfig,
@@ -28,7 +28,6 @@ import {
   ValidatedCartItem,
   DeliverySettings,
 } from '../../types/order';
-import { calculateDeliveryFee } from '../../utils/deliveryFeeCalculator';
 import { postalCodeService } from '../../services/postalCodeService';
 import { api } from '../../services/api';
 import { useBackHandler } from '../../services/navigationManager';
@@ -43,8 +42,26 @@ interface CheckoutModalProps {
 }
 
 const FALLBACK_PAYMENT_METHODS: PaymentMethodConfig[] = [
-  { id: 'fallback_pix', tenantId: '', type: 'PIX', label: 'PIX', isActive: true, position: 0, createdAt: '', updatedAt: '' },
-  { id: 'fallback_cash', tenantId: '', type: 'CASH', label: 'Dinheiro', isActive: true, position: 1, createdAt: '', updatedAt: '' },
+  {
+    id: 'fallback_pix',
+    tenantId: '',
+    type: 'PIX',
+    label: 'PIX',
+    isActive: true,
+    position: 0,
+    createdAt: '',
+    updatedAt: '',
+  },
+  {
+    id: 'fallback_cash',
+    tenantId: '',
+    type: 'CASH',
+    label: 'Dinheiro',
+    isActive: true,
+    position: 1,
+    createdAt: '',
+    updatedAt: '',
+  },
   {
     id: 'fallback_cc',
     tenantId: '',
@@ -84,6 +101,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     revalidateCart,
     openCart,
     setOrderCompleted,
+    fulfillmentType,
+    setFulfillmentType,
+    deliveryAddress,
+    updateDeliveryAddress,
+    deliveryQuote,
+    isCalculatingDelivery,
+    deliveryQuoteError,
+    refreshDeliveryQuote,
   } = useCart();
 
   // Wizard Step: 1 = Dados, 2 = Como receber, 3 = Pagamento, 4 = Revisão
@@ -94,16 +119,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
 
-  // Form Fields - Step 2
-  const [fulfillmentType, setFulfillmentType] = useState<FulfillmentType>('pickup');
-  const [cep, setCep] = useState('');
-  const [street, setStreet] = useState('');
-  const [number, setNumber] = useState('');
-  const [complement, setComplement] = useState('');
-  const [neighborhood, setNeighborhood] = useState('');
-  const [city, setCity] = useState('');
-  const [state, setState] = useState('');
-  const [reference, setReference] = useState('');
+  // CEP lookup state - Step 2
   const [isSearchingCep, setIsSearchingCep] = useState(false);
   const [cepError, setCepError] = useState<string | null>(null);
 
@@ -153,10 +169,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     };
   }, [validatedData?.deliverySettings, tenant.id]);
 
-  const deliveryRules = useMemo(() => {
-    return validatedData?.deliveryRules || [];
-  }, [validatedData?.deliveryRules]);
-
   const paymentMethods = useMemo<PaymentMethodConfig[]>(() => {
     const active = (validatedData?.paymentMethods || []).filter(
       (pm: PaymentMethodConfig) => pm && pm.isActive
@@ -164,19 +176,23 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     return active.length > 0 ? active : FALLBACK_PAYMENT_METHODS;
   }, [validatedData?.paymentMethods]);
 
-  // Set default fulfillment type based on tenant settings
   useEffect(() => {
     const pickupOk = deliverySettings.pickupEnabled !== false;
     const deliveryOk = deliverySettings.deliveryEnabled !== false && hasDeliveryFeature;
 
-    if (deliveryOk && !pickupOk) {
+    if (deliveryOk && !pickupOk && fulfillmentType !== 'delivery') {
       setFulfillmentType('delivery');
-    } else if (pickupOk && !deliveryOk) {
+    } else if (pickupOk && !deliveryOk && fulfillmentType !== 'pickup') {
       setFulfillmentType('pickup');
     }
-  }, [deliverySettings.pickupEnabled, deliverySettings.deliveryEnabled, hasDeliveryFeature]);
+  }, [
+    deliverySettings.pickupEnabled,
+    deliverySettings.deliveryEnabled,
+    hasDeliveryFeature,
+    fulfillmentType,
+    setFulfillmentType,
+  ]);
 
-  // Set default payment method based on available active methods (memoized to prevent infinite loops)
   useEffect(() => {
     if (
       paymentMethods.length > 0 &&
@@ -186,13 +202,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     }
   }, [paymentMethods, paymentMethod]);
 
-  // Single unified back handler for Checkout wizard (eliminates dual-hook history race condition)
   useBackHandler({
     isOpen: isCheckoutOpen,
     onClose: () => {
       if (step > 1) {
         setStep((s) => Math.max(1, s - 1) as 1 | 2 | 3 | 4);
-        return false; // Handled internally by stepping back
+        return false;
       }
       closeCheckout();
     },
@@ -202,25 +217,28 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   if (!isCheckoutOpen) return null;
 
-  // Calculate live delivery fee and authoritative totals
-  const cleanCepDigits = cep.replace(/\D/g, '');
-  const baseTotals = calculateCartTotals(displayItems, 0, 0);
-  const rawSubtotal = baseTotals.subtotal > 0 ? baseTotals.subtotal : contextSubtotal;
+  const cleanCepDigits = deliveryAddress.cep.replace(/\D/g, '');
+  const isDeliveryConfirmed = fulfillmentType === 'delivery' && Boolean(deliveryQuote?.isCovered);
+  const rawDeliveryFee = isDeliveryConfirmed ? toSafePrice(deliveryQuote?.fee) : 0;
 
-  const deliveryResult = calculateDeliveryFee(
-    rawSubtotal,
-    { cep: cleanCepDigits, neighborhood },
-    deliverySettings,
-    deliveryRules
+  const { subtotal: calcSubtotal, deliveryFee, total } = calculateCartTotals(
+    displayItems,
+    rawDeliveryFee,
+    0
   );
+  const subtotal = calcSubtotal > 0 ? calcSubtotal : contextSubtotal;
 
-  const rawDeliveryFee = fulfillmentType === 'delivery' ? toSafePrice(deliveryResult.fee) : 0;
-  const { subtotal, deliveryFee, total } = calculateCartTotals(displayItems, rawDeliveryFee, 0);
+  // Calculate promotional savings if any
+  const promotionalSavings = displayItems.reduce((acc, it) => {
+    if (it.hasDiscount && it.originalPrice && it.originalPrice > it.unitPrice) {
+      return Math.round((acc + (it.originalPrice - it.unitPrice) * it.quantity) * 100) / 100;
+    }
+    return acc;
+  }, 0);
 
   const hasItemsWaitingPrice =
     displayItems.length > 0 && displayItems.every((it) => toSafePrice(it.unitPrice) <= 0);
 
-  // Mask & phone format
   const handlePhoneChange = (val: string) => {
     const raw = val.replace(/\D/g, '').slice(0, 11);
     if (raw.length <= 2) {
@@ -234,27 +252,33 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     }
   };
 
-  // Mask & CEP lookup
   const handleCepChange = async (val: string) => {
     const formatted = postalCodeService.formatCep(val);
-    setCep(formatted);
+    updateDeliveryAddress({ cep: formatted, selectedRuleId: null });
     setCepError(null);
 
     const clean = postalCodeService.cleanCep(formatted);
     if (clean.length === 8) {
       setIsSearchingCep(true);
       try {
-        const result = await postalCodeService.lookup(clean);
+        const result = await postalCodeService.lookup(clean, tenant.slug);
         if (result.found) {
-          if (result.street) setStreet(result.street);
-          if (result.neighborhood) setNeighborhood(result.neighborhood);
-          if (result.city) setCity(result.city);
-          if (result.state) setState(result.state);
+          updateDeliveryAddress({
+            cep: formatted,
+            street: result.street || deliveryAddress.street,
+            neighborhood: result.neighborhood || deliveryAddress.neighborhood,
+            city: result.city || deliveryAddress.city,
+            state: result.state || deliveryAddress.state,
+            latitude: result.latitude ?? null,
+            longitude: result.longitude ?? null,
+          });
         } else {
-          setCepError('CEP não encontrado automaticamente. Por favor, preencha o endereço manualmente.');
+          setCepError(
+            'CEP não encontrado automaticamente. Por favor, preencha os campos do endereço manualmente.'
+          );
         }
       } catch {
-        setCepError('Serviço de CEP temporariamente indisponível. Preencha manualmente.');
+        setCepError('Serviço de CEP indisponível no momento. Preencha manualmente.');
       } finally {
         setIsSearchingCep(false);
       }
@@ -266,7 +290,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     openCart();
   };
 
-  // Step 1 Validation
   const validateStep1 = (): boolean => {
     setFormError(null);
     if (items.length === 0) {
@@ -285,22 +308,55 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     return true;
   };
 
-  // Step 2 Validation
-  const validateStep2 = (): boolean => {
+  const validateStep2 = async (): Promise<boolean> => {
     setFormError(null);
     if (fulfillmentType === 'delivery') {
       if (!cleanCepDigits || cleanCepDigits.length !== 8) {
         setFormError('Por favor, informe um CEP válido com 8 dígitos.');
         return false;
       }
-      if (!street.trim() || !number.trim() || !neighborhood.trim() || !city.trim() || !state.trim()) {
-        setFormError('Por favor, preencha todos os campos obrigatórios do endereço de entrega.');
+      if (
+        !deliveryAddress.street.trim() ||
+        !deliveryAddress.number.trim() ||
+        !deliveryAddress.neighborhood.trim() ||
+        !deliveryAddress.city.trim() ||
+        !deliveryAddress.state.trim()
+      ) {
+        setFormError(
+          'Por favor, preencha todos os campos obrigatórios do endereço de entrega (Rua, Número, Bairro, Cidade e UF).'
+        );
         return false;
       }
-      if (!deliveryResult.isCovered) {
+
+      if (isCalculatingDelivery) {
+        setFormError('Aguarde um instante enquanto calculamos o frete para seu endereço.');
+        return false;
+      }
+
+      let currentQuote = deliveryQuote;
+      if (!currentQuote) {
+        currentQuote = await refreshDeliveryQuote();
+      }
+
+      if (!currentQuote || !currentQuote.isCovered) {
         setFormError(
-          deliveryResult.reason ||
-            'Este endereço ainda não está na nossa área de entrega. Escolha retirada no local.'
+          currentQuote?.reason ||
+            deliveryQuoteError ||
+            'Este endereço ainda não está na nossa área de entrega. Verifique os dados ou escolha retirada no local.'
+        );
+        return false;
+      }
+
+      const effectiveMin =
+        currentQuote.minimumOrder && currentQuote.minimumOrder > 0
+          ? currentQuote.minimumOrder
+          : deliverySettings.minimumOrder;
+
+      if (effectiveMin > 0 && subtotal < effectiveMin) {
+        setFormError(
+          `O pedido mínimo para entrega neste endereço é de ${formatCurrencyBRL(
+            effectiveMin
+          )}. Faltam ${formatCurrencyBRL(effectiveMin - subtotal)}.`
         );
         return false;
       }
@@ -308,7 +364,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     return true;
   };
 
-  // Step 3 Validation
   const validateStep3 = (): boolean => {
     setFormError(null);
     if (paymentMethod === 'CASH' && needsChange) {
@@ -323,7 +378,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     return true;
   };
 
-  // Final Order Submission (Protected against duplicate taps and preserves cart on failure)
   const handleSubmitOrder = async () => {
     if (submittingRef.current || isSubmitting) return;
 
@@ -332,9 +386,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       return;
     }
 
-    if (!validateStep1() || !validateStep2() || !validateStep3()) {
-      return;
-    }
+    if (!validateStep1()) return;
+    const step2Valid = await validateStep2();
+    if (!step2Valid) return;
+    if (!validateStep3()) return;
 
     try {
       submittingRef.current = true;
@@ -355,15 +410,25 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           fulfillmentType === 'delivery'
             ? {
                 cep: cleanCepDigits,
-                street: street.trim(),
-                number: number.trim(),
-                complement: complement.trim() || undefined,
-                neighborhood: neighborhood.trim(),
-                city: city.trim(),
-                state: state.trim().toUpperCase(),
-                reference: reference.trim() || undefined,
+                street: deliveryAddress.street.trim(),
+                number: deliveryAddress.number.trim(),
+                complement: deliveryAddress.complement.trim() || undefined,
+                neighborhood: deliveryAddress.neighborhood.trim(),
+                city: deliveryAddress.city.trim(),
+                state: deliveryAddress.state.trim().toUpperCase(),
+                reference: deliveryAddress.reference.trim() || undefined,
+                selectedRuleId: deliveryAddress.selectedRuleId || null,
+                latitude:
+                  deliveryQuote?.destinationCoordinates?.latitude ??
+                  deliveryAddress.latitude ??
+                  null,
+                longitude:
+                  deliveryQuote?.destinationCoordinates?.longitude ??
+                  deliveryAddress.longitude ??
+                  null,
               }
             : undefined,
+        expectedDeliveryFee: fulfillmentType === 'delivery' ? rawDeliveryFee : 0,
         paymentMethod,
         changeFor:
           paymentMethod === 'CASH' && needsChange && changeFor
@@ -383,7 +448,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     } catch (err: any) {
       console.error('[CHECKOUT] Order creation error:', err);
       setFormError(
-        err?.message || 'Erro ao processar seu pedido. Seus itens continuam salvos; tente novamente.'
+        err?.message ||
+          'Erro ao processar seu pedido. Seus itens continuam salvos; tente novamente.'
       );
     } finally {
       submittingRef.current = false;
@@ -483,6 +549,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   onClick={() => {
                     setFormError(null);
                     revalidateCart();
+                    if (fulfillmentType === 'delivery') {
+                      refreshDeliveryQuote();
+                    }
                   }}
                   className="px-3 py-1.5 rounded-lg bg-white border border-rose-200 hover:bg-rose-100 text-rose-700 font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer"
                 >
@@ -702,7 +771,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                             <div className="relative">
                               <input
                                 type="text"
-                                value={cep}
+                                value={deliveryAddress.cep}
                                 onChange={(e) => handleCepChange(e.target.value)}
                                 placeholder="00000-000"
                                 maxLength={9}
@@ -719,8 +788,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                             </label>
                             <input
                               type="text"
-                              value={state}
-                              onChange={(e) => setState(e.target.value.toUpperCase())}
+                              value={deliveryAddress.state}
+                              onChange={(e) =>
+                                updateDeliveryAddress({
+                                  state: e.target.value.toUpperCase(),
+                                  selectedRuleId: null,
+                                })
+                              }
                               placeholder="UF"
                               maxLength={2}
                               className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl uppercase font-bold text-slate-800"
@@ -739,8 +813,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                             </label>
                             <input
                               type="text"
-                              value={street}
-                              onChange={(e) => setStreet(e.target.value)}
+                              value={deliveryAddress.street}
+                              onChange={(e) => updateDeliveryAddress({ street: e.target.value })}
                               placeholder="Nome da rua"
                               className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white font-medium text-slate-800"
                             />
@@ -751,8 +825,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                             </label>
                             <input
                               type="text"
-                              value={number}
-                              onChange={(e) => setNumber(e.target.value)}
+                              value={deliveryAddress.number}
+                              onChange={(e) => updateDeliveryAddress({ number: e.target.value })}
                               placeholder="123"
                               className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white font-medium text-slate-800"
                             />
@@ -766,8 +840,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                             </label>
                             <input
                               type="text"
-                              value={neighborhood}
-                              onChange={(e) => setNeighborhood(e.target.value)}
+                              value={deliveryAddress.neighborhood}
+                              onChange={(e) =>
+                                updateDeliveryAddress({
+                                  neighborhood: e.target.value,
+                                  selectedRuleId: null,
+                                })
+                              }
                               placeholder="Seu bairro"
                               className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white font-medium text-slate-800"
                             />
@@ -778,8 +857,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                             </label>
                             <input
                               type="text"
-                              value={city}
-                              onChange={(e) => setCity(e.target.value)}
+                              value={deliveryAddress.city}
+                              onChange={(e) =>
+                                updateDeliveryAddress({
+                                  city: e.target.value,
+                                  selectedRuleId: null,
+                                })
+                              }
                               placeholder="Sua cidade"
                               className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white font-medium text-slate-800"
                             />
@@ -790,12 +874,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                           <div>
                             <label className="block text-xs font-bold text-slate-700 mb-1">
                               Complemento{' '}
-                              <span className="text-[10px] text-slate-400 font-normal">(Apto, Bloco)</span>
+                              <span className="text-[10px] text-slate-400 font-normal">
+                                (Apto, Bloco)
+                              </span>
                             </label>
                             <input
                               type="text"
-                              value={complement}
-                              onChange={(e) => setComplement(e.target.value)}
+                              value={deliveryAddress.complement}
+                              onChange={(e) =>
+                                updateDeliveryAddress({ complement: e.target.value })
+                              }
                               placeholder="Ex: Apto 202"
                               className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white font-medium text-slate-800"
                             />
@@ -803,48 +891,104 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                           <div>
                             <label className="block text-xs font-bold text-slate-700 mb-1">
                               Ponto de Referência{' '}
-                              <span className="text-[10px] text-slate-400 font-normal">(Opcional)</span>
+                              <span className="text-[10px] text-slate-400 font-normal">
+                                (Opcional)
+                              </span>
                             </label>
                             <input
                               type="text"
-                              value={reference}
-                              onChange={(e) => setReference(e.target.value)}
+                              value={deliveryAddress.reference}
+                              onChange={(e) =>
+                                updateDeliveryAddress({ reference: e.target.value })
+                              }
                               placeholder="Ex: Próximo à padaria"
                               className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white font-medium text-slate-800"
                             />
                           </div>
                         </div>
 
+                        {/* Ambiguous Neighborhood Disambiguation */}
+                        {deliveryQuote?.errorCode === 'AMBIGUOUS_NEIGHBORHOOD' &&
+                          deliveryQuote.ambiguousRules && (
+                            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 space-y-2 text-xs">
+                              <p className="font-bold text-amber-900">{deliveryQuote.reason}</p>
+                              <div className="space-y-1.5">
+                                {deliveryQuote.ambiguousRules.map((r) => (
+                                  <button
+                                    key={r.id}
+                                    type="button"
+                                    onClick={() => updateDeliveryAddress({ selectedRuleId: r.id })}
+                                    className="w-full p-2.5 rounded-xl bg-white border border-amber-200 hover:bg-amber-100/50 text-left flex items-center justify-between font-bold text-slate-800 cursor-pointer"
+                                  >
+                                    <span>
+                                      {r.name} ({r.city}/{r.state})
+                                    </span>
+                                    <span className="font-black text-indigo-700">
+                                      {formatCurrencyBRL(r.fee)}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
                         {/* Calculated Delivery Fee Feedback */}
-                        {cleanCepDigits.length === 8 && (
+                        {isCalculatingDelivery ? (
+                          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center gap-2">
+                            <Loader2 className="w-4 h-4 animate-spin text-indigo-600 shrink-0" />
+                            <span>Calculando rota e taxa de entrega para seu endereço...</span>
+                          </div>
+                        ) : deliveryQuote ? (
                           <div
-                            className={`p-3 rounded-xl text-xs flex flex-wrap items-center justify-between gap-2 border ${
-                              deliveryResult.isCovered
+                            className={`p-3 rounded-xl text-xs space-y-1.5 border ${
+                              deliveryQuote.isCovered
                                 ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
                                 : 'bg-rose-50 border-rose-200 text-rose-900'
                             }`}
                           >
-                            <div className="flex items-center gap-2 font-semibold">
-                              {deliveryResult.isCovered ? (
-                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                              ) : (
-                                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 font-bold">
+                                {deliveryQuote.isCovered ? (
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                ) : (
+                                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                                )}
+                                <span>
+                                  {deliveryQuote.isCovered
+                                    ? deliveryQuote.fee === 0
+                                      ? 'Entrega Grátis para seu endereço!'
+                                      : `Taxa de entrega calculada: ${formatCurrencyBRL(
+                                          deliveryQuote.fee
+                                        )}`
+                                    : deliveryQuote.reason || 'Endereço fora da área de entrega.'}
+                                </span>
+                              </div>
+                              {deliveryQuote.isCovered && deliveryQuote.estimatedTime && (
+                                <span className="text-[11px] font-bold text-emerald-700">
+                                  ⏱ {deliveryQuote.estimatedTime}
+                                </span>
                               )}
-                              <span>
-                                {deliveryResult.isCovered
-                                  ? deliveryResult.isFreeDelivery
-                                    ? 'Entrega Grátis para seu endereço!'
-                                    : `Taxa de entrega calculada: ${formatCurrencyBRL(deliveryResult.fee)}`
-                                  : 'Endereço fora da área de entrega.'}
-                              </span>
                             </div>
-                            {deliveryResult.isCovered && deliverySettings.deliveryEstimateText && (
-                              <span className="text-[11px] font-bold text-slate-500">
-                                {deliverySettings.deliveryEstimateText}
-                              </span>
+
+                            {deliveryQuote.isCovered && (
+                              <div className="pl-6 text-[11px] text-emerald-800 flex flex-wrap gap-x-3">
+                                {deliveryQuote.distanceKm !== null &&
+                                  deliveryQuote.distanceKm !== undefined && (
+                                    <span className="flex items-center gap-1">
+                                      <Navigation className="w-3 h-3" />
+                                      Distância calculada:{' '}
+                                      <strong>
+                                        {deliveryQuote.distanceKm.toFixed(2).replace('.', ',')} km
+                                      </strong>
+                                    </span>
+                                  )}
+                                {deliveryQuote.ruleName && (
+                                  <span>Modalidade: {deliveryQuote.ruleName}</span>
+                                )}
+                              </div>
                             )}
                           </div>
-                        )}
+                        ) : null}
                       </div>
                     )}
                   </div>
@@ -860,7 +1004,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       </p>
                     </div>
 
-                    {/* Payment Methods */}
                     <div className="space-y-2">
                       {paymentMethods.map((pm: PaymentMethodConfig) => {
                         const isSelected = paymentMethod === pm.type;
@@ -916,7 +1059,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                               </div>
                             </button>
 
-                            {/* Cash change prompt */}
                             {isSelected && isCash && (
                               <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-3">
                                 <div className="flex items-center justify-between text-xs font-bold text-slate-800">
@@ -1019,14 +1161,34 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       </div>
 
                       {fulfillmentType === 'delivery' ? (
-                        <div className="text-slate-600 space-y-0.5 text-[11px] break-words">
+                        <div className="text-slate-600 space-y-1 text-[11px] break-words">
                           <p className="font-semibold text-slate-800">
-                            {street}, {number} {complement && `(${complement})`}
+                            {deliveryAddress.street}, {deliveryAddress.number}{' '}
+                            {deliveryAddress.complement && `(${deliveryAddress.complement})`}
                           </p>
                           <p>
-                            {neighborhood} - {city}/{state} - CEP: {cep}
+                            {deliveryAddress.neighborhood} - {deliveryAddress.city}/
+                            {deliveryAddress.state} - CEP: {deliveryAddress.cep}
                           </p>
-                          {reference && <p className="italic text-slate-500">Ref: {reference}</p>}
+                          {deliveryAddress.reference && (
+                            <p className="italic text-slate-500">Ref: {deliveryAddress.reference}</p>
+                          )}
+                          <div className="pt-1 flex flex-wrap gap-x-3 text-indigo-700 font-semibold">
+                            <span>
+                              Modalidade:{' '}
+                              {deliveryQuote?.pricingMode === 'km'
+                                ? 'Entrega por Quilômetro'
+                                : deliveryQuote?.pricingMode === 'neighborhood_km'
+                                ? 'Bairro + Adicional por Km'
+                                : 'Entrega por Bairro'}
+                            </span>
+                            {deliveryQuote?.distanceKm !== null &&
+                              deliveryQuote?.distanceKm !== undefined && (
+                                <span>
+                                  • Distância: {deliveryQuote.distanceKm.toFixed(2).replace('.', ',')} km
+                                </span>
+                              )}
+                          </div>
                         </div>
                       ) : (
                         <div className="text-slate-600 text-[11px] break-words">
@@ -1084,23 +1246,49 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     {/* Price Breakdown */}
                     <div className="p-4 rounded-2xl bg-indigo-50/50 border border-indigo-100 space-y-2 text-xs">
                       <div className="flex justify-between gap-2 text-slate-600">
-                        <span>Subtotal dos itens</span>
+                        <span>Subtotal dos produtos</span>
                         <span className="font-bold whitespace-nowrap" data-testid="checkout-subtotal">
                           {formatCurrencyBRL(subtotal)}
                         </span>
                       </div>
+
+                      {promotionalSavings > 0 && (
+                        <div className="flex justify-between gap-2 text-emerald-700">
+                          <span>Economia em promoções</span>
+                          <span className="font-bold whitespace-nowrap">
+                            - {formatCurrencyBRL(promotionalSavings)}
+                          </span>
+                        </div>
+                      )}
+
+                      {fulfillmentType === 'delivery' &&
+                        deliveryQuote?.distanceKm !== null &&
+                        deliveryQuote?.distanceKm !== undefined && (
+                          <div className="flex justify-between gap-2 text-slate-600">
+                            <span>Distância calculada</span>
+                            <span className="font-bold whitespace-nowrap">
+                              {deliveryQuote.distanceKm.toFixed(2).replace('.', ',')} km
+                            </span>
+                          </div>
+                        )}
+
                       <div className="flex justify-between gap-2 text-slate-600">
                         <span>Taxa de Entrega</span>
                         <span className="font-bold text-emerald-700 whitespace-nowrap">
                           {fulfillmentType === 'pickup'
-                            ? 'Grátis (Retirada)'
+                            ? 'Sem taxa (Retirada)'
+                            : isCalculatingDelivery
+                            ? 'Calculando...'
+                            : !deliveryQuote?.isCovered
+                            ? 'A calcular'
                             : deliveryFee === 0
                             ? 'GRÁTIS'
                             : formatCurrencyBRL(deliveryFee)}
                         </span>
                       </div>
+
                       <div className="pt-2 border-t border-indigo-200/80 flex justify-between items-baseline gap-2">
-                        <span className="text-sm font-extrabold text-slate-900">Total a Pagar</span>
+                        <span className="text-sm font-extrabold text-slate-900">Total Final</span>
                         <span
                           className="text-lg sm:text-xl font-black text-slate-900 whitespace-nowrap"
                           data-testid="checkout-total"
@@ -1110,7 +1298,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       </div>
                     </div>
 
-                    {/* Notice */}
                     <p className="text-[11px] text-slate-500 text-center leading-relaxed">
                       Ao clicar em <strong>Confirmar e Enviar Pedido</strong>, o pedido será gravado no sistema e uma janela segura será aberta com os detalhes formatados para você enviar à loja pelo WhatsApp.
                     </p>
@@ -1148,22 +1335,39 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               {step < 4 ? (
                 <button
                   type="button"
-                  disabled={isValidating && hasItemsWaitingPrice}
-                  onClick={() => {
+                  disabled={
+                    (isValidating && hasItemsWaitingPrice) ||
+                    (step === 2 && fulfillmentType === 'delivery' && isCalculatingDelivery)
+                  }
+                  onClick={async () => {
                     if (step === 1 && validateStep1()) setStep(2);
-                    else if (step === 2 && validateStep2()) setStep(3);
+                    else if (step === 2 && (await validateStep2())) setStep(3);
                     else if (step === 3 && validateStep3()) setStep(4);
                   }}
-                  className="flex-1 py-3 px-4 sm:px-5 rounded-xl text-white text-xs sm:text-sm font-bold shadow-md hover:opacity-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="flex-1 py-3 px-4 sm:px-5 rounded-xl text-white text-xs sm:text-sm font-bold shadow-md hover:opacity-95 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                   style={{ backgroundColor: primaryColor }}
                 >
-                  <span>Avançar</span>
-                  <ChevronRight className="w-4 h-4 shrink-0" />
+                  {step === 2 && isCalculatingDelivery ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                      <span>Calculando frete...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Avançar</span>
+                      <ChevronRight className="w-4 h-4 shrink-0" />
+                    </>
+                  )}
                 </button>
               ) : (
                 <button
                   type="button"
-                  disabled={isSubmitting || (isValidating && hasItemsWaitingPrice)}
+                  disabled={
+                    isSubmitting ||
+                    (isValidating && hasItemsWaitingPrice) ||
+                    isCalculatingDelivery ||
+                    (fulfillmentType === 'delivery' && !deliveryQuote?.isCovered)
+                  }
                   onClick={handleSubmitOrder}
                   data-testid="checkout-submit-button"
                   className={`flex-1 py-3 px-4 sm:px-5 rounded-xl text-white text-xs sm:text-sm font-bold shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${

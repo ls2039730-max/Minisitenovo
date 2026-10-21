@@ -101,6 +101,15 @@ export interface Tenant {
   appearance: TenantAppearance;
   featureOverrides: Partial<Record<FeatureKey, boolean>>;
   subdomain: string; // preview e.g. "barbearia-prime.meudominio.com"
+  cep?: string;
+  street?: string;
+  number?: string;
+  complement?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  latitude?: number | null;
+  longitude?: number | null;
   notes?: string;
   deletedAt?: string | null;
   createdAt: string;

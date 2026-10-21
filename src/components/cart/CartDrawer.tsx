@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   X,
   ShoppingBag,
@@ -10,6 +10,12 @@ import {
   Clock,
   Loader2,
   RefreshCw,
+  Truck,
+  Store,
+  MapPin,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { Tenant } from '../../types/saas';
@@ -17,6 +23,7 @@ import { ValidatedCartItem } from '../../types/order';
 import { useBackHandler } from '../../services/navigationManager';
 import { formatCurrencyBRL, toSafePrice } from '../../utils/currency';
 import { calculateCartTotals } from '../../utils/cartCalculator';
+import { postalCodeService } from '../../services/postalCodeService';
 import { CartCheckoutErrorBoundary } from './CartCheckoutErrorBoundary';
 
 interface CartDrawerProps {
@@ -44,7 +51,18 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     removeFromCart,
     clearCart,
     revalidateCart,
+    fulfillmentType,
+    setFulfillmentType,
+    deliveryAddress,
+    updateDeliveryAddress,
+    deliveryQuote,
+    isCalculatingDelivery,
+    deliveryQuoteError,
+    refreshDeliveryQuote,
   } = useCart();
+
+  const [isSearchingCep, setIsSearchingCep] = useState(false);
+  const [showAddressFields, setShowAddressFields] = useState(false);
 
   useBackHandler({
     isOpen: isCartOpen,
@@ -56,15 +74,28 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   if (!isCartOpen) return null;
 
   // Authoritative calculation from displayItems
-  const totals = calculateCartTotals(displayItems, 0, 0);
+  const confirmedDeliveryFee =
+    fulfillmentType === 'delivery' && deliveryQuote?.isCovered
+      ? toSafePrice(deliveryQuote.fee)
+      : 0;
+  const totals = calculateCartTotals(displayItems, confirmedDeliveryFee, 0);
   const subtotal = totals.subtotal > 0 ? totals.subtotal : contextSubtotal;
+  const totalWithDelivery =
+    fulfillmentType === 'delivery' && deliveryQuote?.isCovered
+      ? totals.total
+      : subtotal;
+
   const hasItemsWaitingPrice =
     displayItems.length > 0 && displayItems.some((it) => toSafePrice(it.unitPrice) <= 0);
 
   const deliverySettings = validatedData?.deliverySettings;
-  const minimumOrder = toSafePrice(deliverySettings?.minimumOrder || 0);
-  const isBelowMinimum = !hasItemsWaitingPrice && minimumOrder > 0 && subtotal < minimumOrder;
-  const minimumDifference = Math.max(0, Math.round((minimumOrder - subtotal) * 100) / 100);
+  const effectiveMinOrder =
+    fulfillmentType === 'delivery' && deliveryQuote?.minimumOrder && deliveryQuote.minimumOrder > 0
+      ? toSafePrice(deliveryQuote.minimumOrder)
+      : toSafePrice(deliverySettings?.minimumOrder || 0);
+
+  const isBelowMinimum = !hasItemsWaitingPrice && effectiveMinOrder > 0 && subtotal < effectiveMinOrder;
+  const minimumDifference = Math.max(0, Math.round((effectiveMinOrder - subtotal) * 100) / 100);
 
   const canAcceptOrders = validatedData?.canAcceptOrders ?? true;
   const closedNotice = validatedData?.closedNotice;
@@ -73,7 +104,35 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     items.length === 0 ||
     isBelowMinimum ||
     !canAcceptOrders ||
-    (hasItemsWaitingPrice && isValidating);
+    (hasItemsWaitingPrice && isValidating) ||
+    isCalculatingDelivery;
+
+  const handleCartCepChange = async (val: string) => {
+    const formatted = postalCodeService.formatCep(val);
+    const clean = postalCodeService.cleanCep(formatted);
+    updateDeliveryAddress({ cep: formatted, selectedRuleId: null });
+
+    if (clean.length === 8) {
+      setIsSearchingCep(true);
+      setShowAddressFields(true);
+      try {
+        const res = await postalCodeService.lookup(clean, tenant.slug);
+        if (res.found) {
+          updateDeliveryAddress({
+            cep: formatted,
+            street: res.street || deliveryAddress.street,
+            neighborhood: res.neighborhood || deliveryAddress.neighborhood,
+            city: res.city || deliveryAddress.city,
+            state: res.state || deliveryAddress.state,
+            latitude: res.latitude ?? null,
+            longitude: res.longitude ?? null,
+          });
+        }
+      } finally {
+        setIsSearchingCep(false);
+      }
+    }
+  };
 
   return (
     <CartCheckoutErrorBoundary contextName="CartDrawer" onReset={() => revalidateCart()}>
@@ -173,7 +232,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
             </header>
 
             {/* =========================================================
-                AREA 2: LISTA DE PRODUTOS (Com controles e preços)
+                AREA 2: LISTA DE PRODUTOS E CÁLCULO DE ENTREGA NO CARRINHO
                ========================================================= */}
             <div className="flex-1 overflow-y-auto overflow-x-hidden p-3.5 sm:p-5 space-y-3">
               {items.length === 0 ? (
@@ -226,7 +285,6 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       >
                         {/* Top Row: Thumbnail + Name + Variant + Unit Price + Remove Button */}
                         <div className="flex items-start gap-3 min-w-0">
-                          {/* Image Thumbnail */}
                           <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-slate-100 overflow-hidden shrink-0 flex items-center justify-center border border-slate-100">
                             {item.imageUrl ? (
                               <img
@@ -239,7 +297,6 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                             )}
                           </div>
 
-                          {/* Product Name, Variant & Unit Price */}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-start justify-between gap-1.5">
                               <h4 className="text-xs sm:text-sm font-bold text-slate-900 leading-snug line-clamp-2 break-words">
@@ -262,10 +319,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                               </span>
                             )}
 
-                            {/* Unit Price Display (Promotional vs Regular) */}
+                            {/* Unit Price Display */}
                             <div className="mt-1 flex flex-wrap items-baseline gap-1.5">
                               {itemHasValidPrice ? (
-                                item.hasDiscount && item.originalPrice && item.originalPrice > item.unitPrice ? (
+                                item.hasDiscount &&
+                                item.originalPrice &&
+                                item.originalPrice > item.unitPrice ? (
                                   <>
                                     <span className="text-[11px] text-slate-400 line-through whitespace-nowrap">
                                       {formatCurrencyBRL(item.originalPrice)}
@@ -289,7 +348,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                           </div>
                         </div>
 
-                        {/* Bottom Row: Compact Touch-Friendly Quantity Selector & Item Subtotal */}
+                        {/* Bottom Row: Quantity Selector & Item Subtotal */}
                         <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100/80">
                           <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden bg-slate-50 shrink-0">
                             <button
@@ -339,6 +398,232 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       </div>
                     );
                   })}
+
+                  {/* =========================================================
+                      DELIVERY & PICKUP SELECTOR + FREIGHT CALCULATOR IN CART
+                     ========================================================= */}
+                  {deliverySettings && (
+                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-800">
+                          Como deseja receber?
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        {deliverySettings.pickupEnabled !== false && (
+                          <button
+                            type="button"
+                            onClick={() => setFulfillmentType('pickup')}
+                            className={`py-2 px-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                              fulfillmentType === 'pickup'
+                                ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            <Store className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate">Retirar no Local</span>
+                          </button>
+                        )}
+                        {deliverySettings.deliveryEnabled !== false && (
+                          <button
+                            type="button"
+                            onClick={() => setFulfillmentType('delivery')}
+                            className={`py-2 px-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                              fulfillmentType === 'delivery'
+                                ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            <Truck className="w-3.5 h-3.5 shrink-0" />
+                            <span className="truncate">Entrega</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {fulfillmentType === 'delivery' && (
+                        <div className="space-y-2 pt-1">
+                          <div className="flex gap-2">
+                            <div className="relative flex-1">
+                              <input
+                                type="text"
+                                maxLength={9}
+                                value={deliveryAddress.cep}
+                                onChange={(e) => handleCartCepChange(e.target.value)}
+                                placeholder="Digite seu CEP (00000-000)"
+                                className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              />
+                              {isSearchingCep && (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600 absolute right-3 top-2.5" />
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setShowAddressFields((v) => !v)}
+                              className="px-2.5 py-2 text-[11px] font-bold bg-white border border-slate-200 rounded-xl text-slate-700 hover:bg-slate-100 flex items-center gap-1 cursor-pointer shrink-0"
+                            >
+                              <span>Endereço</span>
+                              {showAddressFields ? (
+                                <ChevronUp className="w-3.5 h-3.5" />
+                              ) : (
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+
+                          {(showAddressFields || deliveryAddress.cep.replace(/\D/g, '').length === 8) && (
+                            <div className="space-y-2 pt-1 animate-in fade-in duration-150">
+                              <div className="grid grid-cols-4 gap-2">
+                                <input
+                                  type="text"
+                                  value={deliveryAddress.street}
+                                  onChange={(e) =>
+                                    updateDeliveryAddress({ street: e.target.value })
+                                  }
+                                  placeholder="Rua / Avenida"
+                                  className="col-span-3 px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-xl font-medium text-slate-800"
+                                />
+                                <input
+                                  type="text"
+                                  value={deliveryAddress.number}
+                                  onChange={(e) =>
+                                    updateDeliveryAddress({ number: e.target.value })
+                                  }
+                                  placeholder="Nº"
+                                  className="col-span-1 px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-xl font-bold text-slate-800"
+                                />
+                              </div>
+                              <div className="grid grid-cols-5 gap-2">
+                                <input
+                                  type="text"
+                                  value={deliveryAddress.neighborhood}
+                                  onChange={(e) =>
+                                    updateDeliveryAddress({
+                                      neighborhood: e.target.value,
+                                      selectedRuleId: null,
+                                    })
+                                  }
+                                  placeholder="Bairro"
+                                  className="col-span-2 px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-xl font-medium text-slate-800"
+                                />
+                                <input
+                                  type="text"
+                                  value={deliveryAddress.city}
+                                  onChange={(e) =>
+                                    updateDeliveryAddress({
+                                      city: e.target.value,
+                                      selectedRuleId: null,
+                                    })
+                                  }
+                                  placeholder="Cidade"
+                                  className="col-span-2 px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-xl font-medium text-slate-800"
+                                />
+                                <input
+                                  type="text"
+                                  maxLength={2}
+                                  value={deliveryAddress.state}
+                                  onChange={(e) =>
+                                    updateDeliveryAddress({
+                                      state: e.target.value.toUpperCase(),
+                                      selectedRuleId: null,
+                                    })
+                                  }
+                                  placeholder="UF"
+                                  className="col-span-1 px-2 py-1.5 text-xs bg-white border border-slate-200 rounded-xl font-bold text-slate-800 uppercase text-center"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Ambiguous Neighborhood Disambiguation */}
+                          {deliveryQuote?.errorCode === 'AMBIGUOUS_NEIGHBORHOOD' &&
+                            deliveryQuote.ambiguousRules && (
+                              <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 space-y-1.5 text-xs">
+                                <p className="font-bold text-amber-900">{deliveryQuote.reason}</p>
+                                <div className="space-y-1">
+                                  {deliveryQuote.ambiguousRules.map((r) => (
+                                    <button
+                                      key={r.id}
+                                      type="button"
+                                      onClick={() => updateDeliveryAddress({ selectedRuleId: r.id })}
+                                      className="w-full p-2 rounded-lg bg-white border border-amber-200 hover:bg-amber-100/50 text-left flex items-center justify-between font-semibold text-slate-800 cursor-pointer"
+                                    >
+                                      <span>
+                                        {r.name} ({r.city}/{r.state})
+                                      </span>
+                                      <span className="font-black">
+                                        {formatCurrencyBRL(r.fee)}
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                          {/* Delivery Quote Status Box */}
+                          {isCalculatingDelivery ? (
+                            <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-xs text-slate-600 flex items-center gap-2">
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600 shrink-0" />
+                              <span>Calculando rota e taxa de entrega...</span>
+                            </div>
+                          ) : deliveryQuoteError ? (
+                            <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center justify-between gap-2">
+                              <span className="break-words">{deliveryQuoteError}</span>
+                              <button
+                                type="button"
+                                onClick={() => refreshDeliveryQuote()}
+                                className="px-2 py-1 bg-white rounded-lg border border-rose-200 font-bold text-[11px] shrink-0 cursor-pointer"
+                              >
+                                Repetir
+                              </button>
+                            </div>
+                          ) : deliveryQuote ? (
+                            <div
+                              className={`p-2.5 rounded-xl border text-xs space-y-1 ${
+                                deliveryQuote.isCovered
+                                  ? 'bg-emerald-50/80 border-emerald-200 text-emerald-900'
+                                  : 'bg-rose-50 border-rose-200 text-rose-900'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-start gap-1.5 font-bold min-w-0">
+                                  {deliveryQuote.isCovered ? (
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                                  ) : (
+                                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
+                                  )}
+                                  <span className="break-words">
+                                    {deliveryQuote.isCovered
+                                      ? deliveryQuote.fee === 0
+                                        ? 'Frete Grátis para seu endereço!'
+                                        : `Entrega disponível: ${formatCurrencyBRL(deliveryQuote.fee)}`
+                                      : deliveryQuote.reason ||
+                                        'Endereço fora da nossa área de entrega.'}
+                                  </span>
+                                </div>
+                              </div>
+                              {deliveryQuote.isCovered && (
+                                <div className="text-[11px] text-emerald-800 pl-5 flex flex-wrap gap-x-2">
+                                  {deliveryQuote.distanceKm !== null &&
+                                    deliveryQuote.distanceKm !== undefined && (
+                                      <span>
+                                        Distância:{' '}
+                                        <strong>
+                                          {deliveryQuote.distanceKm.toFixed(1).replace('.', ',')} km
+                                        </strong>
+                                      </span>
+                                    )}
+                                  {deliveryQuote.estimatedTime && (
+                                    <span>• Tempo: {deliveryQuote.estimatedTime}</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -351,7 +636,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 {/* Financial Summary */}
                 <div className="space-y-1.5 text-xs">
                   <div className="flex items-center justify-between gap-2 text-slate-600 font-medium">
-                    <span>Subtotal</span>
+                    <span>Subtotal dos produtos</span>
                     {hasItemsWaitingPrice && subtotal <= 0 ? (
                       <span className="text-xs font-semibold text-slate-400 flex items-center gap-1">
                         <Loader2 className="w-3 h-3 animate-spin" />
@@ -367,10 +652,44 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     )}
                   </div>
 
+                  {fulfillmentType === 'delivery' && deliveryQuote?.destinationSummary && (
+                    <div className="flex items-start justify-between gap-2 text-[11px] text-slate-500">
+                      <span className="shrink-0 flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-slate-400" />
+                        Destino:
+                      </span>
+                      <span className="text-right truncate max-w-[220px] font-medium text-slate-700">
+                        {deliveryQuote.destinationSummary}
+                      </span>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between gap-2 text-slate-500">
-                    <span>Frete / Entrega</span>
-                    <span className="text-[11px] font-semibold text-slate-500 italic text-right">
-                      Calculado na finalização
+                    <span>
+                      {fulfillmentType === 'pickup'
+                        ? 'Modalidade: Retirada'
+                        : deliveryQuote?.distanceKm !== null &&
+                          deliveryQuote?.distanceKm !== undefined
+                        ? `Frete (${deliveryQuote.distanceKm.toFixed(1).replace('.', ',')} km)`
+                        : 'Frete / Entrega'}
+                    </span>
+                    <span className="text-[11px] font-bold text-slate-800 text-right">
+                      {fulfillmentType === 'pickup' ? (
+                        <span className="text-emerald-700">Sem taxa</span>
+                      ) : isCalculatingDelivery ? (
+                        <span className="text-slate-400 flex items-center gap-1">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          Calculando...
+                        </span>
+                      ) : deliveryQuote?.isCovered ? (
+                        deliveryQuote.fee === 0 ? (
+                          <span className="text-emerald-700 font-extrabold">GRÁTIS</span>
+                        ) : (
+                          formatCurrencyBRL(deliveryQuote.fee)
+                        )
+                      ) : (
+                        <span className="text-slate-500 italic">A calcular no endereço</span>
+                      )}
                     </span>
                   </div>
 
@@ -384,7 +703,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   )}
 
                   <div className="pt-2 border-t border-slate-200/80 flex items-baseline justify-between gap-2">
-                    <span className="text-sm font-extrabold text-slate-900">Total parcial</span>
+                    <span className="text-sm font-extrabold text-slate-900">
+                      {fulfillmentType === 'delivery' && deliveryQuote?.isCovered
+                        ? 'Total estimado'
+                        : 'Total parcial'}
+                    </span>
                     {hasItemsWaitingPrice && subtotal <= 0 ? (
                       <span className="text-sm font-bold text-slate-400">Calculando...</span>
                     ) : (
@@ -392,7 +715,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                         className="text-base sm:text-lg font-black text-slate-900 whitespace-nowrap"
                         data-testid="cart-partial-total"
                       >
-                        {formatCurrencyBRL(subtotal)}
+                        {formatCurrencyBRL(totalWithDelivery)}
                       </span>
                     )}
                   </div>
@@ -406,7 +729,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       <span>Pedido Mínimo Não Atingido</span>
                     </div>
                     <p className="text-[11px] text-amber-700 leading-relaxed">
-                      O pedido mínimo é de {formatCurrencyBRL(minimumOrder)}. Faltam{' '}
+                      O pedido mínimo é de {formatCurrencyBRL(effectiveMinOrder)}. Faltam{' '}
                       <strong>{formatCurrencyBRL(minimumDifference)}</strong> para finalizar.
                     </p>
                   </div>

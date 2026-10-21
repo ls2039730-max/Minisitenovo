@@ -10,6 +10,11 @@ import {
   OrderDeliveryAddress,
   DeliverySettings,
   DeliveryRule,
+  DeliveryOriginAddress,
+  DeliveryKmConfig,
+  DeliveryPricingMode,
+  DeliveryQuoteRequest,
+  DeliveryQuoteResponse,
   PaymentMethodConfig,
   ValidatedCartResponse,
   ValidatedCartItem,
@@ -18,7 +23,20 @@ import {
   OrderFilterParams,
   OrdersSummary,
 } from '../../src/types/order.js';
-import { calculateDeliveryFee } from '../../src/utils/deliveryFeeCalculator.js';
+import {
+  DEFAULT_KM_CONFIG,
+  calculateComprehensiveDeliveryQuote,
+  formatAddressSummary,
+  hasValidCoordinates,
+  isOriginAddressValid,
+  normalizeCep,
+  parseFormattedAddressString,
+} from '../../src/utils/deliveryFeeCalculator.js';
+import {
+  calculateRouteDistanceServer,
+  geocodeAddressServer,
+  lookupPostalCodeServer,
+} from '../services/routingService.js';
 import { buildWhatsAppOrderMessage, buildWhatsAppUrl } from '../../src/utils/whatsappMessageBuilder.js';
 import {
   isProductAvailableOnDay,
@@ -29,24 +47,275 @@ import { calculateScheduleStatus } from '../../src/utils/businessHours.js';
 import { toSafePrice, resolveEffectivePrice, sanitizeQuantity } from '../../src/utils/currency.js';
 import { calculateItemSubtotal } from '../../src/utils/cartCalculator.js';
 
-// Rate limiting and idempotency memory storage
 interface RateLimitEntry {
   count: number;
   resetAt: number;
 }
 const rateLimitMap = new Map<string, RateLimitEntry>();
 
+interface ExtendedRuleMeta {
+  city?: string | null;
+  state?: string | null;
+  estimatedTime?: string | null;
+  freeDeliveryAbove?: number | null;
+  includedDistanceKm?: number | null;
+  extraKmFee?: number | null;
+}
+
+interface ExtendedOrderDeliveryMeta {
+  pricingMode?: DeliveryPricingMode | null;
+  distanceKm?: number | null;
+  appliedRuleName?: string | null;
+  deliveryBreakdown?: string | null;
+}
+
+interface TenantDeliveryExtendedConfig {
+  pricingMode?: DeliveryPricingMode;
+  pricingModeExplicitlySet?: boolean;
+  originAddress?: DeliveryOriginAddress | null;
+  kmConfig?: DeliveryKmConfig | null;
+  rulesMeta?: Record<string, ExtendedRuleMeta>;
+  ordersMeta?: Record<string, ExtendedOrderDeliveryMeta>;
+}
+
 export class OrderRepository {
+  // ==========================================
+  // 0. EXTENDED CONFIG STORAGE (DUAL-LAYER PERSISTENCE PER TENANT)
+  // ==========================================
+
+  private async getExtendedConfig(tenantId: string): Promise<TenantDeliveryExtendedConfig> {
+    try {
+      const { data: siteRow } = await supabaseAdmin
+        .from('sites')
+        .select('draft_data')
+        .eq('tenant_id', tenantId)
+        .single();
+
+      const ext = siteRow?.draft_data?.deliveryExtendedConfig;
+      if (ext && typeof ext === 'object') {
+        return {
+          pricingMode: ext.pricingMode,
+          pricingModeExplicitlySet: Boolean(ext.pricingModeExplicitlySet),
+          originAddress: ext.originAddress || null,
+          kmConfig: ext.kmConfig ? { ...DEFAULT_KM_CONFIG, ...ext.kmConfig } : null,
+          rulesMeta: ext.rulesMeta || {},
+          ordersMeta: ext.ordersMeta || {},
+        };
+      }
+    } catch {
+      // Ignore if site row doesn't exist yet
+    }
+    return {
+      rulesMeta: {},
+      ordersMeta: {},
+    };
+  }
+
+  private async saveExtendedConfig(
+    tenantId: string,
+    patch: Partial<TenantDeliveryExtendedConfig>
+  ): Promise<TenantDeliveryExtendedConfig> {
+    const current = await this.getExtendedConfig(tenantId);
+    const merged: TenantDeliveryExtendedConfig = {
+      ...current,
+      ...patch,
+      rulesMeta: { ...(current.rulesMeta || {}), ...(patch.rulesMeta || {}) },
+      ordersMeta: { ...(current.ordersMeta || {}), ...(patch.ordersMeta || {}) },
+    };
+
+    try {
+      const { data: siteRow } = await supabaseAdmin
+        .from('sites')
+        .select('id, draft_data')
+        .eq('tenant_id', tenantId)
+        .single();
+
+      if (siteRow) {
+        const draftData =
+          siteRow.draft_data && typeof siteRow.draft_data === 'object'
+            ? { ...siteRow.draft_data }
+            : {};
+        draftData.deliveryExtendedConfig = merged;
+        await supabaseAdmin
+          .from('sites')
+          .update({ draft_data: draftData, updated_at: new Date().toISOString() })
+          .eq('tenant_id', tenantId);
+      } else {
+        await supabaseAdmin.from('sites').insert({
+          id: crypto.randomUUID(),
+          tenant_id: tenantId,
+          slug: `site-${tenantId.slice(0, 8)}`,
+          status: 'draft',
+          draft_data: { deliveryExtendedConfig: merged },
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+      }
+    } catch (err) {
+      console.error(`[OrderRepository] Error saving extended delivery config for tenant ${tenantId}:`, err);
+    }
+
+    return merged;
+  }
+
+  /**
+   * Resolves the establishment's origin address from:
+   * 1. Saved extended delivery originAddress
+   * 2. Native columns in `public.tenants` (street, number, complement, neighborhood, city, state, cep)
+   * 3. Site Editor's `location` section (`site_sections.settings.address`) if present for this tenant
+   * Never uses another tenant's address or a hardcoded fallback.
+   */
+  public async resolveTenantOriginAddress(
+    tenantId: string,
+    extConfig?: TenantDeliveryExtendedConfig
+  ): Promise<DeliveryOriginAddress | null> {
+    const ext = extConfig || (await this.getExtendedConfig(tenantId));
+    const { data: tenantRow } = await supabaseAdmin
+      .from('tenants')
+      .select('cep, street, number, complement, neighborhood, city, state')
+      .eq('id', tenantId)
+      .single();
+
+    let origin: DeliveryOriginAddress | null = null;
+
+    if (ext.originAddress && isOriginAddressValid(ext.originAddress)) {
+      origin = {
+        cep: normalizeCep(ext.originAddress.cep),
+        street: ext.originAddress.street.trim(),
+        number: (ext.originAddress.number || 'S/N').trim(),
+        complement: ext.originAddress.complement?.trim() || null,
+        neighborhood: (ext.originAddress.neighborhood || '').trim(),
+        city: ext.originAddress.city.trim(),
+        state: ext.originAddress.state.trim().toUpperCase(),
+        latitude:
+          typeof ext.originAddress.latitude === 'number' ? ext.originAddress.latitude : null,
+        longitude:
+          typeof ext.originAddress.longitude === 'number' ? ext.originAddress.longitude : null,
+      };
+    } else if (tenantRow && tenantRow.street && tenantRow.city && tenantRow.state) {
+      origin = {
+        cep: normalizeCep(tenantRow.cep),
+        street: tenantRow.street.trim(),
+        number: (tenantRow.number || 'S/N').trim(),
+        complement: tenantRow.complement?.trim() || null,
+        neighborhood: (tenantRow.neighborhood || '').trim(),
+        city: tenantRow.city.trim(),
+        state: tenantRow.state.trim().toUpperCase(),
+        latitude: ext.originAddress?.latitude ?? null,
+        longitude: ext.originAddress?.longitude ?? null,
+      };
+    } else {
+      // Check if tenant has a location section configured in site_sections
+      const { data: locSections } = await supabaseAdmin
+        .from('site_sections')
+        .select('settings')
+        .eq('tenant_id', tenantId)
+        .eq('section_type', 'location')
+        .limit(1);
+
+      const rawLocationAddress = locSections?.[0]?.settings?.address;
+      if (rawLocationAddress && typeof rawLocationAddress === 'string') {
+        const parsed = parseFormattedAddressString(rawLocationAddress);
+        if (parsed && isOriginAddressValid(parsed)) {
+          origin = parsed;
+        }
+      } else if (rawLocationAddress && typeof rawLocationAddress === 'object') {
+        const addrObj = rawLocationAddress as Record<string, any>;
+        const candidate: DeliveryOriginAddress = {
+          cep: normalizeCep(addrObj.cep || addrObj.zip || ''),
+          street: String(addrObj.street || '').trim(),
+          number: String(addrObj.number || 'S/N').trim(),
+          complement: addrObj.complement ? String(addrObj.complement).trim() : null,
+          neighborhood: String(addrObj.neighborhood || '').trim(),
+          city: String(addrObj.city || '').trim(),
+          state: String(addrObj.state || '').trim().toUpperCase(),
+          latitude:
+            typeof addrObj.latitude === 'number' && Number.isFinite(addrObj.latitude)
+              ? addrObj.latitude
+              : null,
+          longitude:
+            typeof addrObj.longitude === 'number' && Number.isFinite(addrObj.longitude)
+              ? addrObj.longitude
+              : null,
+        };
+        if (isOriginAddressValid(candidate)) {
+          origin = candidate;
+        }
+      }
+    }
+
+    if (!origin) {
+      return null;
+    }
+
+    // Sync to `tenants` table if `tenants.street` was empty
+    if (tenantRow && (!tenantRow.street || !tenantRow.city)) {
+      await supabaseAdmin
+        .from('tenants')
+        .update({
+          cep: origin.cep || null,
+          street: origin.street,
+          number: origin.number,
+          complement: origin.complement || null,
+          neighborhood: origin.neighborhood || null,
+          city: origin.city,
+          state: origin.state,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', tenantId);
+    }
+
+    // Automatically geocode if coordinates are missing
+    if (!hasValidCoordinates(origin)) {
+      const geo = await geocodeAddressServer(origin);
+      if (geo.success && typeof geo.latitude === 'number' && typeof geo.longitude === 'number') {
+        origin.latitude = geo.latitude;
+        origin.longitude = geo.longitude;
+        await this.saveExtendedConfig(tenantId, { originAddress: origin });
+      }
+    } else if (!ext.originAddress) {
+      await this.saveExtendedConfig(tenantId, { originAddress: origin });
+    }
+
+    return origin;
+  }
+
   // ==========================================
   // 1. DELIVERY SETTINGS & RULES
   // ==========================================
 
   public async getDeliverySettings(tenantId: string): Promise<DeliverySettings> {
-    const { data } = await supabaseAdmin
-      .from('delivery_settings')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .single();
+    const [{ data }, extConfig, rulesCountRes] = await Promise.all([
+      supabaseAdmin.from('delivery_settings').select('*').eq('tenant_id', tenantId).single(),
+      this.getExtendedConfig(tenantId),
+      supabaseAdmin
+        .from('delivery_rules')
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', tenantId),
+    ]);
+
+    const originAddress = await this.resolveTenantOriginAddress(tenantId, extConfig);
+    const rulesCount = rulesCountRes.count ?? 0;
+
+    // Determine effective pricing mode:
+    // 1. If explicitly saved by admin in extended config or DB column, use it.
+    // 2. Otherwise, if tenant has 0 neighborhood rules and has a valid origin address, default to 'km' so distance calculation works out of the box.
+    // 3. Otherwise default to 'neighborhood'.
+    let pricingMode: DeliveryPricingMode = 'neighborhood';
+    if (extConfig.pricingModeExplicitlySet && extConfig.pricingMode) {
+      pricingMode = extConfig.pricingMode;
+    } else if ((data as any)?.pricing_mode) {
+      pricingMode = (data as any).pricing_mode as DeliveryPricingMode;
+    } else if (extConfig.pricingMode) {
+      pricingMode = extConfig.pricingMode;
+    } else if (rulesCount === 0 && originAddress && hasValidCoordinates(originAddress)) {
+      pricingMode = 'km';
+    }
+
+    const kmConfig: DeliveryKmConfig = {
+      ...DEFAULT_KM_CONFIG,
+      ...(extConfig.kmConfig || {}),
+    };
 
     if (data) {
       return {
@@ -55,9 +324,16 @@ export class OrderRepository {
         acceptOrdersWhenClosed: data.accept_orders_when_closed !== false,
         pickupEnabled: data.pickup_enabled !== false,
         deliveryEnabled: data.delivery_enabled !== false,
+        pricingMode,
+        originAddress,
+        kmConfig,
         minimumOrder: Number(data.minimum_order || 0),
-        freeDeliveryAbove: data.free_delivery_above !== null && data.free_delivery_above !== undefined ? Number(data.free_delivery_above) : null,
-        pickupInstructions: data.pickup_instructions || 'Retire no balcão apresentando o número do pedido.',
+        freeDeliveryAbove:
+          data.free_delivery_above !== null && data.free_delivery_above !== undefined
+            ? Number(data.free_delivery_above)
+            : null,
+        pickupInstructions:
+          data.pickup_instructions || 'Retire no balcão apresentando o número do pedido.',
         deliveryEstimateText: data.delivery_estimate_text || '40 a 60 minutos',
         orderWhatsappNumber: data.order_whatsapp_number || null,
         createdAt: data.created_at,
@@ -65,7 +341,6 @@ export class OrderRepository {
       };
     }
 
-    // Default configuration if not yet created in table
     const now = new Date().toISOString();
     const defaultSettings: DeliverySettings = {
       tenantId,
@@ -73,6 +348,9 @@ export class OrderRepository {
       acceptOrdersWhenClosed: true,
       pickupEnabled: true,
       deliveryEnabled: true,
+      pricingMode,
+      originAddress,
+      kmConfig,
       minimumOrder: 0,
       freeDeliveryAbove: null,
       pickupInstructions: 'Retire no balcão apresentando o número do pedido.',
@@ -113,21 +391,170 @@ export class OrderRepository {
     };
 
     if (payload.ordersEnabled !== undefined) updateData.orders_enabled = !!payload.ordersEnabled;
-    if (payload.acceptOrdersWhenClosed !== undefined) updateData.accept_orders_when_closed = !!payload.acceptOrdersWhenClosed;
-    if (payload.pickupEnabled !== undefined) updateData.pickup_enabled = !!payload.pickupEnabled;
-    if (payload.deliveryEnabled !== undefined) updateData.delivery_enabled = !!payload.deliveryEnabled;
-    if (payload.minimumOrder !== undefined) updateData.minimum_order = Math.max(0, Number(payload.minimumOrder || 0));
-    if (payload.freeDeliveryAbove !== undefined) {
-      updateData.free_delivery_above = payload.freeDeliveryAbove !== null ? Math.max(0, Number(payload.freeDeliveryAbove)) : null;
+    if (payload.acceptOrdersWhenClosed !== undefined) {
+      updateData.accept_orders_when_closed = !!payload.acceptOrdersWhenClosed;
     }
-    if (payload.pickupInstructions !== undefined) updateData.pickup_instructions = payload.pickupInstructions?.trim() || null;
-    if (payload.deliveryEstimateText !== undefined) updateData.delivery_estimate_text = payload.deliveryEstimateText?.trim() || null;
-    if (payload.orderWhatsappNumber !== undefined) updateData.order_whatsapp_number = payload.orderWhatsappNumber?.replace(/\D/g, '') || null;
+    if (payload.pickupEnabled !== undefined) updateData.pickup_enabled = !!payload.pickupEnabled;
+    if (payload.deliveryEnabled !== undefined) {
+      updateData.delivery_enabled = !!payload.deliveryEnabled;
+    }
+    if (payload.minimumOrder !== undefined) {
+      updateData.minimum_order = Math.max(0, Number(payload.minimumOrder || 0));
+    }
+    if (payload.freeDeliveryAbove !== undefined) {
+      updateData.free_delivery_above =
+        payload.freeDeliveryAbove !== null && payload.freeDeliveryAbove !== undefined
+          ? Math.max(0, Number(payload.freeDeliveryAbove))
+          : null;
+    }
+    if (payload.pickupInstructions !== undefined) {
+      updateData.pickup_instructions = payload.pickupInstructions?.trim() || null;
+    }
+    if (payload.deliveryEstimateText !== undefined) {
+      updateData.delivery_estimate_text = payload.deliveryEstimateText?.trim() || null;
+    }
+    if (payload.orderWhatsappNumber !== undefined) {
+      updateData.order_whatsapp_number =
+        payload.orderWhatsappNumber?.replace(/\D/g, '') || null;
+    }
 
     await supabaseAdmin
       .from('delivery_settings')
       .update(updateData)
       .eq('tenant_id', tenantId);
+
+    // Handle extended settings (pricingMode, originAddress, kmConfig)
+    const extPatch: Partial<TenantDeliveryExtendedConfig> = {};
+
+    if (payload.pricingMode !== undefined) {
+      extPatch.pricingMode = payload.pricingMode;
+      extPatch.pricingModeExplicitlySet = true;
+    }
+
+    if (payload.kmConfig !== undefined && payload.kmConfig !== null) {
+      const k = payload.kmConfig;
+      extPatch.kmConfig = {
+        baseFee: Math.max(0, Number(k.baseFee ?? DEFAULT_KM_CONFIG.baseFee)),
+        pricePerKm: Math.max(0, Number(k.pricePerKm ?? DEFAULT_KM_CONFIG.pricePerKm)),
+        minDistanceKm: Math.max(0, Number(k.minDistanceKm ?? DEFAULT_KM_CONFIG.minDistanceKm)),
+        maxDistanceKm: Math.max(0, Number(k.maxDistanceKm ?? DEFAULT_KM_CONFIG.maxDistanceKm)),
+        distanceMethod:
+          k.distanceMethod === 'straight_line' ? 'straight_line' : 'road_route',
+        roundDistanceUp: Boolean(k.roundDistanceUp),
+        minDeliveryFee:
+          k.minDeliveryFee !== null && k.minDeliveryFee !== undefined && Number(k.minDeliveryFee) > 0
+            ? Math.max(0, Number(k.minDeliveryFee))
+            : null,
+        freeDeliveryAbove:
+          k.freeDeliveryAbove !== null &&
+          k.freeDeliveryAbove !== undefined &&
+          Number(k.freeDeliveryAbove) > 0
+            ? Math.max(0, Number(k.freeDeliveryAbove))
+            : null,
+      };
+    }
+
+    if (payload.originAddress !== undefined) {
+      if (payload.originAddress === null) {
+        extPatch.originAddress = null;
+      } else {
+        const oa = payload.originAddress;
+        const normalizedOrigin: DeliveryOriginAddress = {
+          cep: normalizeCep(oa.cep),
+          street: (oa.street || '').trim(),
+          number: (oa.number || 'S/N').trim(),
+          complement: oa.complement?.trim() || null,
+          neighborhood: (oa.neighborhood || '').trim(),
+          city: (oa.city || '').trim(),
+          state: (oa.state || '').trim().toUpperCase(),
+          latitude:
+            typeof oa.latitude === 'number' && Number.isFinite(oa.latitude)
+              ? oa.latitude
+              : null,
+          longitude:
+            typeof oa.longitude === 'number' && Number.isFinite(oa.longitude)
+              ? oa.longitude
+              : null,
+        };
+
+        // If coordinates were not provided or address changed, geocode automatically
+        const prevOrigin = existing.originAddress;
+        const addressChanged =
+          !prevOrigin ||
+          normalizeCep(prevOrigin.cep) !== normalizedOrigin.cep ||
+          prevOrigin.street !== normalizedOrigin.street ||
+          prevOrigin.number !== normalizedOrigin.number ||
+          prevOrigin.neighborhood !== normalizedOrigin.neighborhood ||
+          prevOrigin.city !== normalizedOrigin.city ||
+          prevOrigin.state !== normalizedOrigin.state;
+
+        if (
+          isOriginAddressValid(normalizedOrigin) &&
+          (!hasValidCoordinates(normalizedOrigin) || addressChanged) &&
+          (oa.latitude === undefined || oa.latitude === null || addressChanged)
+        ) {
+          // If caller explicitly passed new coordinates, keep them; otherwise geocode
+          const callerPassedNewCoords =
+            hasValidCoordinates(oa) &&
+            (!prevOrigin ||
+              oa.latitude !== prevOrigin.latitude ||
+              oa.longitude !== prevOrigin.longitude);
+
+          if (!callerPassedNewCoords) {
+            const geo = await geocodeAddressServer({
+              ...normalizedOrigin,
+              latitude: null,
+              longitude: null,
+            });
+            if (geo.success && typeof geo.latitude === 'number' && typeof geo.longitude === 'number') {
+              normalizedOrigin.latitude = geo.latitude;
+              normalizedOrigin.longitude = geo.longitude;
+            }
+          }
+        }
+
+        extPatch.originAddress = normalizedOrigin;
+
+        // Sync to `public.tenants` native address columns
+        await supabaseAdmin
+          .from('tenants')
+          .update({
+            cep: normalizedOrigin.cep || null,
+            street: normalizedOrigin.street || null,
+            number: normalizedOrigin.number || null,
+            complement: normalizedOrigin.complement || null,
+            neighborhood: normalizedOrigin.neighborhood || null,
+            city: normalizedOrigin.city || null,
+            state: normalizedOrigin.state || null,
+            updated_at: now,
+          })
+          .eq('id', tenantId);
+
+        // Also sync formatted address to `site_sections` (location section) if one exists
+        const formattedAddr = formatAddressSummary(normalizedOrigin);
+        if (formattedAddr) {
+          const { data: locRows } = await supabaseAdmin
+            .from('site_sections')
+            .select('id, settings')
+            .eq('tenant_id', tenantId)
+            .eq('section_type', 'location');
+          if (locRows && locRows.length > 0) {
+            for (const row of locRows) {
+              const nextSettings = { ...(row.settings || {}), address: formattedAddr };
+              await supabaseAdmin
+                .from('site_sections')
+                .update({ settings: nextSettings, updated_at: now })
+                .eq('id', row.id)
+                .eq('tenant_id', tenantId);
+            }
+          }
+        }
+      }
+    }
+
+    if (Object.keys(extPatch).length > 0) {
+      await this.saveExtendedConfig(tenantId, extPatch);
+    }
 
     await repo.logAudit({
       actorUserId: actor.id,
@@ -143,27 +570,61 @@ export class OrderRepository {
   }
 
   public async listDeliveryRules(tenantId: string): Promise<DeliveryRule[]> {
-    const { data } = await supabaseAdmin
-      .from('delivery_rules')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .order('position', { ascending: true });
+    const [{ data }, extConfig] = await Promise.all([
+      supabaseAdmin
+        .from('delivery_rules')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .order('position', { ascending: true }),
+      this.getExtendedConfig(tenantId),
+    ]);
 
-    return (data || []).map((r: any) => ({
-      id: r.id,
-      tenantId: r.tenant_id,
-      type: r.type,
-      name: r.name,
-      neighborhood: r.neighborhood || null,
-      cepStart: r.cep_start || null,
-      cepEnd: r.cep_end || null,
-      fee: Number(r.fee || 0),
-      minimumOrder: r.minimum_order !== null && r.minimum_order !== undefined ? Number(r.minimum_order) : null,
-      isActive: r.is_active !== false,
-      position: r.position || 0,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
-    }));
+    const rulesMeta = extConfig.rulesMeta || {};
+    const originCity = extConfig.originAddress?.city || null;
+    const originState = extConfig.originAddress?.state || null;
+
+    return (data || []).map((r: any) => {
+      const meta = rulesMeta[r.id] || {};
+      return {
+        id: r.id,
+        tenantId: r.tenant_id,
+        type: r.type,
+        name: r.name,
+        neighborhood: r.neighborhood || null,
+        city: r.city ?? meta.city ?? originCity ?? null,
+        state: r.state ?? meta.state ?? originState ?? null,
+        cepStart: r.cep_start || null,
+        cepEnd: r.cep_end || null,
+        fee: Number(r.fee || 0),
+        minimumOrder:
+          r.minimum_order !== null && r.minimum_order !== undefined
+            ? Number(r.minimum_order)
+            : null,
+        freeDeliveryAbove:
+          r.free_delivery_above !== undefined
+            ? r.free_delivery_above !== null
+              ? Number(r.free_delivery_above)
+              : null
+            : meta.freeDeliveryAbove ?? null,
+        estimatedTime: r.estimated_time ?? meta.estimatedTime ?? null,
+        includedDistanceKm:
+          r.included_distance_km !== undefined
+            ? r.included_distance_km !== null
+              ? Number(r.included_distance_km)
+              : null
+            : meta.includedDistanceKm ?? null,
+        extraKmFee:
+          r.extra_km_fee !== undefined
+            ? r.extra_km_fee !== null
+              ? Number(r.extra_km_fee)
+              : null
+            : meta.extraKmFee ?? null,
+        isActive: r.is_active !== false,
+        position: r.position || 0,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+      };
+    });
   }
 
   public async createDeliveryRule(
@@ -171,11 +632,17 @@ export class OrderRepository {
     payload: {
       type: 'fixed' | 'neighborhood' | 'cep_range';
       name: string;
-      neighborhood?: string;
-      cepStart?: string;
-      cepEnd?: string;
+      neighborhood?: string | null;
+      city?: string | null;
+      state?: string | null;
+      cepStart?: string | null;
+      cepEnd?: string | null;
       fee: number;
       minimumOrder?: number | null;
+      freeDeliveryAbove?: number | null;
+      estimatedTime?: string | null;
+      includedDistanceKm?: number | null;
+      extraKmFee?: number | null;
       isActive?: boolean;
     },
     actor: User
@@ -188,12 +655,15 @@ export class OrderRepository {
       id: newId,
       tenant_id: tenantId,
       type: payload.type,
-      name: payload.name.trim(),
+      name: (payload.name || payload.neighborhood || 'Regra').trim(),
       neighborhood: payload.neighborhood?.trim() || null,
       cep_start: payload.cepStart ? payload.cepStart.replace(/\D/g, '') : null,
       cep_end: payload.cepEnd ? payload.cepEnd.replace(/\D/g, '') : null,
       fee: Math.max(0, Number(payload.fee || 0)),
-      minimum_order: payload.minimumOrder !== null && payload.minimumOrder !== undefined ? Math.max(0, Number(payload.minimumOrder)) : null,
+      minimum_order:
+        payload.minimumOrder !== null && payload.minimumOrder !== undefined
+          ? Math.max(0, Number(payload.minimumOrder))
+          : null,
       is_active: payload.isActive !== false,
       position: rules.length,
       created_at: now,
@@ -202,6 +672,30 @@ export class OrderRepository {
 
     await supabaseAdmin.from('delivery_rules').insert(insertData);
 
+    const ruleMeta: ExtendedRuleMeta = {
+      city: payload.city?.trim() || null,
+      state: payload.state?.trim().toUpperCase() || null,
+      estimatedTime: payload.estimatedTime?.trim() || null,
+      freeDeliveryAbove:
+        payload.freeDeliveryAbove !== null &&
+        payload.freeDeliveryAbove !== undefined &&
+        Number(payload.freeDeliveryAbove) > 0
+          ? Math.max(0, Number(payload.freeDeliveryAbove))
+          : null,
+      includedDistanceKm:
+        payload.includedDistanceKm !== null && payload.includedDistanceKm !== undefined
+          ? Math.max(0, Number(payload.includedDistanceKm))
+          : null,
+      extraKmFee:
+        payload.extraKmFee !== null && payload.extraKmFee !== undefined
+          ? Math.max(0, Number(payload.extraKmFee))
+          : null,
+    };
+
+    await this.saveExtendedConfig(tenantId, {
+      rulesMeta: { [newId]: ruleMeta },
+    });
+
     await repo.logAudit({
       actorUserId: actor.id,
       actorUserName: actor.name,
@@ -209,19 +703,25 @@ export class OrderRepository {
       action: 'DELIVERY_RULE_CREATE' as any,
       entity: 'delivery_rules',
       entityId: newId,
-      diff: { created: insertData },
+      diff: { created: { ...insertData, ...ruleMeta } },
     });
 
     return {
       id: newId,
       tenantId,
       type: payload.type,
-      name: payload.name.trim(),
+      name: insertData.name,
       neighborhood: insertData.neighborhood,
+      city: ruleMeta.city,
+      state: ruleMeta.state,
       cepStart: insertData.cep_start,
       cepEnd: insertData.cep_end,
       fee: insertData.fee,
       minimumOrder: insertData.minimum_order,
+      freeDeliveryAbove: ruleMeta.freeDeliveryAbove,
+      estimatedTime: ruleMeta.estimatedTime,
+      includedDistanceKm: ruleMeta.includedDistanceKm,
+      extraKmFee: ruleMeta.extraKmFee,
       isActive: insertData.is_active,
       position: insertData.position,
       createdAt: now,
@@ -246,16 +746,64 @@ export class OrderRepository {
 
     if (payload.name !== undefined) updateData.name = payload.name.trim();
     if (payload.type !== undefined) updateData.type = payload.type;
-    if (payload.neighborhood !== undefined) updateData.neighborhood = payload.neighborhood?.trim() || null;
-    if (payload.cepStart !== undefined) updateData.cep_start = payload.cepStart ? payload.cepStart.replace(/\D/g, '') : null;
-    if (payload.cepEnd !== undefined) updateData.cep_end = payload.cepEnd ? payload.cepEnd.replace(/\D/g, '') : null;
+    if (payload.neighborhood !== undefined) {
+      updateData.neighborhood = payload.neighborhood?.trim() || null;
+    }
+    if (payload.cepStart !== undefined) {
+      updateData.cep_start = payload.cepStart ? payload.cepStart.replace(/\D/g, '') : null;
+    }
+    if (payload.cepEnd !== undefined) {
+      updateData.cep_end = payload.cepEnd ? payload.cepEnd.replace(/\D/g, '') : null;
+    }
     if (payload.fee !== undefined) updateData.fee = Math.max(0, Number(payload.fee));
     if (payload.minimumOrder !== undefined) {
-      updateData.minimum_order = payload.minimumOrder !== null ? Math.max(0, Number(payload.minimumOrder)) : null;
+      updateData.minimum_order =
+        payload.minimumOrder !== null ? Math.max(0, Number(payload.minimumOrder)) : null;
     }
     if (payload.isActive !== undefined) updateData.is_active = !!payload.isActive;
 
-    await supabaseAdmin.from('delivery_rules').update(updateData).eq('id', ruleId).eq('tenant_id', tenantId);
+    await supabaseAdmin
+      .from('delivery_rules')
+      .update(updateData)
+      .eq('id', ruleId)
+      .eq('tenant_id', tenantId);
+
+    const extConfig = await this.getExtendedConfig(tenantId);
+    const prevMeta = extConfig.rulesMeta?.[ruleId] || {};
+    const nextMeta: ExtendedRuleMeta = {
+      ...prevMeta,
+      city: payload.city !== undefined ? payload.city?.trim() || null : prevMeta.city,
+      state:
+        payload.state !== undefined
+          ? payload.state?.trim().toUpperCase() || null
+          : prevMeta.state,
+      estimatedTime:
+        payload.estimatedTime !== undefined
+          ? payload.estimatedTime?.trim() || null
+          : prevMeta.estimatedTime,
+      freeDeliveryAbove:
+        payload.freeDeliveryAbove !== undefined
+          ? payload.freeDeliveryAbove !== null && Number(payload.freeDeliveryAbove) > 0
+            ? Math.max(0, Number(payload.freeDeliveryAbove))
+            : null
+          : prevMeta.freeDeliveryAbove,
+      includedDistanceKm:
+        payload.includedDistanceKm !== undefined
+          ? payload.includedDistanceKm !== null
+            ? Math.max(0, Number(payload.includedDistanceKm))
+            : null
+          : prevMeta.includedDistanceKm,
+      extraKmFee:
+        payload.extraKmFee !== undefined
+          ? payload.extraKmFee !== null
+            ? Math.max(0, Number(payload.extraKmFee))
+            : null
+          : prevMeta.extraKmFee,
+    };
+
+    await this.saveExtendedConfig(tenantId, {
+      rulesMeta: { [ruleId]: nextMeta },
+    });
 
     await repo.logAudit({
       actorUserId: actor.id,
@@ -278,6 +826,13 @@ export class OrderRepository {
 
     await supabaseAdmin.from('delivery_rules').delete().eq('id', ruleId).eq('tenant_id', tenantId);
 
+    const extConfig = await this.getExtendedConfig(tenantId);
+    if (extConfig.rulesMeta && extConfig.rulesMeta[ruleId]) {
+      const nextRulesMeta = { ...extConfig.rulesMeta };
+      delete nextRulesMeta[ruleId];
+      await this.saveExtendedConfig(tenantId, { rulesMeta: nextRulesMeta });
+    }
+
     await repo.logAudit({
       actorUserId: actor.id,
       actorUserName: actor.name,
@@ -299,6 +854,150 @@ export class OrderRepository {
         .eq('id', ruleIds[i])
         .eq('tenant_id', tenantId);
     }
+  }
+
+  // ==========================================
+  // 1B. DELIVERY QUOTE & SIMULATOR ENGINE (SERVER-SIDE)
+  // ==========================================
+
+  public async evaluateDeliveryQuote(
+    tenantId: string,
+    request: DeliveryQuoteRequest,
+    overrideSettings?: Partial<DeliverySettings>
+  ): Promise<DeliveryQuoteResponse> {
+    const [savedSettings, deliveryRules] = await Promise.all([
+      this.getDeliverySettings(tenantId),
+      this.listDeliveryRules(tenantId),
+    ]);
+
+    const deliverySettings: DeliverySettings = overrideSettings
+      ? {
+          ...savedSettings,
+          ...overrideSettings,
+          originAddress:
+            overrideSettings.originAddress !== undefined
+              ? overrideSettings.originAddress
+              : savedSettings.originAddress,
+          kmConfig: overrideSettings.kmConfig
+            ? { ...(savedSettings.kmConfig || DEFAULT_KM_CONFIG), ...overrideSettings.kmConfig }
+            : savedSettings.kmConfig,
+        }
+      : savedSettings;
+
+    const rawAddr = request.address || {};
+    const cleanCep = normalizeCep(rawAddr.cep);
+
+    const enrichedAddr = {
+      cep: cleanCep,
+      street: (rawAddr.street || '').trim(),
+      number: (rawAddr.number || '').trim(),
+      complement: (rawAddr.complement || '').trim(),
+      neighborhood: (rawAddr.neighborhood || '').trim(),
+      city: (rawAddr.city || '').trim(),
+      state: (rawAddr.state || '').trim().toUpperCase(),
+      latitude:
+        typeof rawAddr.latitude === 'number' && Number.isFinite(rawAddr.latitude)
+          ? rawAddr.latitude
+          : null,
+      longitude:
+        typeof rawAddr.longitude === 'number' && Number.isFinite(rawAddr.longitude)
+          ? rawAddr.longitude
+          : null,
+    };
+
+    // Enrich missing fields via CEP lookup when CEP is 8 digits
+    if (
+      cleanCep.length === 8 &&
+      (!enrichedAddr.street || !enrichedAddr.neighborhood || !enrichedAddr.city || !enrichedAddr.state)
+    ) {
+      const cepData = await lookupPostalCodeServer(cleanCep);
+      if (cepData.found) {
+        if (!enrichedAddr.street && cepData.street) enrichedAddr.street = cepData.street;
+        if (!enrichedAddr.neighborhood && cepData.neighborhood) {
+          enrichedAddr.neighborhood = cepData.neighborhood;
+        }
+        if (!enrichedAddr.city && cepData.city) enrichedAddr.city = cepData.city;
+        if (!enrichedAddr.state && cepData.state) enrichedAddr.state = cepData.state;
+      }
+    }
+
+    const pricingMode: DeliveryPricingMode = deliverySettings.pricingMode || 'neighborhood';
+    let calculatedDistanceKm: number | null = null;
+    let distanceMethodUsed = deliverySettings.kmConfig?.distanceMethod || 'road_route';
+    let geocodeError: string | null = null;
+    let routeError: string | null = null;
+
+    if (pricingMode === 'km' || pricingMode === 'neighborhood_km') {
+      // Ensure origin has coordinates
+      let origin = deliverySettings.originAddress || null;
+      if (origin && isOriginAddressValid(origin) && !hasValidCoordinates(origin)) {
+        const originGeo = await geocodeAddressServer(origin);
+        if (
+          originGeo.success &&
+          typeof originGeo.latitude === 'number' &&
+          typeof originGeo.longitude === 'number'
+        ) {
+          origin = {
+            ...origin,
+            latitude: originGeo.latitude,
+            longitude: originGeo.longitude,
+          };
+          deliverySettings.originAddress = origin;
+          if (!overrideSettings) {
+            await this.saveExtendedConfig(tenantId, { originAddress: origin });
+          }
+        }
+      }
+
+      if (origin && hasValidCoordinates(origin)) {
+        // Geocode destination if coordinates not already present
+        if (!hasValidCoordinates(enrichedAddr)) {
+          const destGeo = await geocodeAddressServer(enrichedAddr);
+          if (
+            destGeo.success &&
+            typeof destGeo.latitude === 'number' &&
+            typeof destGeo.longitude === 'number'
+          ) {
+            enrichedAddr.latitude = destGeo.latitude;
+            enrichedAddr.longitude = destGeo.longitude;
+          } else {
+            geocodeError =
+              destGeo.error ||
+              'Não foi possível localizar as coordenadas do endereço informado. Verifique os dados do endereço.';
+          }
+        }
+
+        if (!geocodeError && hasValidCoordinates(enrichedAddr)) {
+          const desiredMethod = deliverySettings.kmConfig?.distanceMethod || 'road_route';
+          const routeRes = await calculateRouteDistanceServer(
+            { latitude: origin.latitude, longitude: origin.longitude },
+            { latitude: enrichedAddr.latitude, longitude: enrichedAddr.longitude },
+            desiredMethod
+          );
+          if (routeRes.success && typeof routeRes.distanceKm === 'number') {
+            calculatedDistanceKm = routeRes.distanceKm;
+            distanceMethodUsed = routeRes.methodUsed || desiredMethod;
+          } else {
+            routeError =
+              routeRes.error ||
+              'Não foi possível calcular a rota até o endereço informado no momento.';
+          }
+        }
+      }
+    }
+
+    return calculateComprehensiveDeliveryQuote({
+      fulfillmentType: 'delivery',
+      subtotal: Number(request.subtotal || 0),
+      deliverySettings,
+      deliveryRules,
+      address: enrichedAddr,
+      selectedRuleId: request.selectedRuleId || null,
+      calculatedDistanceKm,
+      distanceMethodUsed,
+      geocodeError,
+      routeError,
+    });
   }
 
   // ==========================================
@@ -325,7 +1024,6 @@ export class OrderRepository {
       }));
     }
 
-    // Default payment methods if none initialized
     const now = new Date().toISOString();
     const defaults: Array<{ type: any; label: string }> = [
       { type: 'PIX', label: 'PIX (pagamento direto)' },
@@ -380,7 +1078,11 @@ export class OrderRepository {
     if (payload.isActive !== undefined) updateData.is_active = !!payload.isActive;
     if (payload.label !== undefined) updateData.label = payload.label.trim();
 
-    await supabaseAdmin.from('payment_methods').update(updateData).eq('id', methodId).eq('tenant_id', tenantId);
+    await supabaseAdmin
+      .from('payment_methods')
+      .update(updateData)
+      .eq('id', methodId)
+      .eq('tenant_id', tenantId);
 
     await repo.logAudit({
       actorUserId: actor.id,
@@ -425,13 +1127,18 @@ export class OrderRepository {
       this.listPaymentMethods(tenant.id),
     ]);
 
-    // Check store open status from business hours if site is published
-    const { data: rawSite } = await supabaseAdmin.from('sites').select('*').eq('tenant_id', tenant.id).single();
+    const { data: rawSite } = await supabaseAdmin
+      .from('sites')
+      .select('*')
+      .eq('tenant_id', tenant.id)
+      .single();
     let isOpen = true;
     let closedNotice = '';
 
     if (rawSite && rawSite.published_data?.sections) {
-      const hoursSection = rawSite.published_data.sections.find((s: any) => s.type === 'business_hours');
+      const hoursSection = rawSite.published_data.sections.find(
+        (s: any) => s.type === 'business_hours'
+      );
       if (hoursSection?.settings?.schedule) {
         const scheduleStatus = calculateScheduleStatus(hoursSection.settings.schedule);
         isOpen = scheduleStatus.isOpen;
@@ -444,12 +1151,12 @@ export class OrderRepository {
         : 'Estamos fechados no momento e não estamos recebendo pedidos agora.';
     }
 
-    const canAcceptOrders = deliverySettings.ordersEnabled && (isOpen || deliverySettings.acceptOrdersWhenClosed);
+    const canAcceptOrders =
+      deliverySettings.ordersEnabled && (isOpen || deliverySettings.acceptOrdersWhenClosed);
 
     const validatedItems: ValidatedCartItem[] = [];
     const warnings: string[] = [];
 
-    // Query all relevant products in batch
     const productIds = Array.from(new Set(items.map((i) => i.productId)));
     const { data: rawProducts } = await supabaseAdmin
       .from('products')
@@ -459,7 +1166,6 @@ export class OrderRepository {
 
     const productMap = new Map<string, any>((rawProducts || []).map((p: any) => [p.id, p]));
 
-    // Query images & variants
     const { data: allImages } = await supabaseAdmin
       .from('product_images')
       .select('*')
@@ -493,14 +1199,17 @@ export class OrderRepository {
       }
 
       if (product.price_on_request) {
-        warnings.push(`O produto "${product.name}" requer consulta de preço e não pode ser comprado no carrinho.`);
+        warnings.push(
+          `O produto "${product.name}" requer consulta de preço e não pode ser comprado no carrinho.`
+        );
         continue;
       }
 
-      // Check weekly availability for delivery
       const currentDay = getCurrentDayOfWeek();
       if (!isProductAvailableOnDay(product, currentDay, 'delivery')) {
-        warnings.push(`O produto "${product.name}" não está disponível para pedidos delivery hoje (${getDayName(currentDay)}).`);
+        warnings.push(
+          `O produto "${product.name}" não está disponível para pedidos delivery hoje (${getDayName(currentDay)}).`
+        );
         continue;
       }
 
@@ -513,8 +1222,8 @@ export class OrderRepository {
         }
       }
 
-      // Determine price using authoritative numeric resolver
-      const rawBasePrice = variant?.price !== null && variant?.price !== undefined ? variant.price : product.price;
+      const rawBasePrice =
+        variant?.price !== null && variant?.price !== undefined ? variant.price : product.price;
       const rawPromoPrice =
         variant?.promotional_price !== null && variant?.promotional_price !== undefined
           ? variant.promotional_price
@@ -522,12 +1231,17 @@ export class OrderRepository {
           ? product.promotional_price
           : null;
 
-      const { unitPrice, originalPrice, hasDiscount } = resolveEffectivePrice(rawBasePrice, rawPromoPrice);
+      const { unitPrice, originalPrice, hasDiscount } = resolveEffectivePrice(
+        rawBasePrice,
+        rawPromoPrice
+      );
 
-      // Stock validation
       const trackStock = variant ? !!variant.track_stock : !!product.track_stock;
       const allowOutOfStock = product.allow_out_of_stock !== false;
-      const availableStock = Math.max(0, Math.floor(toSafePrice(variant ? variant.stock_quantity : product.stock_quantity)));
+      const availableStock = Math.max(
+        0,
+        Math.floor(toSafePrice(variant ? variant.stock_quantity : product.stock_quantity))
+      );
 
       let qty = sanitizeQuantity(item.quantity, 1, 99);
 
@@ -537,7 +1251,9 @@ export class OrderRepository {
           continue;
         }
         if (qty > availableStock) {
-          warnings.push(`Quantidade de "${product.name}" ajustada de ${qty} para ${availableStock} (limite em estoque).`);
+          warnings.push(
+            `Quantidade de "${product.name}" ajustada de ${qty} para ${availableStock} (limite em estoque).`
+          );
           qty = availableStock;
         }
       }
@@ -566,6 +1282,7 @@ export class OrderRepository {
     }
 
     subtotal = Math.round(subtotal * 100) / 100;
+    const originSummary = formatAddressSummary(deliverySettings.originAddress);
 
     return {
       items: validatedItems,
@@ -576,7 +1293,8 @@ export class OrderRepository {
         id: tenant.id,
         name: tenant.name,
         slug: tenant.slug,
-        address: `${(tenant as any).street || ''}, ${(tenant as any).number || ''} - ${(tenant as any).neighborhood || ''}, ${(tenant as any).city || ''}/${(tenant as any).state || ''}`.replace(/^,\s*|\s*,\s*$/g, ''),
+        address: originSummary || undefined,
+        originAddress: deliverySettings.originAddress || null,
       },
       deliverySettings,
       deliveryRules,
@@ -596,7 +1314,6 @@ export class OrderRepository {
     payload: CreateOrderPayload,
     clientIp: string = 'unknown'
   ): Promise<{ order: Order; whatsappUrl: string; message: string }> {
-    // 1. Rate Limiting Check
     const rateKey = `${clientIp}_${payload.customerPhone || 'unknown'}`;
     const nowMs = Date.now();
     const rateEntry = rateLimitMap.get(rateKey) || { count: 0, resetAt: nowMs + 60000 };
@@ -610,10 +1327,11 @@ export class OrderRepository {
     rateLimitMap.set(rateKey, rateEntry);
 
     if (rateEntry.count > 12) {
-      throw new Error('Muitas tentativas em pouco tempo. Por favor, aguarde um instante antes de enviar novamente.');
+      throw new Error(
+        'Muitas tentativas em pouco tempo. Por favor, aguarde um instante antes de enviar novamente.'
+      );
     }
 
-    // 2. Resolve Tenant & Feature Checks
     const tenant = await repo.getTenantBySlug(tenantSlug);
     if (!tenant) {
       throw new Error(`Estabelecimento "${tenantSlug}" não encontrado.`);
@@ -621,7 +1339,9 @@ export class OrderRepository {
 
     const op = canTenantOperate(tenant.status);
     if (!op.canOperate) {
-      throw new Error(op.blockedReason || 'Este estabelecimento não pode receber pedidos no momento.');
+      throw new Error(
+        op.blockedReason || 'Este estabelecimento não pode receber pedidos no momento.'
+      );
     }
 
     const features = await repo.resolveTenantFeatures(tenant.id);
@@ -632,19 +1352,19 @@ export class OrderRepository {
       throw new Error('O carrinho de compras não está ativo para este estabelecimento.');
     }
 
-    // Check delivery feature gate: if delivery is selected, the tenant MUST have the 'delivery' feature!
     if (payload.fulfillmentType === 'delivery' && !features.delivery) {
       throw new Error('A opção de entrega não está habilitada para o plano desta empresa.');
     }
 
-    const [deliverySettings, deliveryRules, paymentMethods] = await Promise.all([
+    const [deliverySettings, paymentMethods] = await Promise.all([
       this.getDeliverySettings(tenant.id),
-      this.listDeliveryRules(tenant.id),
       this.listPaymentMethods(tenant.id),
     ]);
 
     if (!deliverySettings.ordersEnabled) {
-      throw new Error('Este estabelecimento pausou temporariamente o recebimento de novos pedidos.');
+      throw new Error(
+        'Este estabelecimento pausou temporariamente o recebimento de novos pedidos.'
+      );
     }
 
     if (payload.fulfillmentType === 'pickup' && !deliverySettings.pickupEnabled) {
@@ -655,7 +1375,7 @@ export class OrderRepository {
       throw new Error('A opção de entrega no endereço não está habilitada.');
     }
 
-    // 3. Idempotency Key check: prevent accidental double-clicks from duplicating orders
+    // Idempotency Key check
     if (payload.idempotencyKey) {
       const { data: existingOrder } = await supabaseAdmin
         .from('orders')
@@ -667,7 +1387,8 @@ export class OrderRepository {
       if (existingOrder) {
         const fullExisting = await this.getOrderById(tenant.id, existingOrder.id);
         if (fullExisting) {
-          const destPhone = deliverySettings.orderWhatsappNumber || tenant.whatsapp || tenant.phone || '';
+          const destPhone =
+            deliverySettings.orderWhatsappNumber || tenant.whatsapp || tenant.phone || '';
           const msg = buildWhatsAppOrderMessage(fullExisting, tenant.name);
           const url = buildWhatsAppUrl(destPhone, msg);
           return { order: fullExisting, whatsappUrl: url, message: msg };
@@ -675,7 +1396,7 @@ export class OrderRepository {
       }
     }
 
-    // 4. Validate Customer Information
+    // Validate Customer Information
     const custName = payload.customerName?.trim();
     if (!custName || custName.length < 3) {
       throw new Error('Por favor, informe seu nome completo para identificação do pedido.');
@@ -686,7 +1407,6 @@ export class OrderRepository {
       throw new Error('Por favor, informe um número de telefone/WhatsApp válido com DDD.');
     }
 
-    // 5. Revalidate and Recalculate Items from Database
     if (!payload.items || payload.items.length === 0) {
       throw new Error('Seu carrinho está vazio.');
     }
@@ -734,7 +1454,6 @@ export class OrderRepository {
         throw new Error(`O produto "${product.name}" não permite compra direta pelo carrinho.`);
       }
 
-      // Check weekly availability for delivery
       const currentDay = getCurrentDayOfWeek();
       if (!isProductAvailableOnDay(product, currentDay, 'delivery')) {
         throw new Error(
@@ -746,11 +1465,14 @@ export class OrderRepository {
       if (item.variantId) {
         variant = variantMap.get(item.variantId);
         if (!variant || !variant.is_active || variant.product_id !== product.id) {
-          throw new Error(`A opção selecionada para o produto "${product.name}" não está mais disponível.`);
+          throw new Error(
+            `A opção selecionada para o produto "${product.name}" não está mais disponível.`
+          );
         }
       }
 
-      const rawBasePrice = variant?.price !== null && variant?.price !== undefined ? variant.price : product.price;
+      const rawBasePrice =
+        variant?.price !== null && variant?.price !== undefined ? variant.price : product.price;
       const rawPromoPrice =
         variant?.promotional_price !== null && variant?.promotional_price !== undefined
           ? variant.promotional_price
@@ -759,16 +1481,19 @@ export class OrderRepository {
           : null;
 
       const { unitPrice } = resolveEffectivePrice(rawBasePrice, rawPromoPrice);
-
       const qty = sanitizeQuantity(item.quantity, 1, 99);
 
-      // Stock check
       const trackStock = variant ? !!variant.track_stock : !!product.track_stock;
       const allowOutOfStock = product.allow_out_of_stock !== false;
-      const currentStock = Math.max(0, Math.floor(toSafePrice(variant ? variant.stock_quantity : product.stock_quantity)));
+      const currentStock = Math.max(
+        0,
+        Math.floor(toSafePrice(variant ? variant.stock_quantity : product.stock_quantity))
+      );
 
       if (trackStock && !allowOutOfStock && currentStock < qty) {
-        throw new Error(`Estoque insuficiente para "${product.name}". Temos apenas ${currentStock} unidade(s) disponível(is).`);
+        throw new Error(
+          `Estoque insuficiente para "${product.name}". Temos apenas ${currentStock} unidade(s) disponível(is).`
+        );
       }
 
       const itemSubtotal = calculateItemSubtotal(unitPrice, qty);
@@ -791,40 +1516,78 @@ export class OrderRepository {
 
     subtotal = Math.round(subtotal * 100) / 100;
 
-    // 6. Minimum Order Check
-    if (deliverySettings.minimumOrder > 0 && subtotal < deliverySettings.minimumOrder) {
-      throw new Error(
-        `O pedido mínimo deste estabelecimento é de R$ ${deliverySettings.minimumOrder.toFixed(2).replace('.', ',')}. Faltam R$ ${(deliverySettings.minimumOrder - subtotal).toFixed(2).replace('.', ',')} para atingir o valor.`
-      );
-    }
-
-    // 7. Delivery Address & Fee Calculation
+    // 6. Delivery Address & Authoritative Server-Side Fee Recalculation
     let deliveryFee = 0;
     let deliveryAddressRecord: any = null;
+    let orderDeliveryMeta: ExtendedOrderDeliveryMeta | null = null;
+    let effectiveMinOrder = deliverySettings.minimumOrder;
 
     if (payload.fulfillmentType === 'delivery') {
       const addr = payload.deliveryAddress;
-      if (!addr || !addr.street?.trim() || !addr.number?.trim() || !addr.neighborhood?.trim() || !addr.city?.trim() || !addr.state?.trim()) {
-        throw new Error('Por favor, preencha todos os campos obrigatórios do endereço de entrega.');
+      if (
+        !addr ||
+        !addr.street?.trim() ||
+        !addr.number?.trim() ||
+        !addr.neighborhood?.trim() ||
+        !addr.city?.trim() ||
+        !addr.state?.trim()
+      ) {
+        throw new Error(
+          'Por favor, preencha todos os campos obrigatórios do endereço de entrega (CEP, rua, número, bairro, cidade e UF).'
+        );
       }
 
-      const cleanCep = (addr.cep || '').replace(/\D/g, '');
+      const cleanCep = normalizeCep(addr.cep);
       if (cleanCep.length !== 8) {
         throw new Error('Por favor, informe um CEP válido com 8 dígitos.');
       }
 
-      const deliveryResult = calculateDeliveryFee(
+      const quote = await this.evaluateDeliveryQuote(tenant.id, {
+        address: {
+          cep: cleanCep,
+          street: addr.street.trim(),
+          number: addr.number.trim(),
+          complement: addr.complement?.trim(),
+          neighborhood: addr.neighborhood.trim(),
+          city: addr.city.trim(),
+          state: addr.state.trim().toUpperCase(),
+          latitude: addr.latitude ?? null,
+          longitude: addr.longitude ?? null,
+        },
         subtotal,
-        { cep: cleanCep, neighborhood: addr.neighborhood },
-        deliverySettings,
-        deliveryRules
-      );
+        selectedRuleId: addr.selectedRuleId || null,
+      });
 
-      if (!deliveryResult.isCovered) {
-        throw new Error(deliveryResult.reason || 'Este endereço ainda não está na nossa área de entrega. Escolha a opção de retirada no local.');
+      if (!quote.isCovered) {
+        throw new Error(
+          quote.reason ||
+            'Este endereço ainda não está na nossa área de entrega. Escolha a opção de retirada no local.'
+        );
       }
 
-      deliveryFee = deliveryResult.fee;
+      if (quote.minimumOrder !== undefined && quote.minimumOrder > 0) {
+        effectiveMinOrder = quote.minimumOrder;
+      }
+
+      // Reject manipulated delivery fee if client sent an expectedDeliveryFee that differs from server recalculation
+      if (
+        payload.expectedDeliveryFee !== undefined &&
+        payload.expectedDeliveryFee !== null &&
+        Number.isFinite(Number(payload.expectedDeliveryFee))
+      ) {
+        const clientExpected = Number(payload.expectedDeliveryFee);
+        if (Math.abs(clientExpected - quote.fee) > 0.05) {
+          throw new Error(
+            `Divergência no valor do frete detectada (informado R$ ${clientExpected
+              .toFixed(2)
+              .replace('.', ',')}, calculado no servidor R$ ${quote.fee
+              .toFixed(2)
+              .replace('.', ',')}). Atualize o resumo e tente novamente.`
+          );
+        }
+      }
+
+      deliveryFee = quote.fee;
       deliveryAddressRecord = {
         id: crypto.randomUUID(),
         tenant_id: tenant.id,
@@ -836,8 +1599,26 @@ export class OrderRepository {
         city: addr.city.trim(),
         state: addr.state.trim().toUpperCase(),
         reference: addr.reference?.trim() || null,
-        delivery_rule_id: deliveryResult.ruleMatched?.id || null,
+        delivery_rule_id: quote.ruleApplied?.id || null,
       };
+
+      orderDeliveryMeta = {
+        pricingMode: quote.pricingMode,
+        distanceKm: quote.distanceKm ?? null,
+        appliedRuleName: quote.ruleName || null,
+        deliveryBreakdown: quote.breakdown?.formulaText || null,
+      };
+    }
+
+    // 7. Minimum Order Check (respects rule-specific minimumOrder or global minimumOrder)
+    if (effectiveMinOrder > 0 && subtotal < effectiveMinOrder) {
+      throw new Error(
+        `O pedido mínimo para esta modalidade/região é de R$ ${effectiveMinOrder
+          .toFixed(2)
+          .replace('.', ',')}. Faltam R$ ${(effectiveMinOrder - subtotal)
+          .toFixed(2)
+          .replace('.', ',')} para atingir o valor mínimo.`
+      );
     }
 
     const total = Math.round((subtotal + deliveryFee) * 100) / 100;
@@ -853,7 +1634,13 @@ export class OrderRepository {
     if (payload.paymentMethod === 'CASH' && payload.changeFor) {
       changeFor = Number(payload.changeFor);
       if (changeFor < total) {
-        throw new Error(`O valor para troco (R$ ${changeFor.toFixed(2).replace('.', ',')}) não pode ser menor que o total do pedido (R$ ${total.toFixed(2).replace('.', ',')}).`);
+        throw new Error(
+          `O valor para troco (R$ ${changeFor
+            .toFixed(2)
+            .replace('.', ',')}) não pode ser menor que o total do pedido (R$ ${total
+            .toFixed(2)
+            .replace('.', ',')}).`
+        );
       }
     }
 
@@ -865,9 +1652,10 @@ export class OrderRepository {
       .order('order_number', { ascending: false })
       .limit(1);
 
-    const nextOrderNumber = lastOrder && lastOrder.length > 0 && lastOrder[0].order_number
-      ? Number(lastOrder[0].order_number) + 1
-      : 1001;
+    const nextOrderNumber =
+      lastOrder && lastOrder.length > 0 && lastOrder[0].order_number
+        ? Number(lastOrder[0].order_number) + 1
+        : 1001;
 
     // 10. Atomic Execution: Create Order, Order Items, Delivery Address, Decrement Stock
     const orderId = crypto.randomUUID();
@@ -896,7 +1684,6 @@ export class OrderRepository {
 
     await supabaseAdmin.from('orders').insert(orderRow);
 
-    // Insert Order Items snapshot
     for (const item of orderItemsToInsert) {
       const orderItemId = crypto.randomUUID();
       await supabaseAdmin.from('order_items').insert({
@@ -913,7 +1700,6 @@ export class OrderRepository {
         created_at: now,
       });
 
-      // Atomic stock decrement
       if (item.trackStock) {
         const remaining = Math.max(0, item.currentStock - item.quantity);
         if (item.isVariant) {
@@ -930,7 +1716,6 @@ export class OrderRepository {
             .eq('tenant_id', tenant.id);
         }
 
-        // Record inventory movement for stock history & audit
         await supabaseAdmin.from('inventory_movements').insert({
           id: crypto.randomUUID(),
           tenant_id: tenant.id,
@@ -945,13 +1730,17 @@ export class OrderRepository {
       }
     }
 
-    // Insert Address if delivery
     if (deliveryAddressRecord) {
       deliveryAddressRecord.order_id = orderId;
       await supabaseAdmin.from('order_delivery_addresses').insert(deliveryAddressRecord);
     }
 
-    // Audit log
+    if (orderDeliveryMeta) {
+      await this.saveExtendedConfig(tenant.id, {
+        ordersMeta: { [orderId]: orderDeliveryMeta },
+      });
+    }
+
     await repo.logAudit({
       actorUserId: '00000000-0000-0000-0000-000000000000',
       actorUserName: `Cliente: ${custName} (Checkout)`,
@@ -959,13 +1748,19 @@ export class OrderRepository {
       action: 'ORDER_CREATE' as any,
       entity: 'orders',
       entityId: orderId,
-      diff: { orderNumber: nextOrderNumber, total, fulfillmentType: payload.fulfillmentType },
+      diff: {
+        orderNumber: nextOrderNumber,
+        total,
+        deliveryFee,
+        fulfillmentType: payload.fulfillmentType,
+        deliveryMeta: orderDeliveryMeta,
+      },
     });
 
     const fullOrder = (await this.getOrderById(tenant.id, orderId))!;
 
-    // 11. Generate Structured WhatsApp message & URL
-    const destinationPhone = deliverySettings.orderWhatsappNumber || tenant.whatsapp || tenant.phone || '';
+    const destinationPhone =
+      deliverySettings.orderWhatsappNumber || tenant.whatsapp || tenant.phone || '';
     const message = buildWhatsAppOrderMessage(fullOrder, tenant.name);
     const whatsappUrl = buildWhatsAppUrl(destinationPhone, message);
 
@@ -984,24 +1779,21 @@ export class OrderRepository {
     tenantId: string,
     filters?: OrderFilterParams
   ): Promise<{ orders: Order[]; total: number }> {
-    const { data: rawOrders } = await supabaseAdmin
-      .from('orders')
-      .select('*')
-      .eq('tenant_id', tenantId);
+    const [{ data: rawOrders }, extConfig] = await Promise.all([
+      supabaseAdmin.from('orders').select('*').eq('tenant_id', tenantId),
+      this.getExtendedConfig(tenantId),
+    ]);
 
     let list = rawOrders || [];
 
-    // Filter by status
     if (filters?.status && filters.status !== 'all') {
       list = list.filter((o: any) => o.status === filters.status);
     }
 
-    // Filter by fulfillment type
     if (filters?.fulfillmentType && filters.fulfillmentType !== 'all') {
       list = list.filter((o: any) => o.fulfillment_type === filters.fulfillmentType);
     }
 
-    // Search query
     if (filters?.search && filters.search.trim().length > 0) {
       const q = filters.search.toLowerCase().trim();
       list = list.filter(
@@ -1013,7 +1805,6 @@ export class OrderRepository {
       );
     }
 
-    // Date filters
     if (filters?.startDate) {
       const start = new Date(filters.startDate).getTime();
       list = list.filter((o: any) => new Date(o.created_at).getTime() >= start);
@@ -1023,7 +1814,6 @@ export class OrderRepository {
       list = list.filter((o: any) => new Date(o.created_at).getTime() <= end);
     }
 
-    // Sort by created_at desc
     list.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
     const total = list.length;
@@ -1031,7 +1821,6 @@ export class OrderRepository {
     const limit = filters?.limit || 50;
     const paginated = list.slice((page - 1) * limit, page * limit);
 
-    // Fetch related items & addresses for paginated orders
     const orderIds = paginated.map((o: any) => o.id);
 
     const { data: allItems } = await supabaseAdmin
@@ -1055,6 +1844,7 @@ export class OrderRepository {
 
     const addressMap = new Map<string, any>();
     (allAddresses || []).forEach((addr: any) => addressMap.set(addr.order_id, addr));
+    const ordersMeta = extConfig.ordersMeta || {};
 
     const orders: Order[] = paginated.map((o: any) => {
       const items = (itemsMap.get(o.id) || []).map((item: any) => ({
@@ -1072,6 +1862,7 @@ export class OrderRepository {
       }));
 
       const rawAddr = addressMap.get(o.id);
+      const meta = ordersMeta[o.id] || {};
       const deliveryAddress: OrderDeliveryAddress | null = rawAddr
         ? {
             id: rawAddr.id,
@@ -1085,6 +1876,13 @@ export class OrderRepository {
             state: rawAddr.state,
             reference: rawAddr.reference,
             deliveryRuleId: rawAddr.delivery_rule_id,
+            pricingMode: rawAddr.pricing_mode ?? meta.pricingMode ?? null,
+            distanceKm:
+              rawAddr.distance_km !== undefined && rawAddr.distance_km !== null
+                ? Number(rawAddr.distance_km)
+                : meta.distanceKm ?? null,
+            appliedRuleName: rawAddr.applied_rule_name ?? meta.appliedRuleName ?? null,
+            deliveryBreakdown: rawAddr.delivery_breakdown ?? meta.deliveryBreakdown ?? null,
           }
         : null;
 
@@ -1117,12 +1915,15 @@ export class OrderRepository {
   }
 
   public async getOrderById(tenantId: string, orderId: string): Promise<Order | null> {
-    const { data: rawOrder } = await supabaseAdmin
-      .from('orders')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .eq('id', orderId)
-      .single();
+    const [{ data: rawOrder }, extConfig] = await Promise.all([
+      supabaseAdmin
+        .from('orders')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('id', orderId)
+        .single(),
+      this.getExtendedConfig(tenantId),
+    ]);
 
     if (!rawOrder) return null;
 
@@ -1139,6 +1940,8 @@ export class OrderRepository {
       .eq('order_id', orderId)
       .single();
 
+    const meta = extConfig.ordersMeta?.[orderId] || {};
+
     return {
       id: rawOrder.id,
       tenantId: rawOrder.tenant_id,
@@ -1149,7 +1952,10 @@ export class OrderRepository {
       customerEmail: rawOrder.customer_email,
       fulfillmentType: rawOrder.fulfillment_type,
       paymentMethod: rawOrder.payment_method,
-      changeFor: rawOrder.change_for !== null && rawOrder.change_for !== undefined ? Number(rawOrder.change_for) : null,
+      changeFor:
+        rawOrder.change_for !== null && rawOrder.change_for !== undefined
+          ? Number(rawOrder.change_for)
+          : null,
       subtotal: Number(rawOrder.subtotal),
       deliveryFee: Number(rawOrder.delivery_fee || 0),
       total: Number(rawOrder.total),
@@ -1183,6 +1989,13 @@ export class OrderRepository {
             state: rawAddr.state,
             reference: rawAddr.reference,
             deliveryRuleId: rawAddr.delivery_rule_id,
+            pricingMode: rawAddr.pricing_mode ?? meta.pricingMode ?? null,
+            distanceKm:
+              rawAddr.distance_km !== undefined && rawAddr.distance_km !== null
+                ? Number(rawAddr.distance_km)
+                : meta.distanceKm ?? null,
+            appliedRuleName: rawAddr.applied_rule_name ?? meta.appliedRuleName ?? null,
+            deliveryBreakdown: rawAddr.delivery_breakdown ?? meta.deliveryBreakdown ?? null,
           }
         : null,
       createdAt: rawOrder.created_at,
@@ -1207,8 +2020,6 @@ export class OrderRepository {
 
     const now = new Date().toISOString();
 
-    // Cancellation stock restoration logic:
-    // If transitioning to CANCELLED, restore stock once if not already restored
     if (newStatus === 'CANCELLED' && existing.status !== 'CANCELLED') {
       const { data: existingCancelMovements } = await supabaseAdmin
         .from('inventory_movements')
@@ -1221,24 +2032,37 @@ export class OrderRepository {
         for (const item of existing.items) {
           if (item.productId) {
             if (item.variantId) {
-              const { data: v } = await supabaseAdmin.from('product_variants').select('*').eq('id', item.variantId).single();
+              const { data: v } = await supabaseAdmin
+                .from('product_variants')
+                .select('*')
+                .eq('id', item.variantId)
+                .single();
               if (v && v.track_stock) {
                 await supabaseAdmin
                   .from('product_variants')
-                  .update({ stock_quantity: (v.stock_quantity || 0) + item.quantity, updated_at: now })
+                  .update({
+                    stock_quantity: (v.stock_quantity || 0) + item.quantity,
+                    updated_at: now,
+                  })
                   .eq('id', item.variantId);
               }
             } else {
-              const { data: p } = await supabaseAdmin.from('products').select('*').eq('id', item.productId).single();
+              const { data: p } = await supabaseAdmin
+                .from('products')
+                .select('*')
+                .eq('id', item.productId)
+                .single();
               if (p && p.track_stock) {
                 await supabaseAdmin
                   .from('products')
-                  .update({ stock_quantity: (p.stock_quantity || 0) + item.quantity, updated_at: now })
+                  .update({
+                    stock_quantity: (p.stock_quantity || 0) + item.quantity,
+                    updated_at: now,
+                  })
                   .eq('id', item.productId);
               }
             }
 
-            // Record cancellation movement
             await supabaseAdmin.from('inventory_movements').insert({
               id: crypto.randomUUID(),
               tenant_id: tenantId,
@@ -1342,7 +2166,8 @@ export class OrderRepository {
 
     const now = new Date().toISOString();
     let newSubtotal = existing.subtotal;
-    let newDeliveryFee = payload.deliveryFee !== undefined ? Number(payload.deliveryFee) : existing.deliveryFee;
+    const newDeliveryFee =
+      payload.deliveryFee !== undefined ? Number(payload.deliveryFee) : existing.deliveryFee;
     let updatedItems = existing.items;
 
     if (payload.items && Array.isArray(payload.items)) {
@@ -1420,8 +2245,10 @@ export class OrderRepository {
     };
 
     if (payload.customerName !== undefined) orderUpdate.customer_name = payload.customerName.trim();
-    if (payload.customerPhone !== undefined) orderUpdate.customer_phone = payload.customerPhone.trim();
-    if (payload.customerEmail !== undefined) orderUpdate.customer_email = payload.customerEmail?.trim() || null;
+    if (payload.customerPhone !== undefined)
+      orderUpdate.customer_phone = payload.customerPhone.trim();
+    if (payload.customerEmail !== undefined)
+      orderUpdate.customer_email = payload.customerEmail?.trim() || null;
     if (payload.notes !== undefined) orderUpdate.notes = payload.notes?.trim() || null;
 
     await supabaseAdmin
@@ -1431,7 +2258,11 @@ export class OrderRepository {
       .eq('tenant_id', tenantId);
 
     if (payload.items && Array.isArray(payload.items)) {
-      await supabaseAdmin.from('order_items').delete().eq('order_id', orderId).eq('tenant_id', tenantId);
+      await supabaseAdmin
+        .from('order_items')
+        .delete()
+        .eq('order_id', orderId)
+        .eq('tenant_id', tenantId);
       if (updatedItems.length > 0) {
         await supabaseAdmin.from('order_items').insert(
           updatedItems.map((i) => ({
@@ -1470,8 +2301,16 @@ export class OrderRepository {
       throw new Error('Pedido não encontrado.');
     }
 
-    await supabaseAdmin.from('order_items').delete().eq('order_id', orderId).eq('tenant_id', tenantId);
-    await supabaseAdmin.from('order_delivery_addresses').delete().eq('order_id', orderId).eq('tenant_id', tenantId);
+    await supabaseAdmin
+      .from('order_items')
+      .delete()
+      .eq('order_id', orderId)
+      .eq('tenant_id', tenantId);
+    await supabaseAdmin
+      .from('order_delivery_addresses')
+      .delete()
+      .eq('order_id', orderId)
+      .eq('tenant_id', tenantId);
 
     const { error: delErr } = await supabaseAdmin
       .from('orders')
