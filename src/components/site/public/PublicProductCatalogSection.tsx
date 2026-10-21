@@ -23,6 +23,7 @@ import { Tenant } from '../../../types/saas';
 import { api } from '../../../services/api';
 import { useCart } from '../../../context/CartContext';
 import { isProductAvailableOnDay, getCurrentDayOfWeek } from '../../../utils/productAvailability';
+import { resolveEffectivePrice } from '../../../utils/currency';
 
 interface PublicProductCatalogSectionProps {
   tenant: Tenant;
@@ -148,18 +149,20 @@ export const PublicProductCatalogSection: React.FC<PublicProductCatalogSectionPr
   const getDisplayPrice = (product: Product, variant?: ProductVariant | null) => {
     if (product.priceOnRequest) return null;
 
-    const basePrice = variant?.price !== undefined && variant?.price !== null ? variant.price : product.price;
-    const promoPrice = variant?.promotionalPrice !== undefined && variant?.promotionalPrice !== null ? variant.promotionalPrice : product.promotionalPrice;
+    const rawBasePrice = variant?.price !== undefined && variant?.price !== null ? variant.price : product.price;
+    const rawPromoPrice =
+      variant?.promotionalPrice !== undefined && variant?.promotionalPrice !== null
+        ? variant.promotionalPrice
+        : product.promotionalPrice;
+
+    const resolved = resolveEffectivePrice(rawBasePrice, rawPromoPrice);
 
     return {
-      regular: basePrice ?? null,
-      promotional: promoPrice ?? null,
-      hasDiscount:
-        promoPrice !== null &&
-        promoPrice !== undefined &&
-        basePrice !== null &&
-        basePrice !== undefined &&
-        promoPrice < basePrice,
+      regular: resolved.hasDiscount ? resolved.originalPrice : resolved.unitPrice,
+      promotional: resolved.hasDiscount ? resolved.unitPrice : null,
+      unitPrice: resolved.unitPrice,
+      originalPrice: resolved.originalPrice,
+      hasDiscount: resolved.hasDiscount,
     };
   };
 
@@ -515,7 +518,18 @@ export const PublicProductCatalogSection: React.FC<PublicProductCatalogSectionPr
                           return;
                         }
                         if (cart) {
-                          cart.addToCart(selectedProduct.id, selectedVariant?.id, modalQty, selectedProduct.name);
+                          const pInfo = getDisplayPrice(selectedProduct, selectedVariant);
+                          const imgUrl =
+                            selectedProduct.primaryImage?.publicUrl ||
+                            selectedProduct.images?.[0]?.publicUrl ||
+                            null;
+                          cart.addToCart(selectedProduct.id, selectedVariant?.id, modalQty, selectedProduct.name, {
+                            variantName: selectedVariant?.name || null,
+                            imageUrl: imgUrl,
+                            unitPrice: pInfo?.unitPrice,
+                            originalPrice: pInfo?.originalPrice ?? null,
+                            hasDiscount: pInfo?.hasDiscount ?? false,
+                          });
                           setAddedSuccess(true);
                           setVariantError(null);
                           setTimeout(() => setAddedSuccess(false), 3500);
@@ -703,7 +717,13 @@ export const PublicProductCatalogSection: React.FC<PublicProductCatalogSectionPr
                     } else if (isOutOfStock) {
                       // Disabled
                     } else if (cart) {
-                      cart.addToCart(product.id, null, 1, product.name);
+                      cart.addToCart(product.id, null, 1, product.name, {
+                        variantName: null,
+                        imageUrl: primaryImg || null,
+                        unitPrice: priceInfo?.unitPrice,
+                        originalPrice: priceInfo?.originalPrice ?? null,
+                        hasDiscount: priceInfo?.hasDiscount ?? false,
+                      });
                     }
                   }}
                   className={`w-full py-2 px-3 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer ${radiusClass} ${

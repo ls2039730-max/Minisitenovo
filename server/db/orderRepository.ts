@@ -26,6 +26,8 @@ import {
   getDayName,
 } from '../../src/utils/productAvailability.js';
 import { calculateScheduleStatus } from '../../src/utils/businessHours.js';
+import { toSafePrice, resolveEffectivePrice, sanitizeQuantity } from '../../src/utils/currency.js';
+import { calculateItemSubtotal } from '../../src/utils/cartCalculator.js';
 
 // Rate limiting and idempotency memory storage
 interface RateLimitEntry {
@@ -511,24 +513,23 @@ export class OrderRepository {
         }
       }
 
-      // Determine price
-      const basePrice = variant?.price !== null && variant?.price !== undefined ? Number(variant.price) : Number(product.price);
-      const promoPrice =
+      // Determine price using authoritative numeric resolver
+      const rawBasePrice = variant?.price !== null && variant?.price !== undefined ? variant.price : product.price;
+      const rawPromoPrice =
         variant?.promotional_price !== null && variant?.promotional_price !== undefined
-          ? Number(variant.promotional_price)
+          ? variant.promotional_price
           : product.promotional_price !== null && product.promotional_price !== undefined
-          ? Number(product.promotional_price)
+          ? product.promotional_price
           : null;
 
-      const hasDiscount = promoPrice !== null && promoPrice < basePrice;
-      const unitPrice = hasDiscount && promoPrice !== null ? promoPrice : basePrice;
+      const { unitPrice, originalPrice, hasDiscount } = resolveEffectivePrice(rawBasePrice, rawPromoPrice);
 
       // Stock validation
       const trackStock = variant ? !!variant.track_stock : !!product.track_stock;
       const allowOutOfStock = product.allow_out_of_stock !== false;
-      const availableStock = variant ? Number(variant.stock_quantity || 0) : Number(product.stock_quantity || 0);
+      const availableStock = Math.max(0, Math.floor(toSafePrice(variant ? variant.stock_quantity : product.stock_quantity)));
 
-      let qty = Math.max(1, Math.min(99, Math.floor(Number(item.quantity || 1))));
+      let qty = sanitizeQuantity(item.quantity, 1, 99);
 
       if (trackStock && !allowOutOfStock) {
         if (availableStock <= 0) {
@@ -544,8 +545,8 @@ export class OrderRepository {
       const itemImages = imagesByProduct.get(product.id) || [];
       const primaryImg = itemImages.find((img) => img.is_primary) || itemImages[0];
 
-      const itemSubtotal = Math.round(unitPrice * qty * 100) / 100;
-      subtotal += itemSubtotal;
+      const itemSubtotal = calculateItemSubtotal(unitPrice, qty);
+      subtotal = Math.round((subtotal + itemSubtotal) * 100) / 100;
       itemCount += qty;
 
       validatedItems.push({
@@ -556,7 +557,7 @@ export class OrderRepository {
         variantName: variant?.name || null,
         imageUrl: primaryImg?.public_url || null,
         unitPrice,
-        originalPrice: hasDiscount ? basePrice : null,
+        originalPrice,
         hasDiscount,
         quantity: qty,
         subtotal: itemSubtotal,
@@ -749,30 +750,29 @@ export class OrderRepository {
         }
       }
 
-      const basePrice = variant?.price !== null && variant?.price !== undefined ? Number(variant.price) : Number(product.price);
-      const promoPrice =
+      const rawBasePrice = variant?.price !== null && variant?.price !== undefined ? variant.price : product.price;
+      const rawPromoPrice =
         variant?.promotional_price !== null && variant?.promotional_price !== undefined
-          ? Number(variant.promotional_price)
+          ? variant.promotional_price
           : product.promotional_price !== null && product.promotional_price !== undefined
-          ? Number(product.promotional_price)
+          ? product.promotional_price
           : null;
 
-      const hasDiscount = promoPrice !== null && promoPrice < basePrice;
-      const unitPrice = hasDiscount && promoPrice !== null ? promoPrice : basePrice;
+      const { unitPrice } = resolveEffectivePrice(rawBasePrice, rawPromoPrice);
 
-      const qty = Math.max(1, Math.min(99, Math.floor(Number(item.quantity))));
+      const qty = sanitizeQuantity(item.quantity, 1, 99);
 
       // Stock check
       const trackStock = variant ? !!variant.track_stock : !!product.track_stock;
       const allowOutOfStock = product.allow_out_of_stock !== false;
-      const currentStock = variant ? Number(variant.stock_quantity || 0) : Number(product.stock_quantity || 0);
+      const currentStock = Math.max(0, Math.floor(toSafePrice(variant ? variant.stock_quantity : product.stock_quantity)));
 
       if (trackStock && !allowOutOfStock && currentStock < qty) {
         throw new Error(`Estoque insuficiente para "${product.name}". Temos apenas ${currentStock} unidade(s) disponível(is).`);
       }
 
-      const itemSubtotal = Math.round(unitPrice * qty * 100) / 100;
-      subtotal += itemSubtotal;
+      const itemSubtotal = calculateItemSubtotal(unitPrice, qty);
+      subtotal = Math.round((subtotal + itemSubtotal) * 100) / 100;
 
       orderItemsToInsert.push({
         productId: product.id,
@@ -1363,10 +1363,8 @@ export class OrderRepository {
           throw new Error('Produto não encontrado ou inválido para este estabelecimento.');
         }
 
-        let unitPrice =
-          product.promotional_price !== null && product.promotional_price !== undefined
-            ? Number(product.promotional_price)
-            : Number(product.price || 0);
+        let rawBasePrice = product.price;
+        let rawPromoPrice = product.promotional_price;
         let variantName: string | null = null;
 
         if (itemInput.variantId) {
@@ -1380,16 +1378,19 @@ export class OrderRepository {
 
           if (variant) {
             variantName = variant.name;
+            if (variant.price !== null && variant.price !== undefined) {
+              rawBasePrice = variant.price;
+            }
             if (variant.promotional_price !== null && variant.promotional_price !== undefined) {
-              unitPrice = Number(variant.promotional_price);
-            } else if (variant.price !== null && variant.price !== undefined) {
-              unitPrice = Number(variant.price);
+              rawPromoPrice = variant.promotional_price;
             }
           }
         }
 
-        const itemSubtotal = Math.round(unitPrice * itemInput.quantity * 100) / 100;
-        newSubtotal += itemSubtotal;
+        const { unitPrice } = resolveEffectivePrice(rawBasePrice, rawPromoPrice);
+        const qty = sanitizeQuantity(itemInput.quantity, 1, 99);
+        const itemSubtotal = calculateItemSubtotal(unitPrice, qty);
+        newSubtotal = Math.round((newSubtotal + itemSubtotal) * 100) / 100;
 
         updatedItems.push({
           id: crypto.randomUUID(),
@@ -1400,7 +1401,7 @@ export class OrderRepository {
           productName: product.name,
           variantName,
           unitPrice,
-          quantity: itemInput.quantity,
+          quantity: qty,
           subtotal: itemSubtotal,
           createdAt: now,
         });

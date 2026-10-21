@@ -1,4 +1,5 @@
 import { Order, PAYMENT_METHOD_LABELS } from '../types/order.js';
+import { formatCurrencyBRL, parsePrice } from './currency.js';
 
 /**
  * Builds the structured, human-readable WhatsApp order message
@@ -17,28 +18,32 @@ export function buildWhatsAppOrderMessage(order: Order, tenantName: string): str
   lines.push('');
 
   lines.push('📦 *ITENS*');
-  order.items.forEach((item) => {
+  (order.items || []).forEach((item) => {
     const itemTitle = item.variantName
       ? `${item.productName} (${item.variantName})`
       : item.productName;
-    const unitPriceFormatted = `R$ ${item.unitPrice.toFixed(2).replace('.', ',')}`;
-    const subtotalFormatted = `R$ ${item.subtotal.toFixed(2).replace('.', ',')}`;
+    const unitPriceFormatted = formatCurrencyBRL(item.unitPrice);
+    const subtotalFormatted = formatCurrencyBRL(item.subtotal);
 
     lines.push(`• ${item.quantity}x *${itemTitle}*`);
     lines.push(`  ${unitPriceFormatted} cada | Subtotal: ${subtotalFormatted}`);
   });
   lines.push('');
 
+  const safeSubtotal = parsePrice(order.subtotal);
+  const safeDeliveryFee = parsePrice(order.deliveryFee);
+  const safeTotal = parsePrice(order.total);
+
   lines.push('💰 *RESUMO*');
-  lines.push(`Subtotal: R$ ${order.subtotal.toFixed(2).replace('.', ',')}`);
+  lines.push(`Subtotal: ${formatCurrencyBRL(safeSubtotal)}`);
   if (order.fulfillmentType === 'delivery') {
     lines.push(
-      order.deliveryFee === 0
+      safeDeliveryFee === 0
         ? 'Entrega: GRÁTIS'
-        : `Entrega: R$ ${order.deliveryFee.toFixed(2).replace('.', ',')}`
+        : `Entrega: ${formatCurrencyBRL(safeDeliveryFee)}`
     );
   }
-  lines.push(`*TOTAL: R$ ${order.total.toFixed(2).replace('.', ',')}*`);
+  lines.push(`*TOTAL: ${formatCurrencyBRL(safeTotal)}*`);
   lines.push('');
 
   if (order.fulfillmentType === 'delivery' && order.deliveryAddress) {
@@ -59,7 +64,7 @@ export function buildWhatsAppOrderMessage(order: Order, tenantName: string): str
   const paymentLabel = PAYMENT_METHOD_LABELS[order.paymentMethod] || order.paymentMethod;
   lines.push(paymentLabel);
   if (order.paymentMethod === 'CASH' && order.changeFor) {
-    lines.push(`Troco para: R$ ${order.changeFor.toFixed(2).replace('.', ',')}`);
+    lines.push(`Troco para: ${formatCurrencyBRL(order.changeFor)}`);
   }
   lines.push('');
 

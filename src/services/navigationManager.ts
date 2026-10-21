@@ -84,14 +84,23 @@ class NavigationManager {
       return b.createdAt - a.createdAt;
     });
 
-    // Push overlay state to browser history so Android / Browser Back pops it
+    // Push or update overlay state in browser history so Android / Browser Back pops it
+    // without piling up redundant history entries or racing during overlay switches
     try {
       const currentState = (window.history && window.history.state) || {};
-      window.history.pushState(
-        { ...currentState, _lh_overlay: item.id },
-        '',
-        window.location.href
-      );
+      if (currentState && currentState._lh_overlay) {
+        window.history.replaceState(
+          { ...currentState, _lh_overlay: this.overlayStack[0]?.id || item.id },
+          '',
+          window.location.href
+        );
+      } else {
+        window.history.pushState(
+          { ...currentState, _lh_overlay: item.id },
+          '',
+          window.location.href
+        );
+      }
     } catch (e) {
       // Fallback
     }
@@ -114,19 +123,29 @@ class NavigationManager {
       this.overlayStack.splice(existingIndex, 1);
     }
 
-    // If this unregister was already triggered by the browser popping state, do not call history.back
+    // If this unregister was already triggered by the browser popping state, do not modify history
     if (this.poppedOverlayIds.has(id)) {
       this.poppedOverlayIds.delete(id);
       return;
     }
 
-    // If overlay was closed via UI (not by browser popstate), revert the pushed history entry
+    // If overlay was closed via UI (not by browser popstate), update history state synchronously
+    // via replaceState instead of asynchronous window.history.back() which causes race conditions
+    // and white-screen navigation on mobile browsers when opening another overlay immediately.
     if (typeof window !== 'undefined') {
       try {
         const state = window.history.state;
-        if (state && state._lh_overlay === id) {
-          this.isProgrammaticBack = true;
-          window.history.back();
+        if (state && state._lh_overlay) {
+          if (this.overlayStack.length > 0) {
+            window.history.replaceState(
+              { ...state, _lh_overlay: this.overlayStack[0].id },
+              '',
+              window.location.href
+            );
+          } else {
+            const { _lh_overlay, ...restState } = state;
+            window.history.replaceState(restState, '', window.location.href);
+          }
         }
       } catch (e) {
         // Fallback

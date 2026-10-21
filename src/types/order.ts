@@ -98,6 +98,13 @@ export interface CartItemInput {
   productId: string;
   variantId?: string | null;
   quantity: number;
+  productName?: string;
+  variantName?: string | null;
+  imageUrl?: string | null;
+  unitPrice?: number | null;
+  originalPrice?: number | null;
+  hasDiscount?: boolean;
+  maxAvailableQuantity?: number;
 }
 
 // Validated Item returned from server

@@ -41,6 +41,7 @@ import { CheckoutModal } from '../../checkout/CheckoutModal';
 import { OrderSuccessModal } from '../../checkout/OrderSuccessModal';
 import { calculateScheduleStatus } from '../../../constants/blockRegistry';
 import { MotionMarquee } from '../motion/MotionAdapter';
+import { resolveEffectivePrice } from '../../../utils/currency';
 
 interface PublicOticaEditorialViewProps {
   tenant: Tenant;
@@ -1681,11 +1682,27 @@ export const PublicOticaEditorialView: React.FC<PublicOticaEditorialViewProps> =
                     <button
                       type="button"
                       onClick={() => {
+                        const rawBasePrice = selectedVariant?.price ?? selectedProductForModal.price;
+                        const rawPromoPrice =
+                          selectedVariant?.promotionalPrice ?? selectedProductForModal.promotionalPrice;
+                        const resolved = resolveEffectivePrice(rawBasePrice, rawPromoPrice);
+                        const imgUrl =
+                          selectedProductForModal.primaryImage?.publicUrl ||
+                          selectedProductForModal.images?.[0]?.publicUrl ||
+                          null;
+
                         cart.addToCart(
                           selectedProductForModal.id,
                           selectedVariant ? selectedVariant.id : null,
                           modalQty,
-                          selectedProductForModal.name
+                          selectedProductForModal.name,
+                          {
+                            variantName: selectedVariant ? selectedVariant.name : null,
+                            imageUrl: imgUrl,
+                            unitPrice: resolved.unitPrice,
+                            originalPrice: resolved.originalPrice,
+                            hasDiscount: resolved.hasDiscount,
+                          }
                         );
                         setAddedToast(`"${selectedProductForModal.name}" adicionado à sacola!`);
                         setTimeout(() => setAddedToast(null), 4000);
