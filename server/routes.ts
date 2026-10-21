@@ -1326,7 +1326,13 @@ apiRouter.post('/site/public/:slug/delivery/quote', async (req: Request, res: Re
       });
     }
 
-    const quote = await orderRepo.evaluateDeliveryQuote(tenant.id, req.body);
+    // Protect against serverless timeout (e.g. Vercel 10s limit) by capping quote evaluation to 7s
+    const quotePromise = orderRepo.evaluateDeliveryQuote(tenant.id, req.body);
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Tempo limite de cálculo de frete excedido. Tente novamente.')), 7000)
+    );
+
+    const quote = (await Promise.race([quotePromise, timeoutPromise])) as any;
     return res.json({ success: true, data: quote });
   } catch (err: any) {
     return res.status(400).json({

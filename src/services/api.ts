@@ -107,9 +107,28 @@ class ApiService {
     let lastError: any = null;
 
     for (let attempt = 0; attempt <= retries; attempt++) {
+      if (options.signal?.aborted) {
+        throw new DOMException('Requisição cancelada.', 'AbortError');
+      }
+
+      // Add 8-second client-side timeout so browser never hangs indefinitely
+      const timeoutController = new AbortController();
+      const timeoutId = setTimeout(() => {
+        timeoutController.abort(new DOMException('Tempo limite esgotado.', 'TimeoutError'));
+      }, 8000);
+
+      const onCallerAbort = () => {
+        timeoutController.abort(options.signal?.reason || new DOMException('Requisição cancelada.', 'AbortError'));
+      };
+
+      if (options.signal) {
+        options.signal.addEventListener('abort', onCallerAbort, { once: true });
+      }
+
       try {
         const res = await fetch(endpoint, {
           ...options,
+          signal: timeoutController.signal,
           credentials: 'include', // sends HttpOnly cookie automatically in all topologies
           headers: {
             ...this.getHeaders(),
@@ -124,6 +143,9 @@ class ApiService {
         return data as T;
       } catch (err: any) {
         lastError = err;
+        if (err.name === 'AbortError' || options.signal?.aborted) {
+          throw err;
+        }
         // If it's an HTTP error (4xx/5xx returned by server with a message), do not retry
         if (err.message && err.message !== 'Failed to fetch' && !err.message.includes('NetworkError') && !err.message.includes('fetch')) {
           throw err;
@@ -131,6 +153,11 @@ class ApiService {
         // Transient network failure or server restart, retry if attempts remain
         if (attempt < retries) {
           await new Promise((resolve) => setTimeout(resolve, 350 * Math.pow(2, attempt)));
+        }
+      } finally {
+        clearTimeout(timeoutId);
+        if (options.signal) {
+          options.signal.removeEventListener('abort', onCallerAbort);
         }
       }
     }
@@ -621,13 +648,15 @@ class ApiService {
 
   async calculateDeliveryQuote(
     slug: string,
-    payload: DeliveryQuoteRequest
+    payload: DeliveryQuoteRequest,
+    signal?: AbortSignal
   ): Promise<DeliveryQuoteResponse> {
     const res = await this.request<{ success: boolean; data: DeliveryQuoteResponse }>(
       `/api/site/public/${slug}/delivery/quote`,
       {
         method: 'POST',
         body: JSON.stringify(payload),
+        signal,
       }
     );
     return res.data;
