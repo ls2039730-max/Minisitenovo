@@ -200,16 +200,12 @@ function matchesCityOrState(displayName: string, city?: string, state?: string):
   return true;
 }
 
-// Circuit breaker for Nominatim if blocked (403/429) to avoid wasting seconds
-let nominatimBlockedUntil = 0;
-
 /**
  * Geocodes a structured Brazilian address into (latitude, longitude).
  * Never invents coordinates if geocoding fails.
  */
 export async function geocodeAddressServer(
-  address: Partial<DeliveryOriginAddress>,
-  referenceOrigin?: DeliveryOriginAddress | null
+  address: Partial<DeliveryOriginAddress>
 ): Promise<GeocodeResult> {
   // If valid coordinates are already provided on the object, validate and return them
   if (hasValidCoordinates(address)) {
@@ -228,28 +224,9 @@ export async function geocodeAddressServer(
   let city = (address.city || '').trim();
   let state = (address.state || '').trim().toUpperCase();
 
-  // If customer is on the exact same street and city as reference store origin:
-  if (
-    referenceOrigin &&
-    hasValidCoordinates(referenceOrigin) &&
-    street &&
-    normalizeDeliveryText(street) === normalizeDeliveryText(referenceOrigin.street) &&
-    city &&
-    normalizeDeliveryText(city) === normalizeDeliveryText(referenceOrigin.city)
-  ) {
-    return {
-      success: true,
-      latitude: referenceOrigin.latitude,
-      longitude: referenceOrigin.longitude,
-      formattedAddress: `${street}, ${number || 'S/N'}, ${neighborhood || referenceOrigin.neighborhood}, ${city} - ${state}`,
-      precision: 'street',
-      provider: 'google',
-    };
-  }
-
-  // Enrich from CEP if city/state/street are missing or to obtain fast coordinates
+  // Enrich from CEP if city/state/street are missing
   let cepLookupData: CepLookupResult | null = null;
-  if (cleanCep.length === 8) {
+  if (cleanCep.length === 8 && (!city || !state || !street || !neighborhood)) {
     cepLookupData = await lookupPostalCodeServer(cleanCep);
     if (cepLookupData.found) {
       if (!street && cepLookupData.street) street = cepLookupData.street;
@@ -274,28 +251,7 @@ export async function geocodeAddressServer(
     return cached.data;
   }
 
-  // 1. Fast check: If CEP lookup already gave us valid coordinates, use them!
-  if (
-    cepLookupData &&
-    cepLookupData.found &&
-    typeof cepLookupData.latitude === 'number' &&
-    typeof cepLookupData.longitude === 'number' &&
-    Number.isFinite(cepLookupData.latitude) &&
-    Number.isFinite(cepLookupData.longitude)
-  ) {
-    const geoResult: GeocodeResult = {
-      success: true,
-      latitude: cepLookupData.latitude,
-      longitude: cepLookupData.longitude,
-      formattedAddress: `${street || cepLookupData.street || ''}, ${neighborhood || cepLookupData.neighborhood || ''}, ${city || cepLookupData.city} - ${state || cepLookupData.state}`,
-      precision: 'cep',
-      provider: 'brasilapi',
-    };
-    geocodeCache.set(cacheKey, { timestamp: Date.now(), data: geoResult });
-    return geoResult;
-  }
-
-  // 2. Try Google Maps Geocoding API if GOOGLE_MAPS_API_KEY is available
+  // 1. Try Google Maps Geocoding API if GOOGLE_MAPS_API_KEY is available
   const googleApiKey = process.env.GOOGLE_MAPS_API_KEY;
   if (googleApiKey && googleApiKey.trim()) {
     try {
@@ -312,7 +268,7 @@ export async function geocodeAddressServer(
       const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
         fullQuery
       )}&region=br&language=pt-BR&key=${encodeURIComponent(googleApiKey.trim())}`;
-      const res = await fetchWithTimeout(url, {}, 3500);
+      const res = await fetchWithTimeout(url, {}, 5000);
       if (res.ok) {
         const data = await res.json();
         if (data.status === 'OK' && Array.isArray(data.results) && data.results.length > 0) {
@@ -332,88 +288,88 @@ export async function geocodeAddressServer(
         }
       }
     } catch {
-      // Fallback below
+      // Fallback to Nominatim below
     }
   }
 
-  // 3. Try OpenStreetMap Nominatim with progressive queries (if not circuit-broken)
-  if (Date.now() > nominatimBlockedUntil) {
-    const queries: Array<{ q: string; precision: GeocodeResult['precision'] }> = [];
+  // 2. Try OpenStreetMap Nominatim with progressive queries (most specific -> neighborhood level)
+  const queries: Array<{ q: string; precision: GeocodeResult['precision'] }> = [];
 
-    if (street && number && number.toLowerCase() !== 's/n' && neighborhood && city && state) {
-      queries.push({
-        q: `${street}, ${number}, ${neighborhood}, ${city}, ${state}, Brasil`,
-        precision: 'rooftop',
-      });
-    }
-    if (street && neighborhood && city && state) {
-      queries.push({
-        q: `${street}, ${neighborhood}, ${city}, ${state}, Brasil`,
-        precision: 'street',
-      });
-    } else if (neighborhood && city && state) {
-      queries.push({
-        q: `${neighborhood}, ${city}, ${state}, Brasil`,
-        precision: 'neighborhood',
-      });
-    }
+  if (street && number && number.toLowerCase() !== 's/n' && neighborhood && city && state) {
+    queries.push({
+      q: `${street}, ${number}, ${neighborhood}, ${city}, ${state}, Brasil`,
+      precision: 'rooftop',
+    });
+  }
+  if (street && neighborhood && city && state) {
+    queries.push({
+      q: `${street}, ${neighborhood}, ${city}, ${state}, Brasil`,
+      precision: 'street',
+    });
+  }
+  if (street && city && state) {
+    queries.push({
+      q: `${street}${number && number.toLowerCase() !== 's/n' ? `, ${number}` : ''}, ${city}, ${state}, Brasil`,
+      precision: 'street',
+    });
+  }
+  if (neighborhood && city && state) {
+    queries.push({
+      q: `${neighborhood}, ${city}, ${state}, Brasil`,
+      precision: 'neighborhood',
+    });
+  }
 
-    for (const item of queries) {
-      try {
-        const url = `https://nominatim.openstreetmap.org/search?format=json&limit=2&countrycodes=br&addressdetails=1&q=${encodeURIComponent(
-          item.q
-        )}`;
-        const res = await fetchWithTimeout(
-          url,
-          {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Accept-Language': 'pt-BR,pt;q=0.9',
-            },
+  for (const item of queries) {
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=3&countrycodes=br&addressdetails=1&q=${encodeURIComponent(
+        item.q
+      )}`;
+      const res = await fetchWithTimeout(
+        url,
+        {
+          headers: {
+            'User-Agent': 'ritual-saas-delivery-engine/1.0',
+            'Accept-Language': 'pt-BR,pt;q=0.9',
           },
-          2500
-        );
+        },
+        4500
+      );
 
-        if (res.status === 403 || res.status === 429) {
-          nominatimBlockedUntil = Date.now() + 1000 * 60 * 15;
-          break;
-        }
+      if (res.ok) {
+        const results = await res.json();
+        if (Array.isArray(results) && results.length > 0) {
+          const validMatch = results.find((r: any) =>
+            matchesCityOrState(r.display_name || '', city, state)
+          );
+          const chosen = validMatch || results[0];
+          const lat = parseFloat(chosen.lat);
+          const lon = parseFloat(chosen.lon);
 
-        if (res.ok) {
-          const results = await res.json();
-          if (Array.isArray(results) && results.length > 0) {
-            const validMatch = results.find((r: any) =>
-              matchesCityOrState(r.display_name || '', city, state)
-            );
-            const chosen = validMatch || results[0];
-            const lat = parseFloat(chosen.lat);
-            const lon = parseFloat(chosen.lon);
-
-            if (
-              Number.isFinite(lat) &&
-              Number.isFinite(lon) &&
-              matchesCityOrState(chosen.display_name || '', city, state)
-            ) {
-              const geoResult: GeocodeResult = {
-                success: true,
-                latitude: lat,
-                longitude: lon,
-                formattedAddress: chosen.display_name,
-                precision: item.precision,
-                provider: 'nominatim',
-              };
-              geocodeCache.set(cacheKey, { timestamp: Date.now(), data: geoResult });
-              return geoResult;
-            }
+          if (
+            Number.isFinite(lat) &&
+            Number.isFinite(lon) &&
+            matchesCityOrState(chosen.display_name || '', city, state)
+          ) {
+            const geoResult: GeocodeResult = {
+              success: true,
+              latitude: lat,
+              longitude: lon,
+              formattedAddress: chosen.display_name,
+              precision: item.precision,
+              provider: 'nominatim',
+            };
+            geocodeCache.set(cacheKey, { timestamp: Date.now(), data: geoResult });
+            return geoResult;
           }
         }
-      } catch {
-        // Continue to next query level or fallback
       }
+    } catch {
+      // Continue to next query level
     }
   }
 
-  // 4. Fallback to BrasilAPI CEP coordinates if available
+  // 3. Fallback to BrasilAPI CEP coordinates if available
   if (cleanCep.length === 8) {
     const cepInfo = cepLookupData || (await lookupPostalCodeServer(cleanCep));
     if (
@@ -512,26 +468,6 @@ export async function calculateRouteDistanceServer(
     }
   }
 
-  // Check if points are virtually at the same location (< 250 meters)
-  const directDistanceKm = calculateStraightLineDistanceKm(
-    origin.latitude,
-    origin.longitude,
-    destination.latitude,
-    destination.longitude
-  );
-
-  if (directDistanceKm <= 0.25) {
-    const result: RouteDistanceResult = {
-      success: true,
-      distanceKm: Math.max(0.1, Math.round(directDistanceKm * 100) / 100),
-      durationMinutes: 5,
-      methodUsed: 'road_route',
-      provider: 'haversine',
-    };
-    routeCache.set(cacheKey, { timestamp: Date.now(), data: result });
-    return result;
-  }
-
   // 2. Query OSRM public driving route engine
   try {
     const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}?overview=false`;
@@ -539,11 +475,11 @@ export async function calculateRouteDistanceServer(
       osrmUrl,
       {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'User-Agent': 'ritual-saas-delivery-engine/1.0',
           Accept: 'application/json',
         },
       },
-      4000
+      6000
     );
 
     if (res.ok) {
@@ -569,21 +505,7 @@ export async function calculateRouteDistanceServer(
       }
     }
   } catch {
-    // Fallback to estimation below
-  }
-
-  // Resilient fallback: estimate driving route distance via straight-line Haversine * 1.25
-  if (Number.isFinite(directDistanceKm) && directDistanceKm >= 0) {
-    const estimatedDistanceKm = Math.round(directDistanceKm * 1.25 * 100) / 100;
-    const result: RouteDistanceResult = {
-      success: true,
-      distanceKm: Math.max(0.1, estimatedDistanceKm),
-      durationMinutes: Math.max(5, Math.round(estimatedDistanceKm * 3)),
-      methodUsed: 'road_route',
-      provider: 'haversine',
-    };
-    routeCache.set(cacheKey, { timestamp: Date.now(), data: result });
-    return result;
+    // Handled below
   }
 
   return {

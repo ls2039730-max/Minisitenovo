@@ -328,24 +328,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         return false;
       }
 
-      let currentQuote = deliveryQuote;
-      if (isCalculatingDelivery || !currentQuote) {
-        try {
-          const freshQuote = await Promise.race([
-            refreshDeliveryQuote(),
-            new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000)),
-          ]);
-          if (freshQuote) {
-            currentQuote = freshQuote;
-          }
-        } catch {
-          // Handled below
-        }
-      }
-
-      if (isCalculatingDelivery && !currentQuote) {
+      if (isCalculatingDelivery) {
         setFormError('Aguarde um instante enquanto calculamos o frete para seu endereço.');
         return false;
+      }
+
+      let currentQuote = deliveryQuote;
+      if (!currentQuote) {
+        currentQuote = await refreshDeliveryQuote();
       }
 
       if (!currentQuote || !currentQuote.isCovered) {
@@ -944,38 +934,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
                         {/* Calculated Delivery Fee Feedback */}
                         {isCalculatingDelivery ? (
-                          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                              <Loader2 className="w-4 h-4 animate-spin text-indigo-600 shrink-0" />
-                              <span>Calculando rota e taxa de entrega para seu endereço...</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => refreshDeliveryQuote()}
-                              className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer shrink-0"
-                            >
-                              Recalcular
-                            </button>
-                          </div>
-                        ) : deliveryQuoteError ? (
-                          <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-2">
-                            <div className="flex items-start gap-2">
-                              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                              <div className="flex-1">
-                                <strong className="block font-bold">Aviso no frete:</strong>
-                                <p className="text-[11px] text-amber-800 leading-relaxed">{deliveryQuoteError}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 pt-1 pl-6">
-                              <button
-                                type="button"
-                                onClick={() => refreshDeliveryQuote()}
-                                className="px-3 py-1.5 rounded-lg bg-white border border-amber-300 font-bold text-xs text-amber-900 hover:bg-amber-100/60 transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm"
-                              >
-                                <RefreshCw className="w-3.5 h-3.5" />
-                                <span>Recalcular Frete</span>
-                              </button>
-                            </div>
+                          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center gap-2">
+                            <Loader2 className="w-4 h-4 animate-spin text-indigo-600 shrink-0" />
+                            <span>Calculando rota e taxa de entrega para seu endereço...</span>
                           </div>
                         ) : deliveryQuote ? (
                           <div

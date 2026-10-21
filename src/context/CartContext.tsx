@@ -19,13 +19,7 @@ import { Tenant } from '../types/saas';
 import { api } from '../services/api';
 import { parsePrice, toSafePrice, sanitizeQuantity } from '../utils/currency';
 import { buildAuthoritativeCartItems, calculateCartTotals } from '../utils/cartCalculator';
-import {
-  calculateComprehensiveDeliveryQuote,
-  normalizeCep,
-  calculateStraightLineDistanceKm,
-  hasValidCoordinates,
-  normalizeDeliveryText,
-} from '../utils/deliveryFeeCalculator';
+import { calculateComprehensiveDeliveryQuote, normalizeCep } from '../utils/deliveryFeeCalculator';
 
 interface CartToast {
   show: boolean;
@@ -216,9 +210,6 @@ export const CartProvider: React.FC<CartProviderProps> = ({ tenant, children }) 
 
   const reqIdRef = useRef(0);
   const quoteReqIdRef = useRef(0);
-  const quoteAbortControllerRef = useRef<AbortController | null>(null);
-  const quoteSafetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const inFlightQuoteCountRef = useRef(0);
   const itemsRef = useRef<CartItemInput[]>(items);
   itemsRef.current = items;
   const addressRef = useRef<CustomerDeliveryAddressInput>(deliveryAddress);
@@ -277,17 +268,7 @@ export const CartProvider: React.FC<CartProviderProps> = ({ tenant, children }) 
     }
   }, [validatedData?.deliverySettings]);
 
-  // Clean up any pending abort controllers or safety timers on unmount
-  useEffect(() => {
-    return () => {
-      quoteAbortControllerRef.current?.abort();
-      if (quoteSafetyTimerRef.current) {
-        clearTimeout(quoteSafetyTimerRef.current);
-      }
-    };
-  }, []);
-
-  // Calculate delivery quote via backend API (with resilient local fallback and strict timeout)
+  // Calculate delivery quote via backend API (with local fallback for pure neighborhood mode if offline)
   const refreshDeliveryQuote = useCallback(
     async (
       overrideAddr?: Partial<CustomerDeliveryAddressInput>
@@ -296,15 +277,6 @@ export const CartProvider: React.FC<CartProviderProps> = ({ tenant, children }) 
       const cleanCep = normalizeCep(addr.cep);
 
       if (fulfillmentType === 'pickup') {
-        if (quoteAbortControllerRef.current) {
-          quoteAbortControllerRef.current.abort();
-          quoteAbortControllerRef.current = null;
-        }
-        if (quoteSafetyTimerRef.current) {
-          clearTimeout(quoteSafetyTimerRef.current);
-          quoteSafetyTimerRef.current = null;
-        }
-        inFlightQuoteCountRef.current = 0;
         setDeliveryQuote(null);
         setDeliveryQuoteError(null);
         setIsCalculatingDelivery(false);
@@ -317,137 +289,64 @@ export const CartProvider: React.FC<CartProviderProps> = ({ tenant, children }) 
         Boolean(addr.street?.trim() && addr.city?.trim() && addr.state?.trim());
 
       if (!hasMinimumFields) {
-        if (quoteAbortControllerRef.current) {
-          quoteAbortControllerRef.current.abort();
-          quoteAbortControllerRef.current = null;
-        }
-        if (quoteSafetyTimerRef.current) {
-          clearTimeout(quoteSafetyTimerRef.current);
-          quoteSafetyTimerRef.current = null;
-        }
-        inFlightQuoteCountRef.current = 0;
         setDeliveryQuote(null);
         setDeliveryQuoteError(null);
         setIsCalculatingDelivery(false);
         return null;
       }
 
-      // Abort any prior in-flight calculation to prevent race conditions and network waste
-      if (quoteAbortControllerRef.current) {
-        quoteAbortControllerRef.current.abort();
-      }
-      const controller = new AbortController();
-      quoteAbortControllerRef.current = controller;
-
       const thisQuoteId = ++quoteReqIdRef.current;
-      inFlightQuoteCountRef.current++;
-
-      // Emergency safety watchdog: guarantee that isCalculatingDelivery NEVER hangs indefinitely
-      if (quoteSafetyTimerRef.current) {
-        clearTimeout(quoteSafetyTimerRef.current);
-      }
-      quoteSafetyTimerRef.current = setTimeout(() => {
-        if (thisQuoteId === quoteReqIdRef.current) {
-          console.warn('[DELIVERY] Quote safety timeout triggered after 8s');
-          setIsCalculatingDelivery(false);
-          setDeliveryQuoteError((prev) => prev || 'O cálculo do frete demorou mais que o esperado. Clique em "Tentar Novamente" abaixo.');
-        }
-      }, 8000);
-
       try {
         setIsCalculatingDelivery(true);
         setDeliveryQuoteError(null);
 
-        const res = await api.calculateDeliveryQuote(
-          tenant.slug,
-          {
-            address: {
-              cep: cleanCep,
-              street: addr.street,
-              number: addr.number,
-              complement: addr.complement,
-              neighborhood: addr.neighborhood,
-              city: addr.city,
-              state: addr.state,
-              latitude: addr.latitude ?? null,
-              longitude: addr.longitude ?? null,
-            },
-            subtotal,
-            selectedRuleId: addr.selectedRuleId || null,
+        const res = await api.calculateDeliveryQuote(tenant.slug, {
+          address: {
+            cep: cleanCep,
+            street: addr.street,
+            number: addr.number,
+            complement: addr.complement,
+            neighborhood: addr.neighborhood,
+            city: addr.city,
+            state: addr.state,
+            latitude: addr.latitude ?? null,
+            longitude: addr.longitude ?? null,
           },
-          controller.signal
-        );
+          subtotal,
+          selectedRuleId: addr.selectedRuleId || null,
+        });
 
         if (thisQuoteId === quoteReqIdRef.current) {
           setDeliveryQuote(res);
-          setDeliveryQuoteError(null);
           return res;
         }
         return null;
       } catch (err: any) {
-        // If aborted by a newer keystroke/request, silently discard
-        if (err?.name === 'AbortError' || controller.signal.aborted) {
-          return null;
-        }
-
         if (thisQuoteId === quoteReqIdRef.current) {
-          // Resilient local fallback calculation using in-memory settings if backend is slow/offline
-          if (validatedData?.deliverySettings) {
-            const ds = validatedData.deliverySettings;
-            let calculatedDistanceKm: number | null = null;
-
-            // If KM mode and coordinates or same-street match is present, compute local distance
-            if ((ds.pricingMode || 'neighborhood') === 'km' && ds.originAddress) {
-              const origin = ds.originAddress;
-              if (
-                addr.street &&
-                origin.street &&
-                normalizeDeliveryText(addr.street) === normalizeDeliveryText(origin.street) &&
-                normalizeDeliveryText(addr.city) === normalizeDeliveryText(origin.city)
-              ) {
-                // Same street as store
-                calculatedDistanceKm = 0.2;
-              } else if (hasValidCoordinates(origin) && hasValidCoordinates(addr)) {
-                calculatedDistanceKm = Math.round(
-                  calculateStraightLineDistanceKm(origin.latitude, origin.longitude, addr.latitude!, addr.longitude!) * 1.25 * 100
-                ) / 100;
-              }
-            }
-
+          // If we have deliverySettings in memory and pricingMode is 'neighborhood', compute locally
+          if (
+            validatedData?.deliverySettings &&
+            (validatedData.deliverySettings.pricingMode || 'neighborhood') === 'neighborhood'
+          ) {
             const localQuote = calculateComprehensiveDeliveryQuote({
               fulfillmentType: 'delivery',
               subtotal,
-              deliverySettings: ds,
+              deliverySettings: validatedData.deliverySettings,
               deliveryRules: validatedData.deliveryRules || [],
               address: addr,
               selectedRuleId: addr.selectedRuleId || null,
-              calculatedDistanceKm,
-              distanceMethodUsed: 'road_route',
             });
-
-            if (localQuote.isCovered) {
-              setDeliveryQuote(localQuote);
-              setDeliveryQuoteError(null);
-              return localQuote;
-            }
+            setDeliveryQuote(localQuote);
+            return localQuote;
           }
-
           setDeliveryQuoteError(
-            err?.message || 'Não foi possível calcular o frete para o endereço informado no momento. Tente novamente.'
+            err?.message || 'Não foi possível calcular o frete no momento. Tente novamente.'
           );
         }
         return null;
       } finally {
-        inFlightQuoteCountRef.current = Math.max(0, inFlightQuoteCountRef.current - 1);
-        if (thisQuoteId === quoteReqIdRef.current || inFlightQuoteCountRef.current === 0) {
-          if (quoteSafetyTimerRef.current) {
-            clearTimeout(quoteSafetyTimerRef.current);
-            quoteSafetyTimerRef.current = null;
-          }
+        if (thisQuoteId === quoteReqIdRef.current) {
           setIsCalculatingDelivery(false);
-          if (quoteAbortControllerRef.current === controller) {
-            quoteAbortControllerRef.current = null;
-          }
         }
       }
     },
@@ -457,10 +356,6 @@ export const CartProvider: React.FC<CartProviderProps> = ({ tenant, children }) 
   // Debounced auto-calculation when address or subtotal changes in delivery mode
   useEffect(() => {
     if (fulfillmentType !== 'delivery' || items.length === 0) {
-      if (quoteAbortControllerRef.current) {
-        quoteAbortControllerRef.current.abort();
-        quoteAbortControllerRef.current = null;
-      }
       setDeliveryQuote(null);
       setDeliveryQuoteError(null);
       setIsCalculatingDelivery(false);
