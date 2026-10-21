@@ -951,7 +951,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                             </div>
                             <button
                               type="button"
-                              onClick={() => refreshDeliveryQuote()}
+                              onClick={() => refreshDeliveryQuote(undefined, true)}
                               className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer shrink-0"
                             >
                               Recalcular
@@ -969,7 +969,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                             <div className="flex items-center gap-2 pt-1 pl-6">
                               <button
                                 type="button"
-                                onClick={() => refreshDeliveryQuote()}
+                                onClick={() => refreshDeliveryQuote(undefined, true)}
                                 className="px-3 py-1.5 rounded-lg bg-white border border-amber-300 font-bold text-xs text-amber-900 hover:bg-amber-100/60 transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm"
                               >
                                 <RefreshCw className="w-3.5 h-3.5" />
@@ -1002,11 +1002,22 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                                     : deliveryQuote.reason || 'Endereço fora da área de entrega.'}
                                 </span>
                               </div>
-                              {deliveryQuote.isCovered && deliveryQuote.estimatedTime && (
-                                <span className="text-[11px] font-bold text-emerald-700">
-                                  ⏱ {deliveryQuote.estimatedTime}
-                                </span>
-                              )}
+                              <div className="flex items-center gap-2">
+                                {deliveryQuote.isCovered && deliveryQuote.estimatedTime && (
+                                  <span className="text-[11px] font-bold text-emerald-700">
+                                    ⏱ {deliveryQuote.estimatedTime}
+                                  </span>
+                                )}
+                                {!deliveryQuote.isCovered && (
+                                  <button
+                                    type="button"
+                                    onClick={() => refreshDeliveryQuote(undefined, true)}
+                                    className="px-2 py-0.5 bg-white rounded border border-rose-200 text-[10px] font-bold text-rose-700 hover:bg-rose-100/50 shrink-0 cursor-pointer"
+                                  >
+                                    Recalcular
+                                  </button>
+                                )}
+                              </div>
                             </div>
 
                             {deliveryQuote.isCovered && (
@@ -1026,6 +1037,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                                 )}
                               </div>
                             )}
+                          </div>
+                        ) : !cleanCepDigits && !deliveryAddress.street.trim() ? (
+                          <div className="p-3 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-xs text-slate-500 flex items-center gap-2">
+                            <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
+                            <span>Preencha seu CEP ou logradouro acima para calcular o frete.</span>
                           </div>
                         ) : null}
                       </div>

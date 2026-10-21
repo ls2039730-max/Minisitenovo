@@ -305,10 +305,24 @@ function matchNeighborhoodOrLegacyRule(
   // 1. Check active neighborhood rules
   const activeNeighborhoodRules = activeRules.filter((r) => r.type === 'neighborhood');
   if (customerNeighborhoodNorm) {
-    const nameMatches = activeNeighborhoodRules.filter((r) => {
+    let nameMatches = activeNeighborhoodRules.filter((r) => {
       const ruleNeighborhoodNorm = normalizeDeliveryText(r.neighborhood || r.name);
       return ruleNeighborhoodNorm === customerNeighborhoodNorm;
     });
+
+    // If no exact match, try token/substring match (e.g. "Unamar (Tamoios)" matching "Unamar")
+    if (nameMatches.length === 0) {
+      nameMatches = activeNeighborhoodRules.filter((r) => {
+        const ruleNeighborhoodNorm = normalizeDeliveryText(r.neighborhood || r.name);
+        if (ruleNeighborhoodNorm.length >= 3 && customerNeighborhoodNorm.length >= 3) {
+          return (
+            customerNeighborhoodNorm.includes(ruleNeighborhoodNorm) ||
+            ruleNeighborhoodNorm.includes(customerNeighborhoodNorm)
+          );
+        }
+        return false;
+      });
+    }
 
     if (nameMatches.length > 0) {
       // Filter by city and UF if present

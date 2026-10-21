@@ -562,19 +562,23 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
                           {/* Delivery Quote Status Box */}
                           {isCalculatingDelivery ? (
-                            <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-xs text-slate-600 flex items-center gap-2">
+                            <div className="p-2.5 rounded-xl bg-white border border-slate-200 text-xs text-slate-600 flex items-center gap-2 shadow-xs">
                               <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600 shrink-0" />
                               <span>Calculando rota e taxa de entrega...</span>
                             </div>
                           ) : deliveryQuoteError ? (
                             <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center justify-between gap-2">
-                              <span className="break-words">{deliveryQuoteError}</span>
+                              <div className="flex items-start gap-1.5 min-w-0">
+                                <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
+                                <span className="break-words font-medium">{deliveryQuoteError}</span>
+                              </div>
                               <button
                                 type="button"
-                                onClick={() => refreshDeliveryQuote()}
-                                className="px-2 py-1 bg-white rounded-lg border border-rose-200 font-bold text-[11px] shrink-0 cursor-pointer"
+                                onClick={() => refreshDeliveryQuote(undefined, true)}
+                                className="px-2.5 py-1 bg-white rounded-lg border border-rose-300 font-bold text-[11px] text-rose-700 hover:bg-rose-100/60 shrink-0 cursor-pointer flex items-center gap-1 shadow-xs"
                               >
-                                Repetir
+                                <RefreshCw className="w-3 h-3" />
+                                <span>Repetir</span>
                               </button>
                             </div>
                           ) : deliveryQuote ? (
@@ -601,6 +605,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                                         'Endereço fora da nossa área de entrega.'}
                                   </span>
                                 </div>
+                                {!deliveryQuote.isCovered && (
+                                  <button
+                                    type="button"
+                                    onClick={() => refreshDeliveryQuote(undefined, true)}
+                                    className="px-2 py-0.5 bg-white rounded border border-rose-200 text-[10px] font-bold text-rose-700 hover:bg-rose-100/50 shrink-0 cursor-pointer"
+                                  >
+                                    Recalcular
+                                  </button>
+                                )}
                               </div>
                               {deliveryQuote.isCovered && (
                                 <div className="text-[11px] text-emerald-800 pl-5 flex flex-wrap gap-x-2">
@@ -618,6 +631,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                                   )}
                                 </div>
                               )}
+                            </div>
+                          ) : !deliveryAddress.cep.replace(/\D/g, '') && !deliveryAddress.street.trim() ? (
+                            <div className="p-2.5 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-xs text-slate-500 flex items-center gap-2">
+                              <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <span>Informe seu CEP ou bairro acima para calcular a entrega.</span>
                             </div>
                           ) : null}
                         </div>
