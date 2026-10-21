@@ -1,4 +1,4 @@
-import { MotionPresetDefinition, MotionStudioSettings } from '../types/motion';
+import { MotionPresetDefinition, MotionStudioSettings } from '../types/motion.js';
 
 export const DEFAULT_MOTION_SETTINGS: MotionStudioSettings = {
   enabled: true,

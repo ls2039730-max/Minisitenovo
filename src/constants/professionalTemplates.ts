@@ -1,6 +1,6 @@
-import { Tenant } from '../types/saas';
-import { generateUUID } from "../utils/uuid";
-import { SiteData, SiteSection, SiteAppearance, SiteTemplateId, SectionType } from '../types/site';
+import { Tenant } from '../types/saas.js';
+import { generateUUID } from "../utils/uuid.js";
+import { SiteData, SiteSection, SiteAppearance, SiteTemplateId, SectionType } from '../types/site.js';
 
 export interface TemplateCategory {
   id: string;

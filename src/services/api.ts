@@ -59,8 +59,44 @@ import {
 } from '../types/restaurant';
 
 class ApiService {
+  private memoryToken: string | null = null;
+
+  public getToken(): string | null {
+    if (this.memoryToken) return this.memoryToken;
+    try {
+      const stored = localStorage.getItem('saas_token') || sessionStorage.getItem('saas_token');
+      if (stored) {
+        this.memoryToken = stored;
+        return stored;
+      }
+    } catch {
+      // Storage may be restricted in cross-origin iframes or private mode
+    }
+    return null;
+  }
+
+  public setToken(token: string): void {
+    this.memoryToken = token;
+    try {
+      localStorage.setItem('saas_token', token);
+    } catch {}
+    try {
+      sessionStorage.setItem('saas_token', token);
+    } catch {}
+  }
+
+  public clearToken(): void {
+    this.memoryToken = null;
+    try {
+      localStorage.removeItem('saas_token');
+    } catch {}
+    try {
+      sessionStorage.removeItem('saas_token');
+    } catch {}
+  }
+
   private getHeaders(): HeadersInit {
-    const token = localStorage.getItem('saas_token');
+    const token = this.getToken();
     return {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -108,12 +144,30 @@ class ApiService {
   }
 
   // --- Auth ---
-  async login(email: string, password: string): Promise<{ token: string; user: User; tenant?: Tenant | null; linkedProfessional?: Professional | null }> {
-    const res = await this.request<{ success: boolean; token: string; user: User; tenant?: Tenant | null; linkedProfessional?: Professional | null }>('/api/auth/login', {
+  async login(
+    email: string,
+    password: string
+  ): Promise<{
+    token: string;
+    user: User;
+    tenant?: Tenant | null;
+    resolvedFeatures?: Record<FeatureKey, boolean> | null;
+    linkedProfessional?: Professional | null;
+  }> {
+    const res = await this.request<{
+      success: boolean;
+      token: string;
+      user: User;
+      tenant?: Tenant | null;
+      resolvedFeatures?: Record<FeatureKey, boolean> | null;
+      linkedProfessional?: Professional | null;
+    }>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
-    localStorage.setItem('saas_token', res.token);
+    if (res.token) {
+      this.setToken(res.token);
+    }
     return res;
   }
 
@@ -130,7 +184,7 @@ class ApiService {
 
   async logout(): Promise<void> {
     await this.request('/api/auth/logout', { method: 'POST' }).catch(() => {});
-    localStorage.removeItem('saas_token');
+    this.clearToken();
   }
 
   async selfAssignTenant(): Promise<{ user: User; tenant?: Tenant | null }> {
@@ -153,7 +207,9 @@ class ApiService {
       `/api/auth/impersonate/${tenantId}`,
       { method: 'POST' }
     );
-    localStorage.setItem('saas_token', res.token);
+    if (res.token) {
+      this.setToken(res.token);
+    }
     return res;
   }
 
@@ -162,7 +218,9 @@ class ApiService {
       '/api/auth/impersonate/exit',
       { method: 'POST' }
     );
-    localStorage.setItem('saas_token', res.token);
+    if (res.token) {
+      this.setToken(res.token);
+    }
     return res;
   }
 

@@ -6,6 +6,8 @@ const TOKEN_EXPIRY = '8h';
 
 export interface JwtSessionPayload {
   userId: string;
+  email?: string;
+  name?: string;
   role: string;
   tenantId: string | null;
   // Impersonation metadata
@@ -26,6 +28,8 @@ export function generateSessionToken(
 ): string {
   const payload: JwtSessionPayload = {
     userId: user.id,
+    email: user.email,
+    name: user.name,
     role: user.role,
     tenantId: impersonationContext ? impersonationContext.impersonatedTenantId : user.tenantId,
     ...(impersonationContext

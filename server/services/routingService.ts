@@ -2,13 +2,13 @@ import {
   CepLookupResult,
   DeliveryOriginAddress,
   DistanceCalculationMethod,
-} from '../../src/types/order';
+} from '../../src/types/order.js';
 import {
   calculateStraightLineDistanceKm,
   hasValidCoordinates,
   normalizeCep,
   normalizeDeliveryText,
-} from '../../src/utils/deliveryFeeCalculator';
+} from '../../src/utils/deliveryFeeCalculator.js';
 
 export interface GeocodeResult {
   success: boolean;

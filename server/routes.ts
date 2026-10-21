@@ -57,7 +57,7 @@ export async function authenticate(req: AuthenticatedRequest, res: Response, nex
     });
   }
 
-  const user = await repo.findUserById(decoded.userId);
+  const user = await repo.findUserById(decoded.userId, decoded);
   if (!user || user.status === 'inactive') {
     return res.status(401).json({
       success: false,
@@ -68,6 +68,22 @@ export async function authenticate(req: AuthenticatedRequest, res: Response, nex
   req.user = user;
   req.sessionPayload = decoded;
   next();
+}
+
+function getAuthCookieOptions(req: Request, maxAgeMs = 8 * 60 * 60 * 1000) {
+  const forwardedProto = (req.headers['x-forwarded-proto'] as string) || '';
+  const isSecure =
+    req.secure ||
+    forwardedProto.includes('https') ||
+    process.env.NODE_ENV === 'production';
+
+  return {
+    httpOnly: true,
+    secure: isSecure,
+    sameSite: (isSecure ? 'none' : 'lax') as 'none' | 'lax',
+    path: '/',
+    maxAge: maxAgeMs,
+  };
 }
 
 // Helper: get effective tenant ID strictly verified
@@ -295,6 +311,15 @@ apiRouter.post('/auth/login', async (req: Request, res: Response) => {
       }
     }
 
+    let resolvedFeatures: Record<FeatureKey, boolean> | null = null;
+    if (user.tenantId) {
+      try {
+        resolvedFeatures = await repo.resolveTenantFeatures(user.tenantId);
+      } catch {
+        resolvedFeatures = null;
+      }
+    }
+
     const token = generateSessionToken(user);
 
     // If role is PROFESSIONAL, lookup linked professional
@@ -303,19 +328,15 @@ apiRouter.post('/auth/login', async (req: Request, res: Response) => {
       linkedProfessional = await serviceRepo.getProfessionalByUserId(user.id, user.tenantId);
     }
 
-    // Set secure cookie
-    res.cookie('saas_auth_token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 8 * 60 * 60 * 1000, // 8 hours
-    });
+    // Set secure cookie compatible with both standalone domains and embedded iframes
+    res.cookie('saas_auth_token', token, getAuthCookieOptions(req, 8 * 60 * 60 * 1000));
 
     return res.json({
       success: true,
       token,
       user,
       tenant,
+      resolvedFeatures,
       linkedProfessional,
     });
   } catch (err: any) {
@@ -366,8 +387,9 @@ apiRouter.get('/auth/me', authenticate, async (req: AuthenticatedRequest, res: R
   });
 });
 
-apiRouter.post('/auth/logout', (_req: Request, res: Response) => {
-  res.clearCookie('saas_auth_token');
+apiRouter.post('/auth/logout', (req: Request, res: Response) => {
+  res.clearCookie('saas_auth_token', getAuthCookieOptions(req, 0));
+  res.clearCookie('saas_auth_token', { path: '/' });
   return res.json({ success: true, message: 'Sessão encerrada com sucesso.' });
 });
 
@@ -460,12 +482,7 @@ apiRouter.post('/auth/impersonate/exit', authenticate, async (req: Authenticated
   });
 
   const token = generateSessionToken(originalAdmin);
-  res.cookie('saas_auth_token', token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 8 * 60 * 60 * 1000,
-  });
+  res.cookie('saas_auth_token', token, getAuthCookieOptions(req, 8 * 60 * 60 * 1000));
 
   return res.json({
     success: true,
@@ -490,12 +507,7 @@ apiRouter.post('/auth/impersonate/:tenantId', authenticate, requireSuperAdmin, a
     originalAdmin: req.user!,
   });
 
-  res.cookie('saas_auth_token', token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 4 * 60 * 60 * 1000,
-  });
+  res.cookie('saas_auth_token', token, getAuthCookieOptions(req, 4 * 60 * 60 * 1000));
 
   await repo.logAudit({
     actorUserId: req.user!.id,

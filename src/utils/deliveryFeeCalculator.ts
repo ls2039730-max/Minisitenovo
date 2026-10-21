@@ -7,8 +7,8 @@ import {
   DeliverySettings,
   DistanceCalculationMethod,
   FulfillmentType,
-} from '../types/order';
-import { toSafePrice } from './currency';
+} from '../types/order.js';
+import { toSafePrice } from './currency.js';
 
 function safeParsePrice(val: unknown): number {
   return toSafePrice(val, 0);

@@ -34,11 +34,12 @@ export async function bootstrapDatabaseIfNeeded(): Promise<void> {
       }
 
       if (adminUser) {
-        console.log(`[BOOTSTRAP] Confirming email & updating password for Super Admin ${email}...`);
-        await supabaseAdmin.auth.admin.updateUserById(adminUser.id, {
-          password: 'admin123',
-          email_confirm: true,
-        }).catch((e) => console.warn('[BOOTSTRAP] Could not sync admin user in Supabase:', e.message));
+        if (!adminUser.email_confirmed_at) {
+          console.log(`[BOOTSTRAP] Confirming email for Super Admin ${email}...`);
+          await supabaseAdmin.auth.admin.updateUserById(adminUser.id, {
+            email_confirm: true,
+          }).catch((e) => console.warn('[BOOTSTRAP] Could not confirm admin user in Supabase:', e.message));
+        }
 
         const { data: adminTu } = await supabaseAdmin
           .from('tenant_users')
@@ -198,11 +199,11 @@ export async function bootstrapDatabaseIfNeeded(): Promise<void> {
     }
 
     if (clientUser) {
-      console.log('[BOOTSTRAP] Updating Client Admin password & confirming email in Supabase Auth...');
-      await supabaseAdmin.auth.admin.updateUserById(clientUser.id, {
-        password: 'cliente123',
-        email_confirm: true,
-      }).catch((e) => console.warn('[BOOTSTRAP] Could not sync client user in Supabase:', e.message));
+      if (!clientUser.email_confirmed_at) {
+        await supabaseAdmin.auth.admin.updateUserById(clientUser.id, {
+          email_confirm: true,
+        }).catch((e) => console.warn('[BOOTSTRAP] Could not confirm client user in Supabase:', e.message));
+      }
 
       const { data: clientTu } = await supabaseAdmin
         .from('tenant_users')
@@ -243,10 +244,11 @@ export async function bootstrapDatabaseIfNeeded(): Promise<void> {
     }
 
     if (profUser) {
-      await supabaseAdmin.auth.admin.updateUserById(profUser.id, {
-        password: 'pro123',
-        email_confirm: true,
-      }).catch(() => {});
+      if (!profUser.email_confirmed_at) {
+        await supabaseAdmin.auth.admin.updateUserById(profUser.id, {
+          email_confirm: true,
+        }).catch(() => {});
+      }
 
       const { data: profTu } = await supabaseAdmin
         .from('tenant_users')

@@ -1,4 +1,4 @@
-import { SiteAppearance, SiteTemplateId } from '../types/site';
+import { SiteAppearance, SiteTemplateId } from '../types/site.js';
 
 export interface TemplateDefinition {
   id: SiteTemplateId;

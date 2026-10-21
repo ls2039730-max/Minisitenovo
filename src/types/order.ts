@@ -1,4 +1,4 @@
-import { Product, ProductVariant } from './product';
+import { Product, ProductVariant } from './product.js';
 
 export type OrderStatus =
   | 'NEW'

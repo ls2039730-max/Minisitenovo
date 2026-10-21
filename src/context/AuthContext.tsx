@@ -32,6 +32,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isDevelopment, setIsDevelopment] = useState<boolean>(true);
   const [originalAdminUserName, setOriginalAdminUserName] = useState<string | undefined>(undefined);
   const [resolvedFeatures, setResolvedFeatures] = useState<Record<FeatureKey, boolean>>({} as any);
+  const manualAuthActionRef = React.useRef<boolean>(false);
 
   const isProfessional = user?.role === 'PROFESSIONAL';
 
@@ -46,13 +47,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // 2. Verify active session with backend
-      const token = localStorage.getItem('saas_token');
+      const token = api.getToken();
       if (!token) {
-        setLoading(false);
+        if (!manualAuthActionRef.current) {
+          setLoading(false);
+        }
         return;
       }
 
       const session = await api.getCurrentSession();
+      if (manualAuthActionRef.current) return;
+
       setUser(session.user);
       setTenant(session.tenant || null);
       setLinkedProfessional(session.linkedProfessional || null);
@@ -62,14 +67,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setResolvedFeatures(session.resolvedFeatures);
       }
     } catch (err) {
+      if (manualAuthActionRef.current) return;
       console.warn('Session verification failed, clearing credentials:', err);
-      localStorage.removeItem('saas_token');
+      api.clearToken();
       setUser(null);
       setTenant(null);
       setLinkedProfessional(null);
       setIsImpersonating(false);
     } finally {
-      setLoading(false);
+      if (!manualAuthActionRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -78,21 +86,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (email: string, pass: string) => {
-    setLoading(true);
-    try {
-      const data = await api.login(email, pass);
-      setUser(data.user);
-      setTenant(data.tenant || null);
-      setLinkedProfessional(data.linkedProfessional || null);
-      setIsImpersonating(false);
+    manualAuthActionRef.current = true;
+    // Note: Do NOT set global `loading = true` before api.login completes,
+    // because setting `loading = true` when `user === null` unmounts <LoginView />,
+    // which would destroy the login form state and error display if login fails.
+    const data = await api.login(email, pass);
+    setUser(data.user);
+    setTenant(data.tenant || null);
+    setLinkedProfessional(data.linkedProfessional || null);
+    setIsImpersonating(false);
+    setOriginalAdminUserName(undefined);
+    if (data.resolvedFeatures) {
+      setResolvedFeatures(data.resolvedFeatures);
+    } else {
       await refreshSession();
-      return data;
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
+    return data;
   };
 
   const logout = async () => {
+    manualAuthActionRef.current = true;
     setLoading(true);
     try {
       await api.logout();
@@ -107,6 +121,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const impersonate = async (tenantId: string) => {
+    manualAuthActionRef.current = true;
     setLoading(true);
     try {
       const data = await api.impersonateTenant(tenantId);
@@ -120,6 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const exitImpersonation = async () => {
+    manualAuthActionRef.current = true;
     setLoading(true);
     try {
       await api.exitImpersonation();
@@ -132,13 +148,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshSession = async () => {
     try {
       const session = await api.getCurrentSession();
-      setUser(session.user);
-      setTenant(session.tenant || null);
-      setLinkedProfessional(session.linkedProfessional || null);
-      setIsImpersonating(!!session.isImpersonating);
-      setOriginalAdminUserName(session.originalAdminUserName);
-      if (session.resolvedFeatures) {
-        setResolvedFeatures(session.resolvedFeatures);
+      if (session?.user) {
+        setUser(session.user);
+        setTenant(session.tenant || null);
+        setLinkedProfessional(session.linkedProfessional || null);
+        setIsImpersonating(!!session.isImpersonating);
+        setOriginalAdminUserName(session.originalAdminUserName);
+        if (session.resolvedFeatures) {
+          setResolvedFeatures(session.resolvedFeatures);
+        }
       }
     } catch (e) {
       console.error('Failed to refresh session:', e);

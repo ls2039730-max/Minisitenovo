@@ -13,6 +13,24 @@ import {
 import { validateSlug } from '../tenantResolver.js';
 
 export class SaasRepository {
+  private userSessionCache = new Map<string, { user: User; expiresAt: number }>();
+  private readonly USER_CACHE_TTL_MS = 30 * 1000;
+
+  private cacheUser(user: User): void {
+    this.userSessionCache.set(user.id, {
+      user,
+      expiresAt: Date.now() + this.USER_CACHE_TTL_MS,
+    });
+  }
+
+  public invalidateUserCache(userId?: string): void {
+    if (userId) {
+      this.userSessionCache.delete(userId);
+    } else {
+      this.userSessionCache.clear();
+    }
+  }
+
   // ==========================================
   // AUDIT LOGS (Stored in Supabase audit_logs table)
   // ==========================================
@@ -232,7 +250,7 @@ export class SaasRepository {
     const tenantId: string | null = tu ? tu.tenant_id : null;
     const status = tu ? tu.status : 'active';
 
-    return {
+    const resolvedUser: User = {
       id: authUser.id,
       name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Usuário',
       email: authUser.email!,
@@ -242,6 +260,9 @@ export class SaasRepository {
       status,
       createdAt: authUser.created_at,
     };
+
+    this.cacheUser(resolvedUser);
+    return resolvedUser;
   }
 
   private async resolveOrEnsureTenantUser(authUser: any) {
@@ -252,7 +273,12 @@ export class SaasRepository {
       .select('*')
       .eq('user_id', authUser.id);
 
-    let tu = tuList && tuList.length > 0 ? tuList[0] : null;
+    let tu =
+      tuList && tuList.length > 0
+        ? tuList.find((r: any) => r.status === 'active') ||
+          tuList.find((r: any) => r.status === 'invited') ||
+          tuList[0]
+        : null;
 
     if (tu && tu.status === 'invited') {
       await supabaseAdmin
@@ -358,6 +384,7 @@ export class SaasRepository {
   }
 
   public async linkUserTenant(userId: string, tenantId: string | null, role: UserRole = 'CLIENT_ADMIN'): Promise<void> {
+    this.invalidateUserCache(userId);
     const { data: tuList } = await supabaseAdmin
       .from('tenant_users')
       .select('*')
@@ -386,7 +413,20 @@ export class SaasRepository {
     }
   }
 
-  public async findUserById(id: string): Promise<User | null> {
+  public async findUserById(
+    id: string,
+    fallbackClaims?: {
+      email?: string;
+      name?: string;
+      role?: string;
+      tenantId?: string | null;
+    }
+  ): Promise<User | null> {
+    const cached = this.userSessionCache.get(id);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.user;
+    }
+
     let authUser: any = null;
     try {
       const { data, error } = await supabaseAdmin.auth.admin.getUserById(id);
@@ -396,29 +436,68 @@ export class SaasRepository {
     } catch {}
 
     if (!authUser) {
-      const { data: usersData } = await supabaseAdmin.auth.admin.listUsers();
-      authUser = usersData?.users?.find((u: any) => u.id === id);
+      try {
+        const { data: usersData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 } as any);
+        authUser = usersData?.users?.find((u: any) => u.id === id);
+        if (!authUser && fallbackClaims?.email) {
+          const cleanFallbackEmail = fallbackClaims.email.toLowerCase().trim();
+          authUser = usersData?.users?.find((u: any) => u.email?.toLowerCase().trim() === cleanFallbackEmail);
+        }
+      } catch {}
     }
 
-    if (!authUser) return null;
+    if (!authUser) {
+      // Fallback: check tenant_users directly in PostgreSQL so transient Auth Admin API hiccups
+      // or serverless local-store instances never invalidate an active signed JWT session
+      try {
+        const { data: tuList } = await supabaseAdmin
+          .from('tenant_users')
+          .select('*')
+          .eq('user_id', id);
+        const tu =
+          tuList && tuList.length > 0
+            ? tuList.find((r: any) => r.status === 'active') ||
+              tuList.find((r: any) => r.status === 'invited') ||
+              tuList[0]
+            : null;
+
+        if (tu || fallbackClaims?.email) {
+          const fallbackUser: User = {
+            id,
+            name: fallbackClaims?.name || fallbackClaims?.email?.split('@')[0] || 'Usuário',
+            email: fallbackClaims?.email || 'usuario@localhub.com',
+            role: (tu?.role || fallbackClaims?.role || 'CLIENT_ADMIN') as UserRole,
+            tenantId: tu ? tu.tenant_id : (fallbackClaims?.tenantId ?? null),
+            status: tu ? tu.status : 'active',
+            createdAt: tu?.created_at || new Date().toISOString(),
+          };
+          this.cacheUser(fallbackUser);
+          return fallbackUser;
+        }
+      } catch {}
+      return null;
+    }
 
     const tu = await this.resolveOrEnsureTenantUser(authUser);
 
-    return {
+    const resolvedUser: User = {
       id: authUser.id,
-      name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Usuário',
+      name: authUser.user_metadata?.name || fallbackClaims?.name || authUser.email?.split('@')[0] || 'Usuário',
       email: authUser.email!,
       phone: authUser.user_metadata?.phone || undefined,
-      role: tu ? tu.role : 'CLIENT_ADMIN',
-      tenantId: tu ? tu.tenant_id : null,
+      role: tu ? tu.role : ((fallbackClaims?.role as UserRole) || 'CLIENT_ADMIN'),
+      tenantId: tu ? tu.tenant_id : (fallbackClaims?.tenantId ?? null),
       status: tu ? tu.status : 'active',
       createdAt: authUser.created_at,
     };
+
+    this.cacheUser(resolvedUser);
+    return resolvedUser;
   }
 
   public async findUserByEmail(email: string): Promise<User | null> {
     const cleanEmail = email.toLowerCase().trim();
-    const { data: usersData } = await supabaseAdmin.auth.admin.listUsers();
+    const { data: usersData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 } as any);
     const authUser = usersData?.users?.find(
       (u: any) => u.email?.toLowerCase().trim() === cleanEmail
     );
@@ -653,6 +732,7 @@ export class SaasRepository {
       metadata: data,
     });
 
+    this.invalidateUserCache(userId);
     const updated = await this.findUserById(userId);
     return updated!;
   }
@@ -662,6 +742,7 @@ export class SaasRepository {
       throw new Error('Acesso negado para remover usuário.');
     }
 
+    this.invalidateUserCache(userId);
     await supabaseAdmin
       .from('tenant_users')
       .delete()
