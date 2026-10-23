@@ -499,8 +499,8 @@ export class RestaurantRepository {
     }
 
     const features = await repo.resolveTenantFeatures(tenant.id);
-    if (!features.restaurant_tables && !features.products) {
-      throw new Error('O módulo de catálogo digital para mesas não está ativo para este restaurante.');
+    if (!features.restaurant_tables) {
+      throw new Error('O módulo de catálogo digital para mesas (restaurant_tables) não está ativo para este estabelecimento.');
     }
 
     const { data: table } = await supabaseAdmin
@@ -789,6 +789,11 @@ export class RestaurantRepository {
 
     const op = canTenantOperate(tenant.status);
     if (!op.canOperate) throw new Error(op.blockedReason || 'Este restaurante não está atendendo no momento.');
+
+    const features = await repo.resolveTenantFeatures(tenant.id);
+    if (!features.restaurant_tables) {
+      throw new Error('O módulo de catálogo digital para mesas (restaurant_tables) não está ativo para este estabelecimento.');
+    }
 
     const { data: table } = await supabaseAdmin
       .from('restaurant_tables')
@@ -1467,6 +1472,11 @@ export class RestaurantRepository {
     const op = canTenantOperate(tenant.status);
     if (!op.canOperate) {
       throw new Error(op.blockedReason || 'Este restaurante não está recebendo pedidos no momento.');
+    }
+
+    const features = await repo.resolveTenantFeatures(tenant.id);
+    if (!features.restaurant_tables) {
+      throw new Error('O módulo de catálogo digital para mesas (restaurant_tables) não está ativo para este estabelecimento.');
     }
 
     const { data: table } = await supabaseAdmin

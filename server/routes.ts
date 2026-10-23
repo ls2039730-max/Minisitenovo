@@ -2573,6 +2573,18 @@ apiRouter.post('/site/public/:slug/appointments/cancel/:token', async (req: Requ
 // RESTAURANT DIGITAL CATALOG & TABLES (PUBLIC)
 // ==========================================
 
+function handlePublicRestaurantError(res: Response, err: any, fallbackMessage: string) {
+  const message = err?.message || fallbackMessage;
+  if (typeof message === 'string' && message.includes('restaurant_tables')) {
+    return res.status(403).json({
+      success: false,
+      code: 'FEATURE_DISABLED',
+      error: message,
+    });
+  }
+  return res.status(400).json({ success: false, error: message });
+}
+
 // 1. Table Info Lookup
 apiRouter.get('/public/restaurant/table-info', async (req: Request, res: Response) => {
   try {
@@ -2584,7 +2596,7 @@ apiRouter.get('/public/restaurant/table-info', async (req: Request, res: Respons
     const info = await restaurantRepo.getPublicTableInfo(slug, token);
     return res.json(info);
   } catch (err: any) {
-    return res.status(400).json({ success: false, error: err.message || 'Mesa não encontrada.' });
+    return handlePublicRestaurantError(res, err, 'Mesa não encontrada.');
   }
 });
 
@@ -2596,7 +2608,7 @@ apiRouter.get('/public/restaurant/catalog', async (req: Request, res: Response) 
     if (!slug || !token) {
       return res.status(400).json({ success: false, error: 'Parâmetros slug e token da mesa são obrigatórios.' });
     }
-    // Verify table is valid and active
+    // Verify table is valid and active (also verifies restaurant_tables feature)
     await restaurantRepo.getPublicTableInfo(slug, token);
     // Fetch live catalog from productRepo for table channel
     const catalog = await productRepo.getPublicCatalog(slug, {
@@ -2609,7 +2621,7 @@ apiRouter.get('/public/restaurant/catalog', async (req: Request, res: Response) 
     });
     return res.json(catalog);
   } catch (err: any) {
-    return res.status(400).json({ success: false, error: err.message || 'Erro ao carregar cardápio da mesa.' });
+    return handlePublicRestaurantError(res, err, 'Erro ao carregar cardápio da mesa.');
   }
 });
 
@@ -2634,7 +2646,7 @@ apiRouter.post('/public/restaurant/orders', async (req: Request, res: Response) 
     );
     return res.status(201).json({ success: true, order });
   } catch (err: any) {
-    return res.status(400).json({ success: false, error: err.message || 'Falha ao processar pedido na mesa.' });
+    return handlePublicRestaurantError(res, err, 'Falha ao processar pedido na mesa.');
   }
 });
 
@@ -2658,7 +2670,7 @@ apiRouter.get('/public/restaurant/table-session', async (req: Request, res: Resp
       totalAmount: sessionDetails?.totalAmount || 0,
     });
   } catch (err: any) {
-    return res.status(400).json({ success: false, error: err.message || 'Erro ao consultar conta da mesa.' });
+    return handlePublicRestaurantError(res, err, 'Erro ao consultar conta da mesa.');
   }
 });
 
@@ -2677,7 +2689,7 @@ apiRouter.post('/public/restaurant/request-closing', async (req: Request, res: R
       session,
     });
   } catch (err: any) {
-    return res.status(400).json({ success: false, error: err.message || 'Falha ao solicitar fechamento da conta.' });
+    return handlePublicRestaurantError(res, err, 'Falha ao solicitar fechamento da conta.');
   }
 });
 
@@ -2686,7 +2698,7 @@ apiRouter.post('/public/restaurant/request-closing', async (req: Request, res: R
 // ==========================================
 
 // Tables Management
-apiRouter.get('/restaurant/tables', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/restaurant/tables', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const tables = await restaurantRepo.listTables(tenantId);
@@ -2696,7 +2708,7 @@ apiRouter.get('/restaurant/tables', authenticate, requireNonProfessional, async 
   }
 });
 
-apiRouter.post('/restaurant/tables', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/restaurant/tables', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const table = await restaurantRepo.createTable(tenantId, req.body, req.user!);
@@ -2706,7 +2718,7 @@ apiRouter.post('/restaurant/tables', authenticate, requireNonProfessional, async
   }
 });
 
-apiRouter.post('/restaurant/tables/batch', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/restaurant/tables/batch', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const result = await restaurantRepo.createTablesBatch(tenantId, req.body, req.user!);
@@ -2716,7 +2728,7 @@ apiRouter.post('/restaurant/tables/batch', authenticate, requireNonProfessional,
   }
 });
 
-apiRouter.put('/restaurant/tables/:id', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.put('/restaurant/tables/:id', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const table = await restaurantRepo.updateTable(req.params.id, tenantId, req.body, req.user!);
@@ -2726,7 +2738,7 @@ apiRouter.put('/restaurant/tables/:id', authenticate, requireNonProfessional, as
   }
 });
 
-apiRouter.delete('/restaurant/tables/:id', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.delete('/restaurant/tables/:id', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     await restaurantRepo.deleteTable(req.params.id, tenantId, req.user!);
@@ -2736,7 +2748,7 @@ apiRouter.delete('/restaurant/tables/:id', authenticate, requireNonProfessional,
   }
 });
 
-apiRouter.post('/restaurant/tables/:id/regenerate-token', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/restaurant/tables/:id/regenerate-token', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const newToken = await restaurantRepo.regenerateTableQrToken(req.params.id, tenantId, req.user!);
@@ -2746,7 +2758,7 @@ apiRouter.post('/restaurant/tables/:id/regenerate-token', authenticate, requireN
   }
 });
 
-apiRouter.get('/restaurant/tables/:id/session', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/restaurant/tables/:id/session', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const session = await restaurantRepo.getActiveSessionForTable(tenantId, req.params.id);
@@ -2756,7 +2768,7 @@ apiRouter.get('/restaurant/tables/:id/session', authenticate, requireNonProfessi
   }
 });
 
-apiRouter.post('/restaurant/tables/:id/close-session', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/restaurant/tables/:id/close-session', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const result = await restaurantRepo.closeSession(
@@ -2772,7 +2784,7 @@ apiRouter.post('/restaurant/tables/:id/close-session', authenticate, requireNonP
   }
 });
 
-apiRouter.post('/restaurant/tables/:id/cancel-closing', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/restaurant/tables/:id/cancel-closing', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const session = await restaurantRepo.cancelSessionClosing(tenantId, req.params.id, req.user!);
@@ -2783,7 +2795,7 @@ apiRouter.post('/restaurant/tables/:id/cancel-closing', authenticate, requireNon
 });
 
 // Fee Templates Management
-apiRouter.get('/restaurant/fees', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/restaurant/fees', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const templates = await restaurantRepo.listFeeTemplates(tenantId);
@@ -2793,7 +2805,7 @@ apiRouter.get('/restaurant/fees', authenticate, requireNonProfessional, async (r
   }
 });
 
-apiRouter.post('/restaurant/fees', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/restaurant/fees', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const template = await restaurantRepo.createFeeTemplate(tenantId, req.body, req.user!);
@@ -2803,7 +2815,7 @@ apiRouter.post('/restaurant/fees', authenticate, requireNonProfessional, async (
   }
 });
 
-apiRouter.put('/restaurant/fees/:id', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.put('/restaurant/fees/:id', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const template = await restaurantRepo.updateFeeTemplate(req.params.id, tenantId, req.body, req.user!);
@@ -2813,7 +2825,7 @@ apiRouter.put('/restaurant/fees/:id', authenticate, requireNonProfessional, asyn
   }
 });
 
-apiRouter.delete('/restaurant/fees/:id', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.delete('/restaurant/fees/:id', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     await restaurantRepo.deleteFeeTemplate(req.params.id, tenantId, req.user!);
@@ -2824,7 +2836,7 @@ apiRouter.delete('/restaurant/fees/:id', authenticate, requireNonProfessional, a
 });
 
 // Session Fees Management
-apiRouter.get('/restaurant/sessions/:sessionId/fees', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/restaurant/sessions/:sessionId/fees', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const fees = await restaurantRepo.getSessionFees(tenantId, req.params.sessionId);
@@ -2834,7 +2846,7 @@ apiRouter.get('/restaurant/sessions/:sessionId/fees', authenticate, requireNonPr
   }
 });
 
-apiRouter.post('/restaurant/sessions/:sessionId/fees', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/restaurant/sessions/:sessionId/fees', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const fee = await restaurantRepo.addFeeToSession(tenantId, req.params.sessionId, req.body, req.user!);
@@ -2844,7 +2856,7 @@ apiRouter.post('/restaurant/sessions/:sessionId/fees', authenticate, requireNonP
   }
 });
 
-apiRouter.delete('/restaurant/sessions/:sessionId/fees/:feeId', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.delete('/restaurant/sessions/:sessionId/fees/:feeId', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     await restaurantRepo.removeFeeFromSession(tenantId, req.params.sessionId, req.params.feeId, req.user!);
@@ -2855,7 +2867,7 @@ apiRouter.delete('/restaurant/sessions/:sessionId/fees/:feeId', authenticate, re
 });
 
 // Orders Management
-apiRouter.get('/restaurant/orders', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/restaurant/orders', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const orders = await restaurantRepo.listOrders(tenantId, {
@@ -2871,7 +2883,7 @@ apiRouter.get('/restaurant/orders', authenticate, requireNonProfessional, async 
   }
 });
 
-apiRouter.get('/restaurant/orders/:id', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/restaurant/orders/:id', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const order = await restaurantRepo.getOrderById(tenantId, req.params.id);
@@ -2882,7 +2894,7 @@ apiRouter.get('/restaurant/orders/:id', authenticate, requireNonProfessional, as
   }
 });
 
-apiRouter.put('/restaurant/orders/:id/status', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.put('/restaurant/orders/:id/status', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const { status, notes } = req.body;
@@ -2894,7 +2906,7 @@ apiRouter.put('/restaurant/orders/:id/status', authenticate, requireNonProfessio
   }
 });
 
-apiRouter.post('/restaurant/orders/:id/cancel', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/restaurant/orders/:id/cancel', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const { reason } = req.body;
@@ -2905,7 +2917,7 @@ apiRouter.post('/restaurant/orders/:id/cancel', authenticate, requireNonProfessi
   }
 });
 
-apiRouter.put('/restaurant/orders/:id', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.put('/restaurant/orders/:id', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const updated = await restaurantRepo.updateRestaurantOrder(tenantId, req.params.id, req.body, req.user!);
@@ -2915,7 +2927,7 @@ apiRouter.put('/restaurant/orders/:id', authenticate, requireNonProfessional, as
   }
 });
 
-apiRouter.delete('/restaurant/orders/:id', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.delete('/restaurant/orders/:id', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     await restaurantRepo.deleteRestaurantOrder(tenantId, req.params.id, req.user!);
@@ -2925,7 +2937,7 @@ apiRouter.delete('/restaurant/orders/:id', authenticate, requireNonProfessional,
   }
 });
 
-apiRouter.get('/restaurant/summary', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/restaurant/summary', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const summary = await restaurantRepo.getRestaurantSummary(tenantId);
@@ -3006,7 +3018,7 @@ apiRouter.post('/admin/orders/:id/financials', authenticate, requireNonProfessio
 });
 
 // 4. Update Table Session Financials & Partial/Split Payments
-apiRouter.post('/restaurant/sessions/:sessionId/financials', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/restaurant/sessions/:sessionId/financials', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const result = await restaurantAnalyticsService.updateSessionFinancialsAndPayments(
@@ -3026,7 +3038,7 @@ apiRouter.post('/restaurant/sessions/:sessionId/financials', authenticate, requi
 });
 
 // 5. Enriched Tables Monitoring Overview (5 Operational Visual States + Period Performance)
-apiRouter.get('/admin/tables/overview', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/admin/tables/overview', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const q = req.query;

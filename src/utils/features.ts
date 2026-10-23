@@ -132,11 +132,36 @@ export function isFeatureActive(
     return tenant.featureOverrides[featureKey] as boolean;
   }
 
-  if (plan && plan.includedFeatures) {
+  if (plan && Array.isArray(plan.includedFeatures)) {
     return plan.includedFeatures.includes(featureKey);
   }
 
   return false;
+}
+
+/**
+ * Centralized multi-tenant feature authorization resolver.
+ * Enforces strict precedence:
+ * 1. Explicit Super Admin override in tenant.featureOverrides[featureKey] (true or false)
+ * 2. Server-computed resolvedFeatures[featureKey] (which already applies tenant_features over plan_features)
+ * 3. Plan inheritance (plan.includedFeatures) ONLY when no explicit override exists
+ * 4. Default: false (never falls back to unrelated features such as 'products')
+ */
+export function isTenantFeatureEnabled(
+  featureKey: FeatureKey,
+  resolvedFeatures?: Partial<Record<FeatureKey, boolean>> | null,
+  tenant?: Tenant | null,
+  plan?: Plan | null
+): boolean {
+  if (tenant?.featureOverrides && typeof tenant.featureOverrides[featureKey] === 'boolean') {
+    return tenant.featureOverrides[featureKey] as boolean;
+  }
+
+  if (resolvedFeatures && typeof resolvedFeatures[featureKey] === 'boolean') {
+    return resolvedFeatures[featureKey] as boolean;
+  }
+
+  return isFeatureActive(tenant, plan, featureKey);
 }
 
 /**

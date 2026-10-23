@@ -1,17 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Plan, Tenant } from '../../types/saas';
 import { StatusBadge } from '../common/Badge';
-import { SYSTEM_FEATURES, isFeatureActive } from '../../utils/features';
+import { isTenantFeatureEnabled } from '../../utils/features';
 import { getPublicStoreUrl } from '../../utils/url';
 import { useAuth } from '../../context/AuthContext';
 import {
   Globe,
-  CheckCircle2,
-  Clock,
-  Sparkles,
-  ArrowRight,
-  Palette,
-  Building2,
   ExternalLink,
   Check,
   Copy,
@@ -21,7 +15,6 @@ import {
   Receipt,
   BellRing,
   TrendingUp,
-  AlertTriangle,
   ChevronRight,
 } from 'lucide-react';
 import { api } from '../../services/api';
@@ -41,6 +34,12 @@ export const ClientHomeView: React.FC<ClientHomeViewProps> = ({
   const { resolvedFeatures } = useAuth();
   const currentPlan = plans.find((p) => p.id === tenant.planId);
   const [copied, setCopied] = useState(false);
+
+  // Centralized feature flags
+  const hasRestaurantCatalog = isTenantFeatureEnabled('restaurant_tables', resolvedFeatures, tenant, currentPlan);
+  const hasShoppingCart = isTenantFeatureEnabled('shopping_cart', resolvedFeatures, tenant, currentPlan);
+  const hasProducts = isTenantFeatureEnabled('products', resolvedFeatures, tenant, currentPlan);
+  const hasOrdersAccess = hasShoppingCart || hasRestaurantCatalog;
 
   // Live operational and financial indicators
   const [dashboardData, setDashboardData] = useState<FinancialDashboardResponse | null>(null);
@@ -62,7 +61,9 @@ export const ClientHomeView: React.FC<ClientHomeViewProps> = ({
         setLoadingMetrics(true);
         const [dash, tables] = await Promise.all([
           api.getFinancialDashboard({ period: 'today' }).catch(() => null),
-          api.getEnrichedTablesOverview({ period: 'today' }).catch(() => null),
+          hasRestaurantCatalog
+            ? api.getEnrichedTablesOverview({ period: 'today' }).catch(() => null)
+            : Promise.resolve(null),
         ]);
         if (isMounted) {
           setDashboardData(dash);
@@ -79,22 +80,96 @@ export const ClientHomeView: React.FC<ClientHomeViewProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [tenant.id]);
+  }, [tenant.id, hasRestaurantCatalog]);
 
-  const closingTables = (tablesOverview?.tables || []).filter((t) => t.visualState === 'closing');
-  const preparingTables = (tablesOverview?.tables || []).filter((t) => t.visualState === 'preparing');
-  const pendingOrders = (dashboardData?.reportOrders || []).filter(
-    (r: any) =>
-      r.operationalStatus === 'received' ||
-      r.operationalStatus === 'confirmed' ||
-      r.operationalStatus === 'NEW' ||
-      r.operationalStatus === 'CONFIRMED'
-  );
+  const closingTables = hasRestaurantCatalog
+    ? (tablesOverview?.tables || []).filter((t) => t.visualState === 'closing')
+    : [];
+  const preparingTables = hasRestaurantCatalog
+    ? (tablesOverview?.tables || []).filter((t) => t.visualState === 'preparing')
+    : [];
+  const pendingOrders = hasOrdersAccess
+    ? (dashboardData?.reportOrders || []).filter(
+        (r: any) =>
+          r.operationalStatus === 'received' ||
+          r.operationalStatus === 'confirmed' ||
+          r.operationalStatus === 'NEW' ||
+          r.operationalStatus === 'CONFIRMED'
+      )
+    : [];
 
   const formatMoney = (val: number | null | undefined) =>
     `R$ ${Number(val || 0)
       .toFixed(2)
       .replace('.', ',')}`;
+
+  const quickLinks = [
+    {
+      key: 'home',
+      baseLabel: 'Visão Geral',
+      subtitle: 'Resumo do dia',
+      icon: TrendingUp,
+      iconBg: 'bg-indigo-50 text-indigo-600',
+      hoverText: 'group-hover:text-indigo-600',
+      active: true,
+      enabled: true,
+    },
+    {
+      key: 'orders',
+      baseLabel: 'Pedidos',
+      subtitle: 'Filtros & entregas',
+      icon: ShoppingBag,
+      iconBg: 'bg-blue-50 text-blue-600',
+      hoverText: 'group-hover:text-blue-600',
+      active: false,
+      enabled: hasOrdersAccess,
+    },
+    {
+      key: 'restaurant',
+      baseLabel: 'Mesas',
+      subtitle: '5 estados & comandas',
+      icon: UtensilsCrossed,
+      iconBg: 'bg-amber-50 text-amber-600',
+      hoverText: 'group-hover:text-amber-600',
+      active: false,
+      enabled: hasRestaurantCatalog,
+    },
+    {
+      key: 'financial',
+      baseLabel: 'Financeiro',
+      subtitle: 'KPIs & 6 gráficos',
+      icon: DollarSign,
+      iconBg: 'bg-emerald-50 text-emerald-600',
+      hoverText: 'group-hover:text-emerald-600',
+      active: false,
+      enabled: true,
+    },
+    {
+      key: 'top_products',
+      baseLabel: 'Mais Vendidos',
+      subtitle: 'Ranking de itens',
+      icon: ShoppingBag,
+      iconBg: 'bg-purple-50 text-purple-600',
+      hoverText: 'group-hover:text-purple-600',
+      active: false,
+      enabled: hasProducts || hasOrdersAccess,
+    },
+    {
+      key: 'reports',
+      baseLabel: 'Relatórios',
+      subtitle: 'Exportações CSV',
+      icon: Receipt,
+      iconBg: 'bg-slate-100 text-slate-700',
+      hoverText: 'group-hover:text-indigo-600',
+      active: false,
+      enabled: true,
+    },
+  ]
+    .filter((item) => item.enabled)
+    .map((item, idx) => ({
+      ...item,
+      label: `${idx + 1}. ${item.baseLabel}`,
+    }));
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -135,7 +210,7 @@ export const ClientHomeView: React.FC<ClientHomeViewProps> = ({
                 className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-xs transition-colors"
               >
                 <ExternalLink className="w-3 h-3" />
-                <span>Ver Cardápio Público</span>
+                <span>Ver Página Pública</span>
               </a>
             </div>
           </div>
@@ -149,8 +224,8 @@ export const ClientHomeView: React.FC<ClientHomeViewProps> = ({
         </div>
       </div>
 
-      {/* Real-Time Restaurant Action Banners (Tables / Orders needing attention) */}
-      {closingTables.length > 0 && (
+      {/* Real-Time Restaurant Action Banners (Tables needing attention — only if restaurant_tables is enabled) */}
+      {hasRestaurantCatalog && closingTables.length > 0 && (
         <div className="p-4 sm:p-5 bg-gradient-to-r from-amber-500 via-orange-500 to-rose-600 rounded-3xl text-white shadow-lg flex items-center justify-between gap-4 animate-in slide-in-from-top-2">
           <div className="flex items-center gap-3.5">
             <div className="w-11 h-11 rounded-2xl bg-white text-orange-600 flex items-center justify-center font-black shadow-md shrink-0">
@@ -178,107 +253,37 @@ export const ClientHomeView: React.FC<ClientHomeViewProps> = ({
         </div>
       )}
 
-      {/* Main 6 Restaurant Management Areas Quick Links */}
+      {/* Main Management Areas Quick Links (strictly filtered by active tenant features) */}
       <div className="space-y-2">
         <h2 className="text-xs font-extrabold text-slate-400 uppercase tracking-wider px-1">
           Áreas de Gestão Operacional & Financeira
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <button
-            type="button"
-            onClick={() => onNavigateTab('home')}
-            className="p-4 bg-white rounded-2xl border-2 border-indigo-600 shadow-xs flex flex-col justify-between text-left hover:bg-indigo-50/20 transition-all cursor-pointer group"
-          >
-            <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold mb-3">
-              <TrendingUp className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="font-black text-xs text-slate-900 group-hover:text-indigo-600 block">
-                1. Visão Geral
-              </span>
-              <span className="text-[10px] text-slate-400 mt-0.5 block">Resumo do dia</span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onNavigateTab('orders')}
-            className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between text-left hover:border-slate-300 hover:bg-slate-50 transition-all cursor-pointer group"
-          >
-            <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold mb-3">
-              <ShoppingBag className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="font-black text-xs text-slate-900 group-hover:text-blue-600 block">
-                2. Pedidos
-              </span>
-              <span className="text-[10px] text-slate-400 mt-0.5 block">Filtros & entregas</span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onNavigateTab('restaurant')}
-            className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between text-left hover:border-slate-300 hover:bg-slate-50 transition-all cursor-pointer group"
-          >
-            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold mb-3">
-              <UtensilsCrossed className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="font-black text-xs text-slate-900 group-hover:text-amber-600 block">
-                3. Mesas
-              </span>
-              <span className="text-[10px] text-slate-400 mt-0.5 block">5 estados & comandas</span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onNavigateTab('financial')}
-            className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between text-left hover:border-slate-300 hover:bg-slate-50 transition-all cursor-pointer group"
-          >
-            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold mb-3">
-              <DollarSign className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="font-black text-xs text-slate-900 group-hover:text-emerald-600 block">
-                4. Financeiro
-              </span>
-              <span className="text-[10px] text-slate-400 mt-0.5 block">KPIs & 6 gráficos</span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onNavigateTab('top_products')}
-            className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between text-left hover:border-slate-300 hover:bg-slate-50 transition-all cursor-pointer group"
-          >
-            <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold mb-3">
-              <ShoppingBag className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="font-black text-xs text-slate-900 group-hover:text-purple-600 block">
-                5. Mais Vendidos
-              </span>
-              <span className="text-[10px] text-slate-400 mt-0.5 block">Ranking de pratos</span>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onNavigateTab('reports')}
-            className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between text-left hover:border-slate-300 hover:bg-slate-50 transition-all cursor-pointer group"
-          >
-            <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center font-bold mb-3">
-              <Receipt className="w-5 h-5" />
-            </div>
-            <div>
-              <span className="font-black text-xs text-slate-900 group-hover:text-indigo-600 block">
-                6. Relatórios
-              </span>
-              <span className="text-[10px] text-slate-400 mt-0.5 block">Exportações CSV</span>
-            </div>
-          </button>
+          {quickLinks.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => onNavigateTab(item.key)}
+                className={
+                  item.active
+                    ? 'p-4 bg-white rounded-2xl border-2 border-indigo-600 shadow-xs flex flex-col justify-between text-left hover:bg-indigo-50/20 transition-all cursor-pointer group'
+                    : 'p-4 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between text-left hover:border-slate-300 hover:bg-slate-50 transition-all cursor-pointer group'
+                }
+              >
+                <div className={`w-9 h-9 rounded-xl ${item.iconBg} flex items-center justify-center font-bold mb-3`}>
+                  <Icon className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className={`font-black text-xs text-slate-900 ${item.hoverText} block`}>
+                    {item.label}
+                  </span>
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">{item.subtitle}</span>
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -298,7 +303,7 @@ export const ClientHomeView: React.FC<ClientHomeViewProps> = ({
           </button>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+        <div className={`grid grid-cols-2 ${hasRestaurantCatalog ? 'sm:grid-cols-4' : 'sm:grid-cols-2'} gap-3.5`}>
           <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs">
             <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">
               Faturamento Hoje
@@ -321,131 +326,141 @@ export const ClientHomeView: React.FC<ClientHomeViewProps> = ({
             <span className="text-[11px] text-emerald-700">Confirmado no caixa</span>
           </div>
 
-          <div className="bg-amber-50/70 p-4 rounded-3xl border border-amber-200 shadow-xs">
-            <span className="text-[10px] font-extrabold text-amber-800 uppercase tracking-wider block">
-              Contas & Saldo Aberto
-            </span>
-            <div className="text-xl font-black text-amber-950 mt-1">
-              {formatMoney(tablesOverview?.summary?.totalPendingInOpenSessions || 0)}
-            </div>
-            <span className="text-[11px] text-amber-800">
-              Total em consumo: {formatMoney(tablesOverview?.summary?.totalOpenAmount || 0)}
-            </span>
-          </div>
+          {hasRestaurantCatalog && (
+            <>
+              <div className="bg-amber-50/70 p-4 rounded-3xl border border-amber-200 shadow-xs">
+                <span className="text-[10px] font-extrabold text-amber-800 uppercase tracking-wider block">
+                  Contas & Saldo Aberto
+                </span>
+                <div className="text-xl font-black text-amber-950 mt-1">
+                  {formatMoney(tablesOverview?.summary?.totalPendingInOpenSessions || 0)}
+                </div>
+                <span className="text-[11px] text-amber-800">
+                  Total em consumo: {formatMoney(tablesOverview?.summary?.totalOpenAmount || 0)}
+                </span>
+              </div>
 
-          <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs">
-            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">
-              Mesas Ocupadas
-            </span>
-            <div className="text-xl font-black text-slate-900 mt-1">
-              {(tablesOverview?.summary?.occupiedTables || 0) +
-                (tablesOverview?.summary?.preparingCount || 0) +
-                (tablesOverview?.summary?.awaitingPaymentCount || 0) +
-                (tablesOverview?.summary?.closingCount || 0)}{' '}
-              / {tablesOverview?.summary?.totalTables || 0}
-            </div>
-            <span className="text-[11px] text-slate-500">
-              {tablesOverview?.summary?.freeTables || tablesOverview?.summary?.freeCount || 0} livres para clientes
-            </span>
-          </div>
+              <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs">
+                <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">
+                  Mesas Ocupadas
+                </span>
+                <div className="text-xl font-black text-slate-900 mt-1">
+                  {(tablesOverview?.summary?.occupiedTables || 0) +
+                    (tablesOverview?.summary?.preparingCount || 0) +
+                    (tablesOverview?.summary?.awaitingPaymentCount || 0) +
+                    (tablesOverview?.summary?.closingCount || 0)}{' '}
+                  / {tablesOverview?.summary?.totalTables || 0}
+                </div>
+                <span className="text-[11px] text-slate-500">
+                  {tablesOverview?.summary?.freeTables || tablesOverview?.summary?.freeCount || 0} livres para clientes
+                </span>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Quick Attention Orders & Tables section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Mesas que precisam de atenção */}
-        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-black text-sm text-slate-900 flex items-center gap-2">
-              <UtensilsCrossed className="w-4 h-4 text-amber-600" />
-              <span>Mesas que Precisam de Atenção</span>
-            </h3>
-            <button
-              type="button"
-              onClick={() => onNavigateTab('restaurant')}
-              className="text-xs font-bold text-indigo-600 hover:underline cursor-pointer"
-            >
-              Ver Salão
-            </button>
-          </div>
-
-          {closingTables.length === 0 && preparingTables.length === 0 ? (
-            <div className="p-8 text-center text-slate-400 text-xs">
-              Todas as mesas estão em dia ou disponíveis.
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {[...closingTables, ...preparingTables].slice(0, 5).map((t) => (
-                <div
-                  key={t.id}
+      {/* Quick Attention Orders & Tables section (strictly filtered by active features) */}
+      {(hasRestaurantCatalog || hasOrdersAccess) && (
+        <div className={`grid grid-cols-1 ${hasRestaurantCatalog && hasOrdersAccess ? 'md:grid-cols-2' : ''} gap-4`}>
+          {/* Mesas que precisam de atenção */}
+          {hasRestaurantCatalog && (
+            <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-black text-sm text-slate-900 flex items-center gap-2">
+                  <UtensilsCrossed className="w-4 h-4 text-amber-600" />
+                  <span>Mesas que Precisam de Atenção</span>
+                </h3>
+                <button
+                  type="button"
                   onClick={() => onNavigateTab('restaurant')}
-                  className="p-3 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-colors flex items-center justify-between cursor-pointer"
+                  className="text-xs font-bold text-indigo-600 hover:underline cursor-pointer"
                 >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <strong className="text-slate-900">Mesa {t.tableNumber}</strong>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
-                        {t.visualStateLabel}
+                  Ver Salão
+                </button>
+              </div>
+
+              {closingTables.length === 0 && preparingTables.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-xs">
+                  Todas as mesas estão em dia ou disponíveis.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {[...closingTables, ...preparingTables].slice(0, 5).map((t) => (
+                    <div
+                      key={t.id}
+                      onClick={() => onNavigateTab('restaurant')}
+                      className="p-3 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-colors flex items-center justify-between cursor-pointer"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <strong className="text-slate-900">Mesa {t.tableNumber}</strong>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
+                            {t.visualStateLabel}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-slate-500">
+                          Consumo: {formatMoney(t.activeSession?.totalAmount)} • Falta:{' '}
+                          {formatMoney(t.activeSession?.pendingAmount)}
+                        </span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-400" />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Pedidos em andamento */}
+          {hasOrdersAccess && (
+            <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-black text-sm text-slate-900 flex items-center gap-2">
+                  <ShoppingBag className="w-4 h-4 text-blue-600" />
+                  <span>Pedidos em Andamento Hoje</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => onNavigateTab('orders')}
+                  className="text-xs font-bold text-indigo-600 hover:underline cursor-pointer"
+                >
+                  Ver Pedidos
+                </button>
+              </div>
+
+              {pendingOrders.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 text-xs">
+                  Nenhum novo pedido pendente no momento.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {pendingOrders.slice(0, 5).map((ord: any) => (
+                    <div
+                      key={ord.id || ord.orderId}
+                      onClick={() => onNavigateTab('orders')}
+                      className="p-3 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-colors flex items-center justify-between cursor-pointer"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <strong className="text-slate-900">{ord.displayCode}</strong>
+                          <span className="text-[11px] text-slate-600">({ord.customerName})</span>
+                        </div>
+                        <span className="text-[11px] text-slate-500">
+                          {ord.fulfillmentLabel} • {formatMoney(ord.total)}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-900">
+                        {ord.operationalStatusLabel}
                       </span>
                     </div>
-                    <span className="text-[11px] text-slate-500">
-                      Consumo: {formatMoney(t.activeSession?.totalAmount)} • Falta:{' '}
-                      {formatMoney(t.activeSession?.pendingAmount)}
-                    </span>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-slate-400" />
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           )}
         </div>
-
-        {/* Pedidos em andamento */}
-        <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-black text-sm text-slate-900 flex items-center gap-2">
-              <ShoppingBag className="w-4 h-4 text-blue-600" />
-              <span>Pedidos em Andamento Hoje</span>
-            </h3>
-            <button
-              type="button"
-              onClick={() => onNavigateTab('orders')}
-              className="text-xs font-bold text-indigo-600 hover:underline cursor-pointer"
-            >
-              Ver Pedidos
-            </button>
-          </div>
-
-          {pendingOrders.length === 0 ? (
-            <div className="p-8 text-center text-slate-400 text-xs">
-              Nenhum novo pedido pendente no momento.
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {pendingOrders.slice(0, 5).map((ord: any) => (
-                <div
-                  key={ord.id || ord.orderId}
-                  onClick={() => onNavigateTab('orders')}
-                  className="p-3 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-colors flex items-center justify-between cursor-pointer"
-                >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <strong className="text-slate-900">{ord.displayCode}</strong>
-                      <span className="text-[11px] text-slate-600">({ord.customerName})</span>
-                    </div>
-                    <span className="text-[11px] text-slate-500">
-                      {ord.fulfillmentLabel} • {formatMoney(ord.total)}
-                    </span>
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-900">
-                    {ord.operationalStatusLabel}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      )}
     </div>
   );
 };

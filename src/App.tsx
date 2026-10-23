@@ -29,7 +29,7 @@ import { FinancialDashboardView } from './components/financial/FinancialDashboar
 import { api } from './services/api';
 import { Plan, Tenant, TenantStatus } from './types/saas';
 import { SiteData } from './types/site';
-import { isFeatureActive } from './utils/features';
+import { isFeatureActive, isTenantFeatureEnabled } from './utils/features';
 import { Building2, ArrowLeft, Loader2, AlertCircle, LogOut, ShieldCheck, RefreshCw } from 'lucide-react';
 
 // Reserved paths that should never be treated as store slugs
@@ -213,6 +213,7 @@ const AppContent: React.FC = () => {
   const navigateClientTab = (tab: string, replace = false) => {
     const targetTab = isProfessional ? 'appointments' : tab;
     setClientTab(targetTab);
+    refreshSession();
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       params.set('tab', targetTab);
@@ -544,7 +545,10 @@ const AppContent: React.FC = () => {
                 navigateSelectTenant(null);
               }
             }}
-            onTenantUpdated={loadGlobalData}
+            onTenantUpdated={() => {
+              loadGlobalData();
+              refreshSession();
+            }}
             onTenantDeleted={() => {
               navigateSelectTenant(null);
               loadGlobalData();
@@ -664,40 +668,13 @@ const AppContent: React.FC = () => {
     }
 
     const currentPlan = plans.find((p) => p.id === tenant.planId);
-    const hasSiteEditor =
-      resolvedFeatures && resolvedFeatures.site_editor !== undefined
-        ? resolvedFeatures.site_editor
-        : isFeatureActive(tenant, currentPlan, 'site_editor');
-
-    const hasProducts =
-      resolvedFeatures && resolvedFeatures.products !== undefined
-        ? resolvedFeatures.products
-        : isFeatureActive(tenant, currentPlan, 'products');
-
-    const hasShoppingCart =
-      resolvedFeatures && resolvedFeatures.shopping_cart !== undefined
-        ? resolvedFeatures.shopping_cart
-        : isFeatureActive(tenant, currentPlan, 'shopping_cart');
-
-    const hasServices =
-      resolvedFeatures && resolvedFeatures.services !== undefined
-        ? resolvedFeatures.services
-        : isFeatureActive(tenant, currentPlan, 'services');
-
-    const hasProfessionals =
-      resolvedFeatures && resolvedFeatures.professionals !== undefined
-        ? resolvedFeatures.professionals
-        : isFeatureActive(tenant, currentPlan, 'professionals');
-
-    const hasAppointments =
-      resolvedFeatures && resolvedFeatures.appointments !== undefined
-        ? resolvedFeatures.appointments
-        : isFeatureActive(tenant, currentPlan, 'appointments');
-
-    const hasRestaurantCatalog =
-      resolvedFeatures && resolvedFeatures.restaurant_tables !== undefined
-        ? resolvedFeatures.restaurant_tables
-        : isFeatureActive(tenant, currentPlan, 'restaurant_tables');
+    const hasSiteEditor = isTenantFeatureEnabled('site_editor', resolvedFeatures, tenant, currentPlan);
+    const hasProducts = isTenantFeatureEnabled('products', resolvedFeatures, tenant, currentPlan);
+    const hasShoppingCart = isTenantFeatureEnabled('shopping_cart', resolvedFeatures, tenant, currentPlan);
+    const hasServices = isTenantFeatureEnabled('services', resolvedFeatures, tenant, currentPlan);
+    const hasProfessionals = isTenantFeatureEnabled('professionals', resolvedFeatures, tenant, currentPlan);
+    const hasAppointments = isTenantFeatureEnabled('appointments', resolvedFeatures, tenant, currentPlan);
+    const hasRestaurantCatalog = isTenantFeatureEnabled('restaurant_tables', resolvedFeatures, tenant, currentPlan);
 
     return (
       <ClientLayout
@@ -775,16 +752,16 @@ const AppContent: React.FC = () => {
 
         {/* Orders & Shopping Cart Module */}
         {(clientTab === 'orders' || clientTab === 'shopping_cart') && (
-          hasShoppingCart ? (
+          (hasShoppingCart || hasRestaurantCatalog) ? (
             <OrdersManager tenant={tenant} />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-600 bg-white m-6 rounded-3xl border border-slate-200">
               <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-4">
                 <AlertCircle className="w-8 h-8" />
               </div>
-              <h3 className="text-lg font-bold text-slate-900 mb-1">Recurso não disponível no seu plano</h3>
+              <h3 className="text-lg font-bold text-slate-900 mb-1">Módulo de Pedidos desativado</h3>
               <p className="text-xs text-slate-500 max-w-sm mb-6">
-                O módulo de pedidos e vendas (shopping_cart) não está ativo no plano atual da sua empresa. Entre em contato com a administração para realizar o upgrade.
+                O módulo de pedidos e vendas (shopping_cart) está desativado para a sua empresa. Entre em contato com a administração da plataforma caso deseje habilitá-lo.
               </p>
               <button
                 onClick={() => navigateClientTab('home')}
@@ -796,18 +773,18 @@ const AppContent: React.FC = () => {
           )
         )}
 
-        {/* Restaurant Digital Catalog Module */}
+        {/* Restaurant Digital Catalog & Tables Module — STRICTLY requires restaurant_tables (never falls back to hasProducts) */}
         {(clientTab === 'restaurant' || clientTab === 'catalogo_digital') && (
-          (hasRestaurantCatalog || hasProducts) ? (
+          hasRestaurantCatalog ? (
             <RestaurantManager tenant={tenant} />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-600 bg-white m-6 rounded-3xl border border-slate-200">
               <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-4">
                 <AlertCircle className="w-8 h-8" />
               </div>
-              <h3 className="text-lg font-bold text-slate-900 mb-1">Módulo de Catálogo Digital não disponível</h3>
+              <h3 className="text-lg font-bold text-slate-900 mb-1">Módulo de Mesas & Salão desativado</h3>
               <p className="text-xs text-slate-500 max-w-sm mb-6">
-                O recurso de catálogo digital para mesas (restaurant_tables) não está ativo no plano atual da sua empresa. Entre em contato com a administração para realizar o upgrade.
+                A funcionalidade Catálogo Digital & Mesas (restaurant_tables) está desativada para a sua empresa pelo administrador da plataforma.
               </p>
               <button
                 onClick={() => navigateClientTab('home')}

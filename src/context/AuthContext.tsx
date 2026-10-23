@@ -145,8 +145,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const refreshSession = async () => {
+  const lastRefreshRef = React.useRef<number>(0);
+
+  const refreshSession = React.useCallback(async () => {
     try {
+      const token = api.getToken();
+      if (!token) return;
+      lastRefreshRef.current = Date.now();
       const session = await api.getCurrentSession();
       if (session?.user) {
         setUser(session.user);
@@ -161,7 +166,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {
       console.error('Failed to refresh session:', e);
     }
-  };
+  }, []);
+
+  // Automatically sync tenant features and session when window regains focus or tab becomes visible
+  useEffect(() => {
+    if (!user) return;
+
+    const handleAutoRefresh = () => {
+      const now = Date.now();
+      if (now - lastRefreshRef.current > 2000) {
+        refreshSession();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        handleAutoRefresh();
+      }
+    };
+
+    window.addEventListener('focus', handleAutoRefresh);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('localhub:refresh-session', handleAutoRefresh);
+
+    // Periodic lightweight sync every 30s while tab is visible so live Super Admin overrides propagate automatically
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        refreshSession();
+      }
+    }, 30000);
+
+    return () => {
+      window.removeEventListener('focus', handleAutoRefresh);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('localhub:refresh-session', handleAutoRefresh);
+      window.clearInterval(intervalId);
+    };
+  }, [user, refreshSession]);
 
   return (
     <AuthContext.Provider

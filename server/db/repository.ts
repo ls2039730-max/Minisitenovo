@@ -11,6 +11,7 @@ import {
   AuditLog,
 } from '../../src/types/saas.js';
 import { validateSlug } from '../tenantResolver.js';
+import { SYSTEM_FEATURES } from '../../src/utils/features.js';
 
 export class SaasRepository {
   private userSessionCache = new Map<string, { user: User; expiresAt: number }>();
@@ -1334,7 +1335,7 @@ export class SaasRepository {
       .select('feature_key')
       .eq('plan_id', tenant.plan_id);
 
-    const planSet = new Set(pfList?.map((p: any) => p.feature_key) || []);
+    const planSet = new Set<string>(pfList?.map((p: any) => String(p.feature_key)) || []);
 
     const { data: tfList } = await supabaseAdmin
       .from('tenant_features')
@@ -1342,16 +1343,32 @@ export class SaasRepository {
       .eq('tenant_id', tenantId);
 
     const overrideMap = new Map<string, boolean>();
-    tfList?.forEach((t: any) => overrideMap.set(t.feature_key, t.is_enabled));
+    tfList?.forEach((t: any) => {
+      if (typeof t.is_enabled === 'boolean') {
+        overrideMap.set(String(t.feature_key), t.is_enabled);
+      }
+    });
 
     const { data: allFeats } = await supabaseAdmin.from('features').select('key');
+    const allFeatureKeys = new Set<string>(SYSTEM_FEATURES.map((f) => f.key));
+    allFeats?.forEach((f: any) => {
+      if (f?.key) allFeatureKeys.add(String(f.key));
+    });
+    planSet.forEach((k) => {
+      if (k) allFeatureKeys.add(k);
+    });
+    overrideMap.forEach((_v, k) => {
+      if (k) allFeatureKeys.add(k);
+    });
+
     const result: Record<string, boolean> = {};
 
-    allFeats?.forEach((f: any) => {
-      if (overrideMap.has(f.key)) {
-        result[f.key] = overrideMap.get(f.key)!;
+    allFeatureKeys.forEach((key) => {
+      // Strict precedence: Explicit Super Admin override in tenant_features ALWAYS prevails over plan_features
+      if (overrideMap.has(key)) {
+        result[key] = overrideMap.get(key)!;
       } else {
-        result[f.key] = planSet.has(f.key);
+        result[key] = planSet.has(key);
       }
     });
 

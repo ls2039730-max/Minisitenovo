@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Plan, FeatureKey } from '../../types/saas';
-import { isFeatureActive } from '../../utils/features';
+import { isTenantFeatureEnabled } from '../../utils/features';
 import {
   Home,
   Building2,
@@ -43,7 +43,7 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({
   plans,
   children,
 }) => {
-  const { user, tenant, logout, isImpersonating, exitImpersonation, resolvedFeatures, isProfessional, linkedProfessional } = useAuth();
+  const { user, tenant, logout, isImpersonating, exitImpersonation, resolvedFeatures, isProfessional, linkedProfessional, refreshSession } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Close mobile sidebar first when Back is pressed
@@ -56,57 +56,40 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({
 
   const currentPlan = plans.find((p) => p.id === tenant?.planId);
 
-  // Feature check for site_editor
-  const hasSiteEditor = !isProfessional && (
-    resolvedFeatures && resolvedFeatures.site_editor !== undefined
-      ? resolvedFeatures.site_editor
-      : isFeatureActive(tenant, currentPlan, 'site_editor'));
-
-  // Feature check for products
-  const hasProducts = !isProfessional && (
-    resolvedFeatures && resolvedFeatures.products !== undefined
-      ? resolvedFeatures.products
-      : isFeatureActive(tenant, currentPlan, 'products'));
-
-  // Feature check for shopping cart (orders module)
-  const hasShoppingCart = !isProfessional && (
-    resolvedFeatures && resolvedFeatures.shopping_cart !== undefined
-      ? resolvedFeatures.shopping_cart
-      : isFeatureActive(tenant, currentPlan, 'shopping_cart'));
-
-  // Feature check for services
-  const hasServices = !isProfessional && (
-    resolvedFeatures && resolvedFeatures.services !== undefined
-      ? resolvedFeatures.services
-      : isFeatureActive(tenant, currentPlan, 'services'));
-
-  // Feature check for professionals
-  const hasProfessionals = !isProfessional && (
-    resolvedFeatures && resolvedFeatures.professionals !== undefined
-      ? resolvedFeatures.professionals
-      : isFeatureActive(tenant, currentPlan, 'professionals'));
-
-  // Feature check for appointments
-  const hasAppointments =
-    resolvedFeatures && resolvedFeatures.appointments !== undefined
-      ? resolvedFeatures.appointments
-      : isFeatureActive(tenant, currentPlan, 'appointments');
-
-  // Feature check for restaurant digital catalog & tables
-  const hasRestaurantCatalog = !isProfessional && (
-    resolvedFeatures && resolvedFeatures.restaurant_tables !== undefined
-      ? resolvedFeatures.restaurant_tables
-      : isFeatureActive(tenant, currentPlan, 'restaurant_tables'));
+  // Centralized feature resolution (Super Admin override > server resolvedFeatures > plan > false)
+  const hasSiteEditor = !isProfessional && isTenantFeatureEnabled('site_editor', resolvedFeatures, tenant, currentPlan);
+  const hasProducts = !isProfessional && isTenantFeatureEnabled('products', resolvedFeatures, tenant, currentPlan);
+  const hasShoppingCart = !isProfessional && isTenantFeatureEnabled('shopping_cart', resolvedFeatures, tenant, currentPlan);
+  const hasServices = !isProfessional && isTenantFeatureEnabled('services', resolvedFeatures, tenant, currentPlan);
+  const hasProfessionals = !isProfessional && isTenantFeatureEnabled('professionals', resolvedFeatures, tenant, currentPlan);
+  const hasAppointments = isTenantFeatureEnabled('appointments', resolvedFeatures, tenant, currentPlan);
+  const hasRestaurantCatalog = !isProfessional && isTenantFeatureEnabled('restaurant_tables', resolvedFeatures, tenant, currentPlan);
 
   // Dynamic upcoming modules (only visible for client admins)
   const upcomingModules = isProfessional ? [] : [
     { key: 'qr_code', label: 'QR Code', icon: QrCode },
     { key: 'analytics', label: 'Métricas & Visitas', icon: BarChart2 },
   ].filter((mod) =>
-    resolvedFeatures && resolvedFeatures[mod.key as FeatureKey] !== undefined
-      ? resolvedFeatures[mod.key as FeatureKey]
-      : isFeatureActive(tenant, currentPlan, mod.key as FeatureKey)
+    isTenantFeatureEnabled(mod.key as FeatureKey, resolvedFeatures, tenant, currentPlan)
   );
+
+  // Primary operational & financial menu items (strictly filtered by active features and numbered sequentially)
+  const operationalMenuItems = isProfessional
+    ? [{ key: 'appointments', label: 'Minha Agenda', icon: Calendar }]
+    : [
+        { key: 'home', baseLabel: 'Visão Geral', icon: Home, enabled: true },
+        { key: 'orders', baseLabel: 'Pedidos', icon: ShoppingCart, enabled: hasShoppingCart || hasRestaurantCatalog },
+        { key: 'restaurant', baseLabel: 'Mesas & Salão', icon: UtensilsCrossed, enabled: hasRestaurantCatalog },
+        { key: 'financial', baseLabel: 'Financeiro', icon: DollarSign, enabled: true },
+        { key: 'top_products', baseLabel: 'Mais Vendidos', icon: ShoppingBag, enabled: hasProducts || hasShoppingCart || hasRestaurantCatalog },
+        { key: 'reports', baseLabel: 'Relatórios', icon: FileSpreadsheet, enabled: true },
+      ]
+        .filter((item) => item.enabled)
+        .map((item, idx) => ({
+          key: item.key,
+          label: `${idx + 1}. ${item.baseLabel}`,
+          icon: item.icon,
+        }));
 
   const handleNavClick = (tabKey: string) => {
     if (isProfessional && tabKey !== 'appointments') {
@@ -115,6 +98,14 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({
     const wasMenuOpen = mobileMenuOpen;
     setMobileMenuOpen(false);
     onSelectTab(tabKey, wasMenuOpen);
+  };
+
+  const handleToggleMobileMenu = () => {
+    const nextState = !mobileMenuOpen;
+    setMobileMenuOpen(nextState);
+    if (nextState) {
+      refreshSession();
+    }
   };
 
   const primaryColor = tenant?.appearance?.primaryColor || '#1e293b';
@@ -148,7 +139,7 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({
         >
           <div className="flex items-center gap-2.5">
             <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              onClick={handleToggleMobileMenu}
               className="p-2 -ml-1 rounded-xl text-white hover:bg-white/15 transition-colors flex items-center gap-2"
               aria-label="Abrir menu"
             >
@@ -223,22 +214,13 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({
 
             {/* Navigation */}
             <div className="p-4 space-y-6 flex-1 overflow-y-auto min-h-0">
-              {/* Menu Operacional & Financeiro do Restaurante */}
+              {/* Menu Operacional & Financeiro */}
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block px-3 mb-2">
-                  {isProfessional ? 'Acesso Profissional' : 'Gestão do Restaurante'}
+                  {isProfessional ? 'Acesso Profissional' : (hasRestaurantCatalog ? 'Gestão do Restaurante' : 'Gestão do Negócio')}
                 </span>
                 <nav className="space-y-1">
-                  {(isProfessional ? [
-                    { key: 'appointments', label: 'Minha Agenda', icon: Calendar },
-                  ] : [
-                    { key: 'home', label: '1. Visão Geral', icon: Home },
-                    { key: 'orders', label: '2. Pedidos', icon: ShoppingCart },
-                    { key: 'restaurant', label: '3. Mesas & Salão', icon: UtensilsCrossed },
-                    { key: 'financial', label: '4. Financeiro', icon: DollarSign },
-                    { key: 'top_products', label: '5. Mais Vendidos', icon: ShoppingBag },
-                    { key: 'reports', label: '6. Relatórios', icon: FileSpreadsheet },
-                  ]).map((item) => {
+                  {operationalMenuItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = currentTab === item.key;
                     return (
