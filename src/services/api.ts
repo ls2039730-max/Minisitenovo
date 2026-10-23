@@ -61,6 +61,7 @@ import {
   AdvancedOrderFilterParams,
   PaginatedUnifiedOrdersResponse,
   UnifiedOrder,
+  EnrichedRestaurantTable,
   EnrichedTablesOverviewResponse,
   FinancialDashboardResponse,
   PeriodFilterPreset,
@@ -1505,8 +1506,51 @@ class ApiService {
     if (filters?.startDate) params.set('startDate', filters.startDate);
     if (filters?.endDate) params.set('endDate', filters.endDate);
     const qs = params.toString() ? `?${params.toString()}` : '';
-    const res = await this.request<{ success: boolean; data: EnrichedTablesOverviewResponse }>(`/api/admin/tables/overview${qs}`);
-    return res.data;
+    const res = await this.request<{ success: boolean; data: any }>(`/api/admin/tables/overview${qs}`);
+    const rawData = res.data;
+    const tables: EnrichedRestaurantTable[] = Array.isArray(rawData)
+      ? rawData
+      : Array.isArray(rawData?.tables)
+      ? rawData.tables
+      : [];
+
+    if (rawData && !Array.isArray(rawData) && rawData.summary) {
+      return {
+        tables,
+        summary: rawData.summary,
+      };
+    }
+
+    const freeCount = tables.filter((t) => t.visualState === 'free').length;
+    const occupiedCount = tables.filter((t) => t.visualState === 'occupied').length;
+    const preparingCount = tables.filter((t) => t.visualState === 'preparing').length;
+    const awaitingPaymentCount = tables.filter((t) => t.visualState === 'awaiting_payment').length;
+    const closingCount = tables.filter((t) => t.visualState === 'closing').length;
+    const totalOpenAmount = Number(
+      tables.reduce((acc, t) => acc + Number(t.currentSessionTotal || 0), 0).toFixed(2)
+    );
+    const totalPendingInOpenSessions = Number(
+      tables.reduce((acc, t) => acc + Number(t.currentSessionPendingAmount || 0), 0).toFixed(2)
+    );
+
+    return {
+      tables,
+      summary: {
+        totalTables: tables.length,
+        freeTables: freeCount,
+        occupiedTables: occupiedCount,
+        preparingTables: preparingCount,
+        awaitingPaymentTables: awaitingPaymentCount,
+        closingTables: closingCount,
+        freeCount,
+        occupiedCount,
+        preparingCount,
+        awaitingPaymentCount,
+        closingCount,
+        totalOpenAmount,
+        totalPendingInOpenSessions,
+      },
+    };
   }
 
   async getFinancialDashboard(params?: {

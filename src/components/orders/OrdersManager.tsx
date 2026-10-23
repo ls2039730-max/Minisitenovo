@@ -805,9 +805,13 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({ tenant }) => {
                     {orders.map((o) => {
                       const opColor =
                         OPERATIONAL_STATUS_COLORS[o.operationalStatus] ||
-                        OPERATIONAL_STATUS_COLORS.received;
+                        OPERATIONAL_STATUS_COLORS[o.normalizedOperationalStatus] ||
+                        OPERATIONAL_STATUS_COLORS.NEW ||
+                        { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' };
                       const payColor =
-                        PAYMENT_STATUS_COLORS[o.paymentStatus] || PAYMENT_STATUS_COLORS.pending;
+                        PAYMENT_STATUS_COLORS[o.paymentStatus] ||
+                        PAYMENT_STATUS_COLORS.pending ||
+                        { bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' };
 
                       return (
                         <tr

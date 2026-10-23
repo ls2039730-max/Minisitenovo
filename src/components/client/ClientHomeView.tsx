@@ -304,10 +304,10 @@ export const ClientHomeView: React.FC<ClientHomeViewProps> = ({
               Faturamento Hoje
             </span>
             <div className="text-xl font-black text-slate-900 mt-1">
-              {formatMoney(dashboardData?.kpis.grossRevenue || 0)}
+              {formatMoney(dashboardData?.kpis?.grossRevenue || 0)}
             </div>
             <span className="text-[11px] text-slate-500">
-              Líquido: {formatMoney(dashboardData?.kpis.netSales || 0)}
+              Líquido: {formatMoney(dashboardData?.kpis?.netSales || 0)}
             </span>
           </div>
 
@@ -316,7 +316,7 @@ export const ClientHomeView: React.FC<ClientHomeViewProps> = ({
               Recebido Hoje
             </span>
             <div className="text-xl font-black text-emerald-950 mt-1">
-              {formatMoney(dashboardData?.kpis.confirmedReceipts || 0)}
+              {formatMoney(dashboardData?.kpis?.confirmedReceipts || 0)}
             </div>
             <span className="text-[11px] text-emerald-700">Confirmado no caixa</span>
           </div>
@@ -326,10 +326,10 @@ export const ClientHomeView: React.FC<ClientHomeViewProps> = ({
               Contas & Saldo Aberto
             </span>
             <div className="text-xl font-black text-amber-950 mt-1">
-              {formatMoney(tablesOverview?.summary.totalPendingInOpenSessions || 0)}
+              {formatMoney(tablesOverview?.summary?.totalPendingInOpenSessions || 0)}
             </div>
             <span className="text-[11px] text-amber-800">
-              Total em consumo: {formatMoney(tablesOverview?.summary.totalOpenAmount || 0)}
+              Total em consumo: {formatMoney(tablesOverview?.summary?.totalOpenAmount || 0)}
             </span>
           </div>
 
@@ -338,14 +338,14 @@ export const ClientHomeView: React.FC<ClientHomeViewProps> = ({
               Mesas Ocupadas
             </span>
             <div className="text-xl font-black text-slate-900 mt-1">
-              {(tablesOverview?.summary.occupiedTables || 0) +
-                (tablesOverview?.summary.preparingCount || 0) +
-                (tablesOverview?.summary.awaitingPaymentCount || 0) +
-                (tablesOverview?.summary.closingCount || 0)}{' '}
-              / {tablesOverview?.summary.totalTables || 0}
+              {(tablesOverview?.summary?.occupiedTables || 0) +
+                (tablesOverview?.summary?.preparingCount || 0) +
+                (tablesOverview?.summary?.awaitingPaymentCount || 0) +
+                (tablesOverview?.summary?.closingCount || 0)}{' '}
+              / {tablesOverview?.summary?.totalTables || 0}
             </div>
             <span className="text-[11px] text-slate-500">
-              {tablesOverview?.summary.freeTables || tablesOverview?.summary.freeCount || 0} livres para clientes
+              {tablesOverview?.summary?.freeTables || tablesOverview?.summary?.freeCount || 0} livres para clientes
             </span>
           </div>
         </div>

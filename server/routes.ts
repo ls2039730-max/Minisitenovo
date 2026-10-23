@@ -3030,14 +3030,52 @@ apiRouter.get('/admin/tables/overview', authenticate, requireNonProfessional, as
   try {
     const tenantId = getEffectiveTenantId(req);
     const q = req.query;
-    const overview = await restaurantAnalyticsService.getEnrichedTablesOverview(tenantId, {
+    const tables = await restaurantAnalyticsService.getEnrichedTablesOverview(tenantId, {
       visualState: q.visualState ? (String(q.visualState) as any) : undefined,
       search: (q.searchNumber || q.search) ? String(q.searchNumber || q.search) : undefined,
       period: q.period as any,
       startDate: q.startDate ? String(q.startDate) : undefined,
       endDate: q.endDate ? String(q.endDate) : undefined,
     });
-    return res.json({ success: true, data: overview });
+
+    const freeCount = tables.filter((t) => t.visualState === 'free').length;
+    const occupiedCount = tables.filter((t) => t.visualState === 'occupied').length;
+    const preparingCount = tables.filter((t) => t.visualState === 'preparing').length;
+    const awaitingPaymentCount = tables.filter((t) => t.visualState === 'awaiting_payment').length;
+    const closingCount = tables.filter((t) => t.visualState === 'closing').length;
+
+    const totalOpenAmount = Number(
+      tables.reduce((acc, t) => acc + Number(t.currentSessionTotal || 0), 0).toFixed(2)
+    );
+    const totalPaidInOpenSessions = Number(
+      tables.reduce((acc, t) => acc + Number(t.currentSessionPaidAmount || 0), 0).toFixed(2)
+    );
+    const totalPendingInOpenSessions = Number(
+      tables.reduce((acc, t) => acc + Number(t.currentSessionPendingAmount || 0), 0).toFixed(2)
+    );
+
+    return res.json({
+      success: true,
+      data: {
+        tables,
+        summary: {
+          totalTables: tables.length,
+          freeTables: freeCount,
+          occupiedTables: occupiedCount,
+          preparingTables: preparingCount,
+          awaitingPaymentTables: awaitingPaymentCount,
+          closingTables: closingCount,
+          freeCount,
+          occupiedCount,
+          preparingCount,
+          awaitingPaymentCount,
+          closingCount,
+          totalOpenAmount,
+          totalPaidInOpenSessions,
+          totalPendingInOpenSessions,
+        },
+      },
+    });
   } catch (err: any) {
     return res.status(400).json({ success: false, error: err.message || 'Erro ao carregar acompanhamento de mesas.' });
   }

@@ -72,27 +72,59 @@ export const ORDER_ORIGIN_LABELS: Record<OrderOriginChannel, string> = {
   counter: 'Balcão / Interno',
 };
 
-export const FULFILLMENT_TYPE_LABELS = UNIFIED_FULFILLMENT_LABELS;
-export const ORIGIN_CHANNEL_LABELS = ORDER_ORIGIN_LABELS;
+export const FULFILLMENT_TYPE_LABELS: Record<string, string> = {
+  ...UNIFIED_FULFILLMENT_LABELS,
+  table_dine_in: 'Consumo no Local',
+};
+
+export const ORIGIN_CHANNEL_LABELS: Record<string, string> = {
+  ...ORDER_ORIGIN_LABELS,
+  online_catalog: 'Catálogo Online',
+  qr_table: 'Mesa (QR Code)',
+  counter_pos: 'Balcão / PDV',
+  whatsapp: 'WhatsApp',
+};
 
 export const OPERATIONAL_STATUS_LABELS: Record<string, string> = {
   NEW: 'Novo / Recebido',
+  IN_SERVICE: 'Em Atendimento',
   CONFIRMED: 'Confirmado',
   PREPARING: 'Em Preparação',
   READY: 'Pronto',
+  READY_FOR_PICKUP: 'Pronto para Retirada',
   OUT_FOR_DELIVERY: 'Saiu para Entrega',
   COMPLETED: 'Concluído',
   CANCELLED: 'Cancelado',
+  received: 'Recebido',
+  in_service: 'Em Atendimento',
+  confirmed: 'Confirmado',
+  preparing: 'Em Preparação',
+  ready: 'Pronto',
+  out_for_delivery: 'Saiu para Entrega',
+  delivered: 'Entregue / Concluído',
+  completed: 'Concluído',
+  cancelled: 'Cancelado',
 };
 
 export const OPERATIONAL_STATUS_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   NEW: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+  IN_SERVICE: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200' },
   CONFIRMED: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
   PREPARING: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
   READY: { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200' },
+  READY_FOR_PICKUP: { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200' },
   OUT_FOR_DELIVERY: { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200' },
   COMPLETED: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
   CANCELLED: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' },
+  received: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+  in_service: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200' },
+  confirmed: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
+  preparing: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
+  ready: { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200' },
+  out_for_delivery: { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200' },
+  delivered: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
+  completed: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
+  cancelled: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' },
 };
 
 export interface PaymentTransactionEntry {

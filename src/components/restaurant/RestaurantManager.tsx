@@ -462,7 +462,7 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
             Total Mesas
           </span>
           <div className="text-xl font-black text-slate-900 mt-1">
-            {enrichedOverview?.summary.totalTables ?? summary?.totalTables ?? tables.length}
+            {enrichedOverview?.summary?.totalTables ?? summary?.totalTables ?? tables.length}
           </div>
           <span className="text-[10px] text-slate-500 mt-0.5 block">Cadastradas</span>
         </div>
@@ -472,7 +472,7 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
             Livres
           </span>
           <div className="text-xl font-black text-emerald-900 mt-1">
-            {enrichedOverview?.summary.freeCount ?? summary?.availableTables ?? 0}
+            {enrichedOverview?.summary?.freeCount ?? summary?.availableTables ?? 0}
           </div>
           <span className="text-[10px] text-emerald-600 mt-0.5 block">Disponíveis</span>
         </div>
@@ -482,7 +482,7 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
             Em Preparo
           </span>
           <div className="text-xl font-black text-amber-900 mt-1">
-            {enrichedOverview?.summary.preparingCount ?? 0}
+            {enrichedOverview?.summary?.preparingCount ?? 0}
           </div>
           <span className="text-[10px] text-amber-600 mt-0.5 block">Cozinha ativa</span>
         </div>
@@ -492,13 +492,13 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
             Aguardam Pgto
           </span>
           <div className="text-xl font-black text-purple-900 mt-1">
-            {enrichedOverview?.summary.awaitingPaymentCount ?? 0}
+            {enrichedOverview?.summary?.awaitingPaymentCount ?? 0}
           </div>
           <span className="text-[10px] text-purple-600 mt-0.5 block">Itens entregues</span>
         </div>
 
         <div className={`p-3.5 rounded-2xl border shadow-xs transition-all ${
-          (enrichedOverview?.summary.closingCount ?? closingTables.length) > 0
+          (enrichedOverview?.summary?.closingCount ?? closingTables.length) > 0
             ? 'bg-orange-100 border-orange-400 ring-2 ring-orange-400 animate-pulse'
             : 'bg-white border-slate-200'
         }`}>
@@ -506,7 +506,7 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
             Em Fechamento
           </span>
           <div className="text-xl font-black text-orange-950 mt-1">
-            {enrichedOverview?.summary.closingCount ?? closingTables.length}
+            {enrichedOverview?.summary?.closingCount ?? closingTables.length}
           </div>
           <span className="text-[10px] text-orange-700 mt-0.5 block">Pediram a conta</span>
         </div>
@@ -516,7 +516,7 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
             Contas Abertas
           </span>
           <div className="text-base font-black text-white mt-1">
-            R$ {(enrichedOverview?.summary.totalOpenAmount || 0).toFixed(2).replace('.', ',')}
+            R$ {(enrichedOverview?.summary?.totalOpenAmount || 0).toFixed(2).replace('.', ',')}
           </div>
           <span className="text-[10px] text-slate-300 mt-0.5 block">Acumulado no salão</span>
         </div>
@@ -526,7 +526,7 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
             Saldo Pendente
           </span>
           <div className="text-base font-black text-amber-950 mt-1">
-            R$ {(enrichedOverview?.summary.totalPendingInOpenSessions || 0).toFixed(2).replace('.', ',')}
+            R$ {(enrichedOverview?.summary?.totalPendingInOpenSessions || 0).toFixed(2).replace('.', ',')}
           </div>
           <span className="text-[10px] text-amber-700 mt-0.5 block">Falta receber</span>
         </div>
