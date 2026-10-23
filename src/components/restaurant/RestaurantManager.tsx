@@ -36,6 +36,16 @@ import {
   RESTAURANT_STATUS_LABELS,
   RESTAURANT_STATUS_COLORS,
 } from '../../types/restaurant';
+import {
+  EnrichedRestaurantTable,
+  EnrichedTablesOverviewResponse,
+  TableVisualOperationalState,
+  TABLE_VISUAL_STATE_LABELS,
+  TABLE_VISUAL_STATE_COLORS,
+  PeriodFilterPreset,
+  PERIOD_PRESET_LABELS,
+  PAYMENT_STATUS_LABELS,
+} from '../../types/analytics';
 import { api } from '../../services/api';
 import { TableModal } from './modals/TableModal';
 import { BatchTablesModal } from './modals/BatchTablesModal';
@@ -53,6 +63,7 @@ interface RestaurantManagerProps {
 export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) => {
   const [activeTab, setActiveTab] = useState<'hall' | 'orders' | 'tables' | 'fees' | 'guide'>('hall');
   const [tables, setTables] = useState<RestaurantTable[]>([]);
+  const [enrichedOverview, setEnrichedOverview] = useState<EnrichedTablesOverviewResponse | null>(null);
   const [orders, setOrders] = useState<RestaurantOrder[]>([]);
   const [summary, setSummary] = useState<RestaurantSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -82,8 +93,9 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
   const [soundMuted, setSoundMuted] = useState(false);
 
   // Filters
-  const [hallFilter, setHallFilter] = useState<'all' | TableStatus>('all');
+  const [hallFilter, setHallFilter] = useState<'all' | TableVisualOperationalState>('all');
   const [searchTable, setSearchTable] = useState('');
+  const [tablePeriodFilter, setTablePeriodFilter] = useState<PeriodFilterPreset>('today');
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>('all');
   const [orderSearch, setOrderSearch] = useState('');
 
@@ -150,15 +162,19 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
       if (!isSilent) setLoading(true);
       else setRefreshing(true);
 
-      const [tablesData, ordersData, summaryData] = await Promise.all([
+      const [tablesData, ordersData, summaryData, overviewData] = await Promise.all([
         api.getRestaurantTables(),
         api.getRestaurantOrders(),
         api.getRestaurantSummary(),
+        api.getEnrichedTablesOverview({ period: tablePeriodFilter }).catch(() => null),
       ]);
 
       setTables(tablesData);
       setOrders(ordersData);
       setSummary(summaryData);
+      if (overviewData) {
+        setEnrichedOverview(overviewData);
+      }
 
       const closingCount = (tablesData || []).filter((t: RestaurantTable) => t.status === 'closing').length;
       if (closingCount > prevClosingCountRef.current) {
@@ -171,7 +187,7 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
       setLoading(false);
       setRefreshing(false);
     }
-  }, [tenant, playChime]);
+  }, [tenant, playChime, tablePeriodFilter]);
 
   useEffect(() => {
     loadData();
@@ -253,9 +269,17 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
     }
   };
 
-  // Filtered tables for hall view
+  // Enriched tables map & filtered tables for hall view
+  const enrichedTablesMap = new Map<string, EnrichedRestaurantTable>(
+    (enrichedOverview?.tables || []).map((et: EnrichedRestaurantTable) => [et.id, et])
+  );
+
   const filteredTables = tables.filter((t) => {
-    if (hallFilter !== 'all' && t.status !== hallFilter) return false;
+    const et = enrichedTablesMap.get(t.id);
+    const vState: TableVisualOperationalState =
+      et?.visualState ||
+      (t.status === 'closing' ? 'closing' : t.status === 'occupied' ? 'occupied' : 'free');
+    if (hallFilter !== 'all' && vState !== hallFilter) return false;
     if (searchTable.trim()) {
       const q = searchTable.toLowerCase().trim();
       return (
@@ -431,14 +455,14 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
         </div>
       )}
 
-      {/* KPI Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+      {/* KPI Stats Cards (Differentiating Open Bill Total vs Confirmed Paid vs Pending) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
         <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-xs">
           <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
             Total Mesas
           </span>
           <div className="text-xl font-black text-slate-900 mt-1">
-            {summary?.totalTables || tables.length}
+            {enrichedOverview?.summary.totalTables ?? summary?.totalTables ?? tables.length}
           </div>
           <span className="text-[10px] text-slate-500 mt-0.5 block">Cadastradas</span>
         </div>
@@ -448,63 +472,73 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
             Livres
           </span>
           <div className="text-xl font-black text-emerald-900 mt-1">
-            {summary?.availableTables || tables.filter((t) => t.status === 'available').length}
+            {enrichedOverview?.summary.freeCount ?? summary?.availableTables ?? 0}
           </div>
           <span className="text-[10px] text-emerald-600 mt-0.5 block">Disponíveis</span>
         </div>
 
         <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-2xl shadow-xs">
           <span className="text-[10px] uppercase font-bold text-amber-700 block tracking-wider">
-            Ocupadas
+            Em Preparo
           </span>
           <div className="text-xl font-black text-amber-900 mt-1">
-            {summary?.occupiedTables || tables.filter((t) => t.status === 'occupied').length}
+            {enrichedOverview?.summary.preparingCount ?? 0}
           </div>
-          <span className="text-[10px] text-amber-600 mt-0.5 block">Com clientes</span>
+          <span className="text-[10px] text-amber-600 mt-0.5 block">Cozinha ativa</span>
+        </div>
+
+        <div className="p-3.5 bg-purple-50/70 border border-purple-200 rounded-2xl shadow-xs">
+          <span className="text-[10px] uppercase font-bold text-purple-700 block tracking-wider">
+            Aguardam Pgto
+          </span>
+          <div className="text-xl font-black text-purple-900 mt-1">
+            {enrichedOverview?.summary.awaitingPaymentCount ?? 0}
+          </div>
+          <span className="text-[10px] text-purple-600 mt-0.5 block">Itens entregues</span>
         </div>
 
         <div className={`p-3.5 rounded-2xl border shadow-xs transition-all ${
-          (summary?.closingTables || closingTables.length) > 0
-            ? 'bg-amber-100 border-amber-400 ring-2 ring-amber-400 animate-pulse'
+          (enrichedOverview?.summary.closingCount ?? closingTables.length) > 0
+            ? 'bg-orange-100 border-orange-400 ring-2 ring-orange-400 animate-pulse'
             : 'bg-white border-slate-200'
         }`}>
+          <span className="text-[10px] uppercase font-bold text-orange-800 block tracking-wider">
+            Em Fechamento
+          </span>
+          <div className="text-xl font-black text-orange-950 mt-1">
+            {enrichedOverview?.summary.closingCount ?? closingTables.length}
+          </div>
+          <span className="text-[10px] text-orange-700 mt-0.5 block">Pediram a conta</span>
+        </div>
+
+        <div className="p-3.5 bg-slate-900 text-white rounded-2xl shadow-xs">
+          <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+            Contas Abertas
+          </span>
+          <div className="text-base font-black text-white mt-1">
+            R$ {(enrichedOverview?.summary.totalOpenAmount || 0).toFixed(2).replace('.', ',')}
+          </div>
+          <span className="text-[10px] text-slate-300 mt-0.5 block">Acumulado no salão</span>
+        </div>
+
+        <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl shadow-xs">
           <span className="text-[10px] uppercase font-bold text-amber-800 block tracking-wider">
-            Fechando Conta
+            Saldo Pendente
           </span>
-          <div className="text-xl font-black text-amber-950 mt-1">
-            {summary?.closingTables || closingTables.length}
+          <div className="text-base font-black text-amber-950 mt-1">
+            R$ {(enrichedOverview?.summary.totalPendingInOpenSessions || 0).toFixed(2).replace('.', ',')}
           </div>
-          <span className="text-[10px] text-amber-700 mt-0.5 block">Aguardam garçom</span>
-        </div>
-
-        <div className="p-3.5 bg-blue-50/70 border border-blue-100 rounded-2xl shadow-xs">
-          <span className="text-[10px] uppercase font-bold text-blue-700 block tracking-wider">
-            Pedidos Hoje
-          </span>
-          <div className="text-xl font-black text-blue-900 mt-1">
-            {summary?.activeOrdersToday || 0}
-          </div>
-          <span className="text-[10px] text-blue-600 mt-0.5 block">Realizados no salão</span>
-        </div>
-
-        <div className="p-3.5 bg-purple-50/70 border border-purple-100 rounded-2xl shadow-xs">
-          <span className="text-[10px] uppercase font-bold text-purple-700 block tracking-wider">
-            Aguardando Ação
-          </span>
-          <div className="text-xl font-black text-purple-900 mt-1">
-            {summary?.ordersPendingAction || 0}
-          </div>
-          <span className="text-[10px] text-purple-600 mt-0.5 block">Preparo / Entrega</span>
+          <span className="text-[10px] text-amber-700 mt-0.5 block">Falta receber</span>
         </div>
 
         <div className="p-3.5 bg-indigo-50/70 border border-indigo-100 rounded-2xl shadow-xs">
           <span className="text-[10px] uppercase font-bold text-indigo-700 block tracking-wider">
-            Receita no Salão
+            Receita Hoje
           </span>
-          <div className="text-xl font-black text-indigo-900 mt-1">
+          <div className="text-base font-black text-indigo-900 mt-1">
             R$ {(summary?.totalRevenueToday || 0).toFixed(2).replace('.', ',')}
           </div>
-          <span className="text-[10px] text-indigo-600 mt-0.5 block">Consumido hoje</span>
+          <span className="text-[10px] text-indigo-600 mt-0.5 block">Consumido no salão</span>
         </div>
       </div>
 
@@ -589,14 +623,16 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
       {/* ======================================================== */}
       {activeTab === 'hall' && (
         <div className="space-y-4">
-          {/* Filters Bar */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200">
-            <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
+          {/* Filters Bar: Situation (5 states), Period, and Table Number Search */}
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0">
               {[
                 { key: 'all', label: 'Todas as Mesas' },
-                { key: 'available', label: 'Disponíveis (Livres)' },
+                { key: 'free', label: 'Livres' },
                 { key: 'occupied', label: 'Ocupadas' },
-                { key: 'closing', label: 'Fechando' },
+                { key: 'preparing', label: 'Pedido em Preparo' },
+                { key: 'awaiting_payment', label: 'Aguardando Pagamento' },
+                { key: 'closing', label: 'Em Fechamento' },
               ].map((f) => (
                 <button
                   key={f.key}
@@ -612,15 +648,33 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
               ))}
             </div>
 
-            <div className="relative w-full sm:w-64">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchTable}
-                onChange={(e) => setSearchTable(e.target.value)}
-                placeholder="Buscar mesa ou setor..."
-                className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-              />
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold text-slate-500">Período:</span>
+                <select
+                  value={tablePeriodFilter}
+                  onChange={(e) => setTablePeriodFilter(e.target.value as PeriodFilterPreset)}
+                  className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
+                >
+                  <option value="today">Hoje</option>
+                  <option value="yesterday">Ontem</option>
+                  <option value="last_7_days">Últimos 7 dias</option>
+                  <option value="last_30_days">Últimos 30 dias</option>
+                  <option value="this_month">Mês atual</option>
+                  <option value="last_month">Mês anterior</option>
+                </select>
+              </div>
+
+              <div className="relative flex-1 sm:w-56">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchTable}
+                  onChange={(e) => setSearchTable(e.target.value)}
+                  placeholder="Buscar nº ou nome da mesa..."
+                  className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
             </div>
           </div>
 
@@ -653,23 +707,46 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {filteredTables.map((table) => {
-                const isOccupied = table.status === 'occupied';
-                const isClosing = table.status === 'closing';
+                const et = enrichedTablesMap.get(table.id);
+                const vState: TableVisualOperationalState =
+                  et?.visualState ||
+                  (table.status === 'closing'
+                    ? 'closing'
+                    : table.status === 'occupied'
+                    ? 'occupied'
+                    : 'free');
+                const vStateColors =
+                  TABLE_VISUAL_STATE_COLORS[vState] || TABLE_VISUAL_STATE_COLORS.free;
+                const vStateLabel =
+                  et?.visualStateLabel || TABLE_VISUAL_STATE_LABELS[vState] || 'Livre';
+
+                const isFree = vState === 'free';
+                const isClosing = vState === 'closing';
+                const openTotal = et ? et.currentSessionTotal : (table.currentSessionTotal || 0);
+                const paidAmount = et ? et.currentSessionPaidAmount : 0;
+                const pendingAmount = et ? et.currentSessionPendingAmount : openTotal;
+                const ordersCount = et ? et.currentSessionOrdersCount : (table.currentSessionOrdersCount || 0);
+                const occupationMins = et?.occupationMinutes || 0;
+                const openedAt = et?.currentSessionOpenedAt || table.currentSessionOpenedAt;
 
                 return (
                   <div
                     key={table.id}
-                    className={`p-4 rounded-3xl border-2 transition-all flex flex-col justify-between ${
+                    onClick={() => {
+                      setSessionTable({ ...table, ...(et || {}) });
+                      setSessionModalOpen(true);
+                    }}
+                    className={`p-4 rounded-3xl border-2 transition-all flex flex-col justify-between cursor-pointer ${
                       isClosing
-                        ? 'bg-amber-50/80 border-amber-400 ring-2 ring-amber-400 shadow-lg'
-                        : isOccupied
-                        ? 'bg-amber-50/40 border-amber-300 shadow-md'
+                        ? 'bg-orange-50/90 border-orange-400 ring-2 ring-orange-400 shadow-lg'
+                        : !isFree
+                        ? `${vStateColors.cardBg} ${vStateColors.cardBorder} shadow-md`
                         : 'bg-white border-slate-200 hover:border-slate-300 shadow-xs'
                     }`}
                   >
                     {/* Top card bar */}
                     <div>
-                      <div className="flex items-start justify-between">
+                      <div className="flex items-start justify-between gap-2">
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-xl font-black text-slate-900 tracking-tight">
@@ -688,67 +765,105 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
                           )}
                         </div>
 
-                        {/* Status Badge */}
+                        {/* 5-State Operational Visual Badge */}
                         <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full shrink-0 ${
                             isClosing
-                              ? 'bg-amber-500 text-slate-950 font-black animate-pulse'
-                              : isOccupied
-                              ? 'bg-amber-500 text-white'
-                              : 'bg-emerald-100 text-emerald-800'
+                              ? `${vStateColors.badgeBg} ${vStateColors.badgeText} animate-pulse`
+                              : `${vStateColors.badgeBg} ${vStateColors.badgeText}`
                           }`}
                         >
-                          {isClosing ? 'Fechando (Conta Solicitada)' : isOccupied ? 'Ocupada' : 'Livre'}
+                          {vStateLabel}
                         </span>
                       </div>
 
-                      {/* Occupied or Closing details */}
-                      {(isOccupied || isClosing) && (
-                        <div className={`mt-3.5 p-3 rounded-2xl border space-y-1 ${
-                          isClosing ? 'bg-amber-100/70 border-amber-300' : 'bg-white/90 border-amber-200'
-                        }`}>
+                      {/* Active Session Details */}
+                      {!isFree ? (
+                        <div
+                          className={`mt-3.5 p-3 rounded-2xl border space-y-1.5 ${
+                            isClosing
+                              ? 'bg-orange-100/80 border-orange-300'
+                              : 'bg-white/95 border-slate-200/90'
+                          }`}
+                        >
                           <div className="flex justify-between items-center">
                             <span className="text-[10px] uppercase font-bold text-slate-500">
-                              {isClosing ? 'Valor a Cobrar' : 'Consumo'}
+                              Total da Conta
                             </span>
                             <span className="text-sm font-black text-slate-900">
-                              R$ {(table.currentSessionTotal || 0).toFixed(2).replace('.', ',')}
+                              R$ {openTotal.toFixed(2).replace('.', ',')}
                             </span>
                           </div>
-                          <div className="flex justify-between items-center text-[11px] text-slate-600">
-                            <span>Pedidos na mesa:</span>
-                            <span className="font-bold text-slate-800">
-                              {table.currentSessionOrdersCount || 0}
-                            </span>
-                          </div>
-                          {isClosing && (
-                            <div className="text-[10px] font-bold text-amber-900 bg-amber-200/90 px-2 py-1 rounded-lg mt-1 flex items-center gap-1.5 animate-pulse">
-                              <Bell className="w-3 h-3 text-amber-800 shrink-0" />
-                              <span>Cliente solicitou fechamento da conta</span>
+
+                          {paidAmount > 0 && (
+                            <div className="flex justify-between items-center text-[11px] text-emerald-700 font-bold">
+                              <span>Já Recebido:</span>
+                              <span>R$ {paidAmount.toFixed(2).replace('.', ',')}</span>
                             </div>
                           )}
-                          {table.currentSessionOpenedAt && (
-                            <div className="flex items-center gap-1 text-[10px] text-slate-400 pt-0.5">
-                              <Clock className="w-3 h-3" />
-                              <span>
-                                Aberta às {new Date(table.currentSessionOpenedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+
+                          <div className="flex justify-between items-center text-[11px] font-bold text-amber-900">
+                            <span>Saldo Pendente:</span>
+                            <span>R$ {pendingAmount.toFixed(2).replace('.', ',')}</span>
+                          </div>
+
+                          <div className="pt-1 border-t border-slate-100 flex justify-between items-center text-[11px] text-slate-600">
+                            <span>Pedidos associados:</span>
+                            <span className="font-bold text-slate-900">{ordersCount}</span>
+                          </div>
+
+                          <div className="flex justify-between items-center text-[11px] text-slate-600">
+                            <span>Situação Pgto:</span>
+                            <span className="font-bold text-indigo-700">
+                              {et?.currentSessionPaymentStatus ? PAYMENT_STATUS_LABELS[et.currentSessionPaymentStatus] : 'Pendente'}
+                            </span>
+                          </div>
+
+                          {isClosing && (
+                            <div className="text-[10px] font-bold text-orange-950 bg-orange-200/90 px-2 py-1 rounded-lg mt-1 flex items-center gap-1.5 animate-pulse">
+                              <Bell className="w-3 h-3 text-orange-800 shrink-0" />
+                              <span>Cliente solicitou fechamento</span>
+                            </div>
+                          )}
+
+                          {openedAt && (
+                            <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-100">
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                Aberta às{' '}
+                                {new Date(openedAt).toLocaleTimeString([], {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </span>
+                              <span className="font-bold text-slate-700">
+                                {occupationMins < 60
+                                  ? `${occupationMins} min`
+                                  : `${Math.floor(occupationMins / 60)}h ${occupationMins % 60}m`}
                               </span>
                             </div>
                           )}
                         </div>
-                      )}
-
-                      {!isOccupied && !isClosing && (
-                        <div className="mt-4 p-3 bg-slate-50 rounded-2xl border border-slate-100 text-center">
-                          <span className="text-xs text-slate-400">
-                            Pronta para novos clientes
+                      ) : (
+                        <div className="mt-4 p-3 bg-slate-50 rounded-2xl border border-slate-100 text-center space-y-1">
+                          <span className="text-xs font-semibold text-emerald-700 block">
+                            Mesa Livre para Atendimento
                           </span>
+                          {et && (et.periodOrdersCount || 0) > 0 && (
+                            <span className="text-[10px] text-slate-500 block">
+                              No período: {et.periodOrdersCount} ped. • R${' '}
+                              {(et.periodRevenue || 0).toFixed(2).replace('.', ',')}
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>
 
                     {/* Card Actions */}
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-1.5">
+                    <div
+                      className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-1.5"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => {
@@ -776,24 +891,24 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
                       {isClosing ? (
                         <button
                           onClick={() => {
-                            setSessionTable(table);
+                            setSessionTable({ ...table, ...(et || {}) });
                             setSessionModalOpen(true);
                           }}
-                          className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-xs transition-all shadow-md flex items-center gap-1 cursor-pointer"
+                          className="px-3 py-1.5 bg-orange-500 hover:bg-orange-400 text-slate-950 font-black rounded-xl text-xs transition-all shadow-md flex items-center gap-1 cursor-pointer"
                         >
                           <Receipt className="w-3.5 h-3.5" />
                           <span>FINALIZAR MESA</span>
                         </button>
-                      ) : isOccupied ? (
+                      ) : !isFree ? (
                         <button
                           onClick={() => {
-                            setSessionTable(table);
+                            setSessionTable({ ...table, ...(et || {}) });
                             setSessionModalOpen(true);
                           }}
-                          className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                          className="px-3 py-1.5 bg-slate-900 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 cursor-pointer"
                         >
                           <Receipt className="w-3.5 h-3.5" />
-                          <span>Ver Conta</span>
+                          <span>Ver Conta / Pagamentos</span>
                         </button>
                       ) : (
                         <button

@@ -24,6 +24,7 @@ import { AppointmentManager } from './components/appointments/AppointmentManager
 import { PublicSiteView } from './components/site/public/PublicSiteView';
 import { RestaurantManager } from './components/restaurant/RestaurantManager';
 import { PublicTableCatalogView } from './components/restaurant/public/PublicTableCatalogView';
+import { FinancialDashboardView } from './components/financial/FinancialDashboardView';
 
 import { api } from './services/api';
 import { Plan, Tenant, TenantStatus } from './types/saas';
@@ -816,6 +817,21 @@ const AppContent: React.FC = () => {
               </button>
             </div>
           )
+        )}
+
+        {/* Restaurant Financial Dashboard Module */}
+        {clientTab === 'financial' && (
+          <FinancialDashboardView tenant={tenant} initialMode="dashboard" />
+        )}
+
+        {/* Top Selling Products Module */}
+        {clientTab === 'top_products' && (
+          <FinancialDashboardView tenant={tenant} initialMode="top_products" />
+        )}
+
+        {/* Financial & Operational Reports Module */}
+        {clientTab === 'reports' && (
+          <FinancialDashboardView tenant={tenant} initialMode="reports" />
         )}
 
         {/* Services Module */}

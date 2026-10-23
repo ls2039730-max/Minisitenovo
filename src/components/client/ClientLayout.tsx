@@ -24,6 +24,8 @@ import {
   Briefcase,
   Users,
   UtensilsCrossed,
+  DollarSign,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 import { useBackHandler } from '../../services/navigationManager';
@@ -221,25 +223,21 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({
 
             {/* Navigation */}
             <div className="p-4 space-y-6 flex-1 overflow-y-auto min-h-0">
-              {/* Menu Inicial */}
+              {/* Menu Operacional & Financeiro do Restaurante */}
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block px-3 mb-2">
-                  {isProfessional ? 'Acesso Profissional' : 'Principal'}
+                  {isProfessional ? 'Acesso Profissional' : 'Gestão do Restaurante'}
                 </span>
                 <nav className="space-y-1">
                   {(isProfessional ? [
                     { key: 'appointments', label: 'Minha Agenda', icon: Calendar },
                   ] : [
-                    { key: 'home', label: 'Início', icon: Home },
-                    { key: 'company', label: 'Minha Empresa', icon: Building2 },
-                    { key: 'appearance', label: 'Aparência', icon: Palette },
-                    ...(hasAppointments ? [{ key: 'appointments', label: 'Agenda', icon: Calendar }] : []),
-                    ...(hasServices ? [{ key: 'services', label: 'Serviços', icon: Briefcase }] : []),
-                    ...(hasProfessionals ? [{ key: 'professionals', label: 'Profissionais', icon: Users }] : []),
-                    ...(hasProducts ? [{ key: 'products', label: 'Produtos', icon: ShoppingBag }] : []),
-                    ...(hasRestaurantCatalog || hasProducts ? [{ key: 'restaurant', label: 'Catálogo Digital', icon: UtensilsCrossed }] : []),
-                    ...(hasShoppingCart ? [{ key: 'orders', label: 'Pedidos', icon: ShoppingCart }] : []),
-                    ...(hasSiteEditor ? [{ key: 'site', label: 'Site', icon: Globe }] : []),
+                    { key: 'home', label: '1. Visão Geral', icon: Home },
+                    { key: 'orders', label: '2. Pedidos', icon: ShoppingCart },
+                    { key: 'restaurant', label: '3. Mesas & Salão', icon: UtensilsCrossed },
+                    { key: 'financial', label: '4. Financeiro', icon: DollarSign },
+                    { key: 'top_products', label: '5. Mais Vendidos', icon: ShoppingBag },
+                    { key: 'reports', label: '6. Relatórios', icon: FileSpreadsheet },
                   ]).map((item) => {
                     const Icon = item.icon;
                     const isActive = currentTab === item.key;
@@ -263,6 +261,46 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({
                   })}
                 </nav>
               </div>
+
+              {/* Menu Cadastros & Configurações */}
+              {!isProfessional && (
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block px-3 mb-2">
+                    Configurações & Cadastros
+                  </span>
+                  <nav className="space-y-1">
+                    {[
+                      ...(hasProducts ? [{ key: 'products', label: 'Produtos', icon: ShoppingBag }] : []),
+                      ...(hasSiteEditor ? [{ key: 'site', label: 'Site / Cardápio', icon: Globe }] : []),
+                      { key: 'company', label: 'Minha Empresa', icon: Building2 },
+                      { key: 'appearance', label: 'Aparência', icon: Palette },
+                      ...(hasAppointments ? [{ key: 'appointments', label: 'Agenda', icon: Calendar }] : []),
+                      ...(hasServices ? [{ key: 'services', label: 'Serviços', icon: Briefcase }] : []),
+                      ...(hasProfessionals ? [{ key: 'professionals', label: 'Profissionais', icon: Users }] : []),
+                    ].map((item) => {
+                      const Icon = item.icon;
+                      const isActive = currentTab === item.key;
+                      return (
+                        <button
+                          key={item.key}
+                          onClick={() => handleNavClick(item.key)}
+                          className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                            isActive
+                              ? 'bg-white text-slate-900 shadow-md font-bold'
+                              : 'text-white/80 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <Icon className="w-4 h-4" />
+                            <span>{item.label}</span>
+                          </div>
+                          {isActive && <ChevronRight className="w-3.5 h-3.5" />}
+                        </button>
+                      );
+                    })}
+                  </nav>
+                </div>
+              )}
 
               {/* Módulos Habilitados (Features ativas) */}
               {upcomingModules.length > 0 && (

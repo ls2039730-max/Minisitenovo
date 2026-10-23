@@ -16,6 +16,7 @@ import { canTenantOperate, resolveSlugFromHost, validateSlug } from './tenantRes
 import { storageService } from './storage/storageService.js';
 import { handlePublicSiteHtml } from './seoRenderer.js';
 import { geocodeAddressServer, lookupPostalCodeServer } from './services/routingService.js';
+import { restaurantAnalyticsService } from './services/restaurantAnalyticsService.js';
 
 export const apiRouter = Router();
 
@@ -2933,6 +2934,131 @@ apiRouter.get('/restaurant/summary', authenticate, requireNonProfessional, async
     return res.status(400).json({ success: false, error: err.message });
   }
 });
+
+// ==========================================
+// 26. RESTAURANT ANALYTICS, UNIFIED ORDERS, TABLES OVERVIEW & FINANCIAL DASHBOARD
+// ==========================================
+
+// 1. Unified Orders Catalog with Advanced Combinable Filters & Pagination
+apiRouter.get('/admin/orders/unified', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const q = req.query;
+    const result = await restaurantAnalyticsService.queryUnifiedOrders(tenantId, {
+      period: q.period as any,
+      startDate: q.startDate ? String(q.startDate) : undefined,
+      endDate: q.endDate ? String(q.endDate) : undefined,
+      operationalStatus: q.operationalStatus ? String(q.operationalStatus) : undefined,
+      paymentStatus: q.paymentStatus ? (String(q.paymentStatus) as any) : undefined,
+      paymentMethod: q.paymentMethod ? String(q.paymentMethod) : undefined,
+      fulfillmentType: q.fulfillmentType ? String(q.fulfillmentType) : undefined,
+      tableId: q.tableId ? String(q.tableId) : undefined,
+      orderNumber: q.orderNumber ? String(q.orderNumber) : undefined,
+      customerName: q.customerName ? String(q.customerName) : undefined,
+      customerPhone: q.customerPhone ? String(q.customerPhone) : undefined,
+      minAmount: q.minAmount !== undefined && q.minAmount !== '' ? Number(q.minAmount) : undefined,
+      maxAmount: q.maxAmount !== undefined && q.maxAmount !== '' ? Number(q.maxAmount) : undefined,
+      originChannel: q.originChannel ? String(q.originChannel) : undefined,
+      search: q.search ? String(q.search) : undefined,
+      sortBy: (q.sortBy as any) || 'date',
+      sortDirection: (q.sortDirection as any) || 'desc',
+      page: q.page ? Number(q.page) : 1,
+      limit: q.limit ? Number(q.limit) : 25,
+    });
+    return res.json({ success: true, data: result });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao filtrar catálogo de pedidos.' });
+  }
+});
+
+// 2. Single Unified Order Details (with Payment & Operational Audit History)
+apiRouter.get('/admin/orders/unified/:id', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const order = await restaurantAnalyticsService.getUnifiedOrderById(tenantId, req.params.id);
+    if (!order) {
+      return res.status(404).json({ success: false, error: 'Pedido não encontrado neste estabelecimento.' });
+    }
+    return res.json({ success: true, data: order });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao buscar detalhes do pedido.' });
+  }
+});
+
+// 3. Update Order Financials & Payment Records (Discounts, Partial/Full Payments, Refunds)
+apiRouter.post('/admin/orders/:id/financials', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const updated = await restaurantAnalyticsService.updateOrderFinancialsAndPayments(
+      tenantId,
+      req.params.id,
+      req.body || {},
+      req.user!
+    );
+    return res.json({
+      success: true,
+      data: updated,
+      message: 'Dados financeiros do pedido atualizados com sucesso!',
+    });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao atualizar financeiro do pedido.' });
+  }
+});
+
+// 4. Update Table Session Financials & Partial/Split Payments
+apiRouter.post('/restaurant/sessions/:sessionId/financials', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const result = await restaurantAnalyticsService.updateSessionFinancialsAndPayments(
+      tenantId,
+      req.params.sessionId,
+      req.body || {},
+      req.user!
+    );
+    return res.json({
+      success: true,
+      data: result,
+      message: 'Pagamentos e financeiro da mesa atualizados com sucesso!',
+    });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao registrar pagamento na mesa.' });
+  }
+});
+
+// 5. Enriched Tables Monitoring Overview (5 Operational Visual States + Period Performance)
+apiRouter.get('/admin/tables/overview', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const q = req.query;
+    const overview = await restaurantAnalyticsService.getEnrichedTablesOverview(tenantId, {
+      visualState: q.visualState ? (String(q.visualState) as any) : undefined,
+      search: (q.searchNumber || q.search) ? String(q.searchNumber || q.search) : undefined,
+      period: q.period as any,
+      startDate: q.startDate ? String(q.startDate) : undefined,
+      endDate: q.endDate ? String(q.endDate) : undefined,
+    });
+    return res.json({ success: true, data: overview });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao carregar acompanhamento de mesas.' });
+  }
+});
+
+// 6. Complete Restaurant Financial Dashboard (KPIs, 6 Charts, Top Products, Reports)
+apiRouter.get('/admin/financial/dashboard', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const q = req.query;
+    const dashboard = await restaurantAnalyticsService.getFinancialDashboard(tenantId, {
+      period: (q.period as any) || 'this_month',
+      startDate: q.startDate ? String(q.startDate) : undefined,
+      endDate: q.endDate ? String(q.endDate) : undefined,
+    });
+    return res.json({ success: true, data: dashboard });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao carregar dashboard financeiro.' });
+  }
+});
+
 
 
 

@@ -57,6 +57,15 @@ import {
   RestaurantSessionFee,
   AddSessionFeePayload,
 } from '../types/restaurant';
+import {
+  AdvancedOrderFilterParams,
+  PaginatedUnifiedOrdersResponse,
+  UnifiedOrder,
+  EnrichedTablesOverviewResponse,
+  FinancialDashboardResponse,
+  PeriodFilterPreset,
+  OrderPaymentStatus,
+} from '../types/analytics';
 
 class ApiService {
   private memoryToken: string | null = null;
@@ -1391,6 +1400,129 @@ class ApiService {
       body: JSON.stringify(payload),
     });
   }
+
+  // ==========================================
+  // RESTAURANT ANALYTICS, UNIFIED ORDERS & FINANCIAL DASHBOARD
+  // ==========================================
+
+  async getUnifiedOrders(filters: AdvancedOrderFilterParams = {}): Promise<PaginatedUnifiedOrdersResponse> {
+    const params = new URLSearchParams();
+    if (filters.period) params.set('period', filters.period);
+    if (filters.startDate) params.set('startDate', filters.startDate);
+    if (filters.endDate) params.set('endDate', filters.endDate);
+    if (filters.operationalStatus && filters.operationalStatus !== 'all') params.set('operationalStatus', filters.operationalStatus);
+    if (filters.paymentStatus && filters.paymentStatus !== 'all') params.set('paymentStatus', filters.paymentStatus);
+    if (filters.paymentMethod && filters.paymentMethod !== 'all') params.set('paymentMethod', filters.paymentMethod);
+    if (filters.fulfillmentType && filters.fulfillmentType !== 'all') params.set('fulfillmentType', filters.fulfillmentType);
+    if (filters.tableId && filters.tableId !== 'all') params.set('tableId', filters.tableId);
+    if (filters.orderNumber) params.set('orderNumber', filters.orderNumber);
+    if (filters.customerName) params.set('customerName', filters.customerName);
+    if (filters.minAmount !== undefined && filters.minAmount !== null && !isNaN(Number(filters.minAmount))) params.set('minAmount', String(filters.minAmount));
+    if (filters.maxAmount !== undefined && filters.maxAmount !== null && !isNaN(Number(filters.maxAmount))) params.set('maxAmount', String(filters.maxAmount));
+    if (filters.originChannel && filters.originChannel !== 'all') params.set('originChannel', filters.originChannel);
+    if (filters.search) params.set('search', filters.search);
+    if (filters.sortBy) params.set('sortBy', filters.sortBy);
+    if (filters.sortOrder || filters.sortDirection) params.set('sortOrder', (filters.sortOrder || filters.sortDirection)!);
+    if (filters.page) params.set('page', String(filters.page));
+    if (filters.limit) params.set('limit', String(filters.limit));
+
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await this.request<{ success: boolean; data: PaginatedUnifiedOrdersResponse }>(`/api/admin/orders/unified${qs}`);
+    return res.data;
+  }
+
+  async getUnifiedOrderById(id: string): Promise<UnifiedOrder> {
+    const res = await this.request<{ success: boolean; data: UnifiedOrder }>(`/api/admin/orders/unified/${encodeURIComponent(id)}`);
+    return res.data;
+  }
+
+  async updateOrderFinancials(
+    orderId: string,
+    payload: {
+      discount?: number;
+      paymentStatus?: OrderPaymentStatus;
+      paymentMethod?: string;
+      addPayment?: {
+        amount: number;
+        paymentMethod: string;
+        notes?: string;
+      };
+      removePaymentId?: string;
+      markFullPaid?: boolean;
+      paymentMethodForFullPaid?: string;
+    }
+  ): Promise<UnifiedOrder> {
+    const res = await this.request<{ success: boolean; data: UnifiedOrder; message: string }>(
+      `/api/admin/orders/${encodeURIComponent(orderId)}/financials`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    );
+    return res.data;
+  }
+
+  async updateSessionFinancials(
+    sessionId: string,
+    payload: {
+      discount?: number;
+      paymentStatus?: OrderPaymentStatus;
+      addPayment?: {
+        amount: number;
+        paymentMethod: string;
+        notes?: string;
+      };
+      removePaymentId?: string;
+    }
+  ): Promise<{
+    sessionId: string;
+    discount: number;
+    paymentStatus: OrderPaymentStatus;
+    payments: any[];
+    paidAmount: number;
+  }> {
+    const res = await this.request<{ success: boolean; data: any; message: string }>(
+      `/api/restaurant/sessions/${encodeURIComponent(sessionId)}/financials`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    );
+    return res.data;
+  }
+
+  async getEnrichedTablesOverview(filters?: {
+    visualState?: string;
+    searchNumber?: string;
+    period?: PeriodFilterPreset;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<EnrichedTablesOverviewResponse> {
+    const params = new URLSearchParams();
+    if (filters?.visualState && filters.visualState !== 'all') params.set('visualState', filters.visualState);
+    if (filters?.searchNumber) params.set('searchNumber', filters.searchNumber);
+    if (filters?.period) params.set('period', filters.period);
+    if (filters?.startDate) params.set('startDate', filters.startDate);
+    if (filters?.endDate) params.set('endDate', filters.endDate);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await this.request<{ success: boolean; data: EnrichedTablesOverviewResponse }>(`/api/admin/tables/overview${qs}`);
+    return res.data;
+  }
+
+  async getFinancialDashboard(params?: {
+    period?: PeriodFilterPreset;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<FinancialDashboardResponse> {
+    const qsParams = new URLSearchParams();
+    if (params?.period) qsParams.set('period', params.period);
+    if (params?.startDate) qsParams.set('startDate', params.startDate);
+    if (params?.endDate) qsParams.set('endDate', params.endDate);
+    const qs = qsParams.toString() ? `?${qsParams.toString()}` : '';
+    const res = await this.request<{ success: boolean; data: FinancialDashboardResponse }>(`/api/admin/financial/dashboard${qs}`);
+    return res.data;
+  }
 }
 
 export const api = new ApiService();
+
