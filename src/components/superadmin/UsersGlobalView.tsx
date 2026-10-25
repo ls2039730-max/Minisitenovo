@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
 import { Tenant, User } from '../../types/saas';
+import { getTenantSubdomain } from '../../utils/url';
 import { Users, Shield, Building2, Search, CheckCircle2, UserX } from 'lucide-react';
 
 interface UsersGlobalViewProps {
@@ -113,7 +114,7 @@ export const UsersGlobalView: React.FC<UsersGlobalViewProps> = ({ tenants }) => 
                         ) : tenant ? (
                           <div>
                             <span className="font-semibold text-slate-800">{tenant.name}</span>
-                            <span className="block text-[11px] font-mono text-slate-400">{tenant.subdomain}</span>
+                            <span className="block text-[11px] font-mono text-slate-400">{getTenantSubdomain(tenant.slug)}</span>
                           </div>
                         ) : (
                           <span className="text-slate-400">Sem tenant</span>

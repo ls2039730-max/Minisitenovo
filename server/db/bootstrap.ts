@@ -1,5 +1,6 @@
 import { supabaseAdmin, isRealSupabaseConfigured, getSupabaseAuthClient } from '../supabaseAdmin.js';
 import { SYSTEM_FEATURES } from '../../src/utils/features.js';
+import { getServerBaseDomain, getTenantSubdomain } from '../tenantResolver.js';
 
 let bootstrapDone = false;
 
@@ -144,7 +145,7 @@ export async function bootstrapDatabaseIfNeeded(): Promise<void> {
         owner_name: 'Carlos Eduardo Silva',
         owner_email: 'contato@barbeariaprime.com',
         owner_phone: '(11) 98765-4321',
-        subdomain: 'barbearia-prime.meudominio.com',
+        subdomain: getTenantSubdomain('barbearia-prime', getServerBaseDomain()),
         street: 'Rua Augusta',
         number: '1500',
         neighborhood: 'Consolação',
@@ -795,6 +796,30 @@ export async function bootstrapDatabaseIfNeeded(): Promise<void> {
       } catch (bucketE) {
         // Bucket may already exist
       }
+    }
+
+    // Normalize tenant subdomain records in Supabase so legacy .vercel.app / meudominio.com strings become {slug}.minihub.tech
+    try {
+      const baseDomain = getServerBaseDomain();
+      const { data: allTenants } = await supabaseAdmin
+        .from('tenants')
+        .select('id, slug, subdomain')
+        .is('deleted_at', null);
+
+      if (allTenants && allTenants.length > 0) {
+        for (const t of allTenants) {
+          if (!t.slug) continue;
+          const expectedSubdomain = getTenantSubdomain(t.slug, baseDomain);
+          if (t.subdomain !== expectedSubdomain) {
+            await supabaseAdmin
+              .from('tenants')
+              .update({ subdomain: expectedSubdomain })
+              .eq('id', t.id);
+          }
+        }
+      }
+    } catch (normErr: any) {
+      console.warn('[BOOTSTRAP] Could not normalize tenant subdomains:', normErr.message);
     }
 
     console.log('[BOOTSTRAP] Database verification & bootstrap completed successfully!');

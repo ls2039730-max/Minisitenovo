@@ -202,21 +202,25 @@ export function resolveSlugFromHostname(
     return null;
   }
 
-  const cleanBase = getConfiguredBaseDomain(baseDomain);
-  if (!cleanBase) return null;
+  const configuredBase = getConfiguredBaseDomain(baseDomain);
+  const candidateBaseDomains = Array.from(
+    new Set([configuredBase, DEFAULT_BASE_DOMAIN].filter(Boolean))
+  );
 
-  // Root domain and www are the SaaS portal, NOT a tenant
-  if (host === cleanBase || host === `www.${cleanBase}`) {
-    return null;
-  }
+  for (const cleanBase of candidateBaseDomains) {
+    // Root domain and www are the SaaS portal, NOT a tenant
+    if (host === cleanBase || host === `www.${cleanBase}`) {
+      return null;
+    }
 
-  // Check if host is a direct subdomain of cleanBase: {slug}.{baseDomain}
-  if (host.endsWith(`.${cleanBase}`)) {
-    const sub = host.slice(0, -(cleanBase.length + 1));
-    // Must be single-level subdomain, not reserved, and valid slug characters
-    if (sub && !sub.includes('.') && !RESERVED_SUBDOMAIN_SLUGS.has(sub)) {
-      if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(sub)) {
-        return sub;
+    // Check if host is a direct subdomain of cleanBase: {slug}.{baseDomain}
+    if (host.endsWith(`.${cleanBase}`)) {
+      const sub = host.slice(0, -(cleanBase.length + 1));
+      // Must be single-level subdomain, not reserved, and valid slug characters
+      if (sub && !sub.includes('.') && !RESERVED_SUBDOMAIN_SLUGS.has(sub)) {
+        if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(sub)) {
+          return sub;
+        }
       }
     }
   }

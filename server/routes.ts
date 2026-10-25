@@ -905,6 +905,22 @@ apiRouter.post('/site/publish', authenticate, requireFeature('site_editor'), asy
 apiRouter.get('/site/public/:slug', async (req: Request, res: Response) => {
   try {
     const { slug } = req.params;
+    const forwardedHost = (req.headers['x-forwarded-host'] as string) || '';
+    const hostHeader = forwardedHost.split(',')[0].trim() || req.get('host') || '';
+    const simHeader = (req.headers['x-tenant-slug'] || req.headers['x-simulate-tenant']) as string | undefined;
+    const simQuery = req.query.simulate_subdomain as string | undefined;
+    const subdomainSlug = resolveSlugFromHost(hostHeader, getServerBaseDomain(), simHeader || simQuery);
+
+    if (subdomainSlug && slug && subdomainSlug.toLowerCase() !== slug.trim().toLowerCase()) {
+      return res.status(404).json({
+        success: false,
+        isPublished: false,
+        tenant: null,
+        site: null,
+        error: 'O endereço solicitado não pertence a este domínio.',
+      });
+    }
+
     const result = await siteRepo.getPublicSiteBySlug(slug);
     if (!result.success) {
       return res.status(404).json(result);

@@ -53,17 +53,35 @@ const RESERVED_APP_PATHS = new Set([
 
 export const CROSS_TENANT_BLOCKED_SENTINEL = '__cross_tenant_blocked__';
 
-function getTenantSubdomainSlug(): string | null {
-  if (typeof window === 'undefined') return null;
-  return resolveSlugFromHostname(window.location.hostname);
+export function getTenantSubdomainSlug(hostnameOverride?: string): string | null {
+  const host =
+    hostnameOverride !== undefined
+      ? hostnameOverride
+      : typeof window !== 'undefined'
+        ? window.location.hostname
+        : '';
+  if (!host) return null;
+  return resolveSlugFromHostname(host);
 }
 
 // Helper to detect if user requested a public store/company page by slug
-function getPublicSlugFromUrl(): string | null {
-  if (typeof window === 'undefined') return null;
+export function getPublicSlugFromUrl(
+  hostnameOverride?: string,
+  pathnameOverride?: string,
+  searchOverride?: string
+): string | null {
+  const isBrowser = typeof window !== 'undefined';
+  if (!isBrowser && hostnameOverride === undefined && pathnameOverride === undefined) {
+    return null;
+  }
 
-  const subdomainSlug = getTenantSubdomainSlug();
-  const rawPath = window.location.pathname.replace(/^\/+|\/+$/g, '');
+  const subdomainSlug = getTenantSubdomainSlug(hostnameOverride);
+  const pathname =
+    pathnameOverride !== undefined ? pathnameOverride : isBrowser ? window.location.pathname : '/';
+  const search =
+    searchOverride !== undefined ? searchOverride : isBrowser ? window.location.search : '';
+
+  const rawPath = pathname.replace(/^\/+|\/+$/g, '');
   const pathParts = rawPath ? rawPath.split('/') : [];
   const firstSeg = (pathParts[0] || '').toLowerCase();
 
@@ -92,6 +110,18 @@ function getPublicSlugFromUrl(): string | null {
     return subdomainSlug;
   }
 
+  // Check SSR-injected initial tenant slug if present on root
+  if (
+    isBrowser &&
+    hostnameOverride === undefined &&
+    pathnameOverride === undefined &&
+    !rawPath &&
+    typeof (window as any).__INITIAL_TENANT_SLUG__ === 'string' &&
+    (window as any).__INITIAL_TENANT_SLUG__.trim()
+  ) {
+    return (window as any).__INITIAL_TENANT_SLUG__.trim().toLowerCase();
+  }
+
   // Standard / Legacy domain access (e.g. minisitenovo.vercel.app/p/:slug or minihub.tech/p/:slug)
   if (firstSeg === 'p' && pathParts[1]) {
     return pathParts[1].toLowerCase();
@@ -100,7 +130,7 @@ function getPublicSlugFromUrl(): string | null {
     return pathParts[1].toLowerCase();
   }
 
-  const params = new URLSearchParams(window.location.search);
+  const params = new URLSearchParams(search);
   const qSlug = params.get('p') || params.get('slug') || params.get('site');
   if (qSlug) return qSlug.toLowerCase();
 

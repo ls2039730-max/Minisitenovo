@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../../services/api';
 import { Tenant } from '../../types/saas';
+import { getTenantSubdomain } from '../../utils/url';
 import { StatusBadge } from '../common/Badge';
 import {
   Building2,
@@ -255,7 +256,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                       <StatusBadge status={tenant.status} />
                     </div>
                     <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <span className="font-mono text-slate-600">{tenant.subdomain}</span>
+                      <span className="font-mono text-indigo-600">{getTenantSubdomain(tenant.slug)}</span>
                       <span>•</span>
                       <span>Resp: {tenant.ownerName}</span>
                       <span>•</span>

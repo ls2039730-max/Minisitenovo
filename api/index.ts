@@ -139,13 +139,18 @@ app.get('*', async (req, res) => {
     } catch (e) {}
   }
   const possiblePaths = [
+    path.resolve(process.cwd(), 'dist', '_spa.html'),
     path.resolve(process.cwd(), 'dist', 'index.html'),
+    path.resolve(__dirname, '..', 'dist', '_spa.html'),
     path.resolve(__dirname, '..', 'dist', 'index.html'),
+    path.resolve(__dirname, 'dist', '_spa.html'),
     path.resolve(__dirname, 'dist', 'index.html'),
     path.resolve(process.cwd(), 'index.html'),
   ];
+  res.setHeader('Vary', 'Host, X-Forwarded-Host');
   for (const p of possiblePaths) {
     if (fs.existsSync(p)) {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.sendFile(p);
     }
   }

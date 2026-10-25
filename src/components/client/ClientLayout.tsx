@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Plan, FeatureKey } from '../../types/saas';
 import { isTenantFeatureEnabled } from '../../utils/features';
+import { getTenantSubdomain } from '../../utils/url';
 import {
   Home,
   Building2,
@@ -151,7 +152,7 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({
               </div>
               <div className="min-w-0 max-w-[140px] sm:max-w-[200px]">
                 <span className="font-extrabold text-sm tracking-tight block truncate">{tenant?.name}</span>
-                <span className="text-[10px] block opacity-80 truncate">{tenant?.subdomain}</span>
+                <span className="text-[10px] block opacity-80 truncate">{tenant?.slug ? getTenantSubdomain(tenant.slug) : tenant?.subdomain}</span>
               </div>
             </div>
           </div>

@@ -13,6 +13,7 @@ import { ProfessionalTemplate, generateTemplatePreviewSite } from '../../../cons
 import { Tenant } from '../../../types/saas';
 import { SiteData } from '../../../types/site';
 import { PublicSiteView } from '../public/PublicSiteView';
+import { getPublicStoreUrl } from '../../../utils/url';
 
 interface TemplatePreviewModalProps {
   template: ProfessionalTemplate | null;
@@ -134,7 +135,7 @@ export const TemplatePreviewModal: React.FC<TemplatePreviewModalProps> = ({
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80 inline-block" />
               </div>
               <div className="bg-slate-950 text-slate-400 px-3 py-1 rounded-lg text-[11px] font-mono flex-1 text-center max-w-md mx-auto truncate">
-                https://{tenant.subdomain} (Modo Pré-visualização do Template)
+                {getPublicStoreUrl(tenant.slug)} (Modo Pré-visualização do Template)
               </div>
             </div>
 

@@ -249,6 +249,7 @@ export function buildTenantMetaTags(
     <script type="application/ld+json">
     ${schemaJson}
     </script>
+    <script>window.__INITIAL_TENANT_SLUG__ = "${escapeHtml(slug)}";</script>
   `;
 }
 
@@ -270,9 +271,11 @@ export function injectMetaIntoHtml(html: string, metaTags: string): string {
 
 export function getBaseHtml(): string {
   const possiblePaths = [
+    path.resolve(process.cwd(), 'dist', '_spa.html'),
     path.resolve(process.cwd(), 'dist', 'index.html'),
-    path.resolve(process.cwd(), 'index.html'),
+    path.resolve(__dirname, '..', 'dist', '_spa.html'),
     path.resolve(__dirname, '..', 'dist', 'index.html'),
+    path.resolve(process.cwd(), 'index.html'),
     path.resolve(__dirname, '..', 'index.html'),
   ];
   for (const p of possiblePaths) {
