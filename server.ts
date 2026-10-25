@@ -7,7 +7,7 @@ import { apiRouter } from './server/routes.js';
 import { bootstrapDatabaseIfNeeded } from './server/db/bootstrap.js';
 import { handlePublicSiteHtml } from './server/seoRenderer.js';
 import { repo } from './server/db/repository.js';
-import { resolveSlugFromHost } from './server/tenantResolver.js';
+import { resolveSlugFromHost, getServerBaseDomain } from './server/tenantResolver.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -58,11 +58,11 @@ async function startServer() {
   }
 
   // Intercept all public site paths before Vite / static fallback:
-  // 1. Root '/' on custom tenant subdomains (e.g. https://una-otica.DOMINIO/)
+  // 1. Root '/' on custom tenant subdomains (e.g. https://una-otica.minihub.tech/)
   app.get('/', (req, res, next) => {
     const forwardedHost = (req.headers['x-forwarded-host'] as string) || '';
     const hostHeader = forwardedHost.split(',')[0].trim() || req.get('host') || '';
-    const baseDomain = process.env.APP_BASE_DOMAIN || '';
+    const baseDomain = getServerBaseDomain();
     const simHeader = (req.headers['x-tenant-slug'] || req.headers['x-simulate-tenant']) as string | undefined;
     const simQuery = req.query?.simulate_subdomain as string | undefined;
     const subdomainSlug = resolveSlugFromHost(hostHeader, baseDomain, simHeader || simQuery);
@@ -79,7 +79,7 @@ async function startServer() {
   });
 
   // 2. /p, /p/, /p/:slug and /site/:slug
-  // Supports both standard https://minisitenovo.vercel.app/p/:slug and subdomain https://una-otica.DOMINIO/p/
+  // Supports both legacy https://minisitenovo.vercel.app/p/:slug and subdomain https://una-otica.minihub.tech
   app.get(['/p', '/p/', '/p/:slug', '/p/:slug/*', '/site', '/site/', '/site/:slug', '/site/:slug/*'], (req, res, next) => {
     if (req.path.includes('.') && !req.path.endsWith('.html')) {
       return next();
@@ -132,6 +132,24 @@ async function startServer() {
     if (!slug || slug.includes('.') || RESERVED_DIRECT_PATHS.has(slug)) {
       return next();
     }
+
+    const forwardedHost = (req.headers['x-forwarded-host'] as string) || '';
+    const hostHeader = forwardedHost.split(',')[0].trim() || req.get('host') || '';
+    const baseDomain = getServerBaseDomain();
+    const simHeader = (req.headers['x-tenant-slug'] || req.headers['x-simulate-tenant']) as string | undefined;
+    const simQuery = req.query?.simulate_subdomain as string | undefined;
+    const subdomainSlug = resolveSlugFromHost(hostHeader, baseDomain, simHeader || simQuery);
+
+    // If accessed via a tenant subdomain, always delegate to handlePublicSiteHtml to enforce cross-tenant isolation
+    if (subdomainSlug) {
+      return handlePublicSiteHtml(
+        req,
+        res,
+        slug,
+        !isProd && viteInstance ? (url, html) => viteInstance.transformIndexHtml(url, html) : undefined
+      );
+    }
+
     try {
       const tenant = await repo.getTenantBySlug(slug);
       if (tenant) {

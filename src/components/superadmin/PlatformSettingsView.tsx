@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getConfiguredBaseDomain } from '../../utils/url';
 import {
   Settings,
   Globe,
@@ -13,19 +14,7 @@ import {
 
 export const PlatformSettingsView: React.FC = () => {
   const [baseDomain, setBaseDomain] = useState(() => {
-    let domain = 'meudominio.com';
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('localhub_base_domain');
-      if (saved) {
-        domain = saved;
-      } else {
-        const host = window.location.host;
-        if (host && !host.includes('localhost') && !host.includes('127.0.0.1') && !host.includes('run.app')) {
-          domain = host;
-        }
-      }
-    }
-    return domain.replace(/^https?:\/\//, '').replace(/\/$/, '').trim();
+    return getConfiguredBaseDomain();
   });
   const [saved, setSaved] = useState(false);
 
@@ -76,7 +65,7 @@ export const PlatformSettingsView: React.FC = () => {
                 type="text"
                 value={baseDomain}
                 onChange={(e) => setBaseDomain(e.target.value)}
-                placeholder="meudominio.com"
+                placeholder="minihub.tech"
                 required
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-mono text-xs focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
               />
@@ -88,7 +77,7 @@ export const PlatformSettingsView: React.FC = () => {
               </button>
             </div>
             <p className="mt-2 text-xs text-slate-400">
-              Formato dos novos subdomínios: <span className="font-mono text-indigo-600">{'{slug}.'}{baseDomain}</span>
+              Formato das URLs públicas das empresas: <span className="font-mono text-indigo-600">{'https://{slug}.'}{baseDomain}</span>
             </p>
           </div>
         </form>

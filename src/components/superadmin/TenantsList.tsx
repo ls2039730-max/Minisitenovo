@@ -3,6 +3,7 @@ import { Plan, Tenant, TenantStatus } from '../../types/saas';
 import { StatusBadge } from '../common/Badge';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { useAuth } from '../../context/AuthContext';
+import { getTenantSubdomain } from '../../utils/url';
 import {
   Search,
   Plus,
@@ -221,8 +222,8 @@ export const TenantsList: React.FC<TenantsListProps> = ({
                             <div className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors flex items-center gap-1.5">
                               {tenant.name}
                             </div>
-                            <div className="text-[11px] font-mono text-slate-400 mt-0.5">
-                              {tenant.subdomain}
+                            <div className="text-[11px] font-mono text-indigo-600 mt-0.5">
+                              {getTenantSubdomain(tenant.slug)}
                             </div>
                             <div className="text-[11px] text-slate-400 mt-0.5">{tenant.segment}</div>
                           </div>

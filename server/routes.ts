@@ -12,7 +12,7 @@ import { generateSessionToken, verifySessionToken, JwtSessionPayload } from './a
 import { SYSTEM_FEATURES } from '../src/utils/features.js';
 import { User, Tenant, TenantStatus, FeatureKey } from '../src/types/saas.js';
 import { Professional, ProfessionalPayload } from '../src/types/service.js';
-import { canTenantOperate, resolveSlugFromHost, validateSlug } from './tenantResolver.js';
+import { canTenantOperate, resolveSlugFromHost, validateSlug, getServerBaseDomain } from './tenantResolver.js';
 import { storageService } from './storage/storageService.js';
 import { handlePublicSiteHtml } from './seoRenderer.js';
 import { geocodeAddressServer, lookupPostalCodeServer } from './services/routingService.js';
@@ -253,7 +253,7 @@ apiRouter.get('/config', (_req: Request, res: Response) => {
   return res.json({
     success: true,
     isDevelopment: process.env.NODE_ENV !== 'production',
-    baseDomain: process.env.APP_BASE_DOMAIN || 'meudominio.com',
+    baseDomain: getServerBaseDomain(),
   });
 });
 
@@ -262,7 +262,7 @@ apiRouter.get('/resolve-tenant', async (req: Request, res: Response) => {
   const simHeader = (req.headers['x-tenant-slug'] || req.headers['x-simulate-tenant']) as string | undefined;
   const simQuery = req.query.simulate_subdomain as string | undefined;
 
-  const slug = resolveSlugFromHost(host, process.env.APP_BASE_DOMAIN || '', simHeader || simQuery);
+  const slug = resolveSlugFromHost(host, getServerBaseDomain(), simHeader || simQuery);
   if (!slug) {
     return res.json({ success: true, isTenantHost: false, tenant: null });
   }

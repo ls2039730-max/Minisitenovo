@@ -30,6 +30,7 @@ import { api } from './services/api';
 import { Plan, Tenant, TenantStatus } from './types/saas';
 import { SiteData } from './types/site';
 import { isFeatureActive, isTenantFeatureEnabled } from './utils/features';
+import { resolveSlugFromHostname } from './utils/url';
 import { Building2, ArrowLeft, Loader2, AlertCircle, LogOut, ShieldCheck, RefreshCw } from 'lucide-react';
 
 // Reserved paths that should never be treated as store slugs
@@ -50,44 +51,11 @@ const RESERVED_APP_PATHS = new Set([
   'mesa',
 ]);
 
+export const CROSS_TENANT_BLOCKED_SENTINEL = '__cross_tenant_blocked__';
+
 function getTenantSubdomainSlug(): string | null {
   if (typeof window === 'undefined') return null;
-  const host = window.location.hostname.toLowerCase();
-  const baseDomain =
-    (import.meta as any).env?.VITE_APP_BASE_DOMAIN ||
-    (window as any).__APP_BASE_DOMAIN ||
-    localStorage.getItem('localhub_base_domain') ||
-    '';
-
-  const cleanBase = baseDomain
-    .replace(/^https?:\/\//, '')
-    .replace(/\/$/, '')
-    .trim()
-    .toLowerCase();
-
-  const RESERVED_HOSTS = ['vercel.app', 'run.app', 'localhost', '127.0.0.1', '0.0.0.0'];
-  if (!cleanBase || cleanBase === 'meudominio.com' || RESERVED_HOSTS.some((h) => cleanBase.includes(h))) {
-    return null;
-  }
-
-  if (host === cleanBase || host === `www.${cleanBase}`) {
-    return null;
-  }
-
-  if (host.endsWith(`.${cleanBase}`)) {
-    const sub = host.slice(0, -(cleanBase.length + 1));
-    const RESERVED_SLUGS = new Set([
-      'www', 'admin', 'api', 'app', 'dashboard', 'login', 'signup',
-      'suporte', 'support', 'mail', 'auth', 'billing', 'cdn', 'static',
-      'assets', 'help', 'status', 'portal', 'account', 'webmail', 'root', 'sysadmin',
-    ]);
-    if (sub && !sub.includes('.') && !RESERVED_SLUGS.has(sub)) {
-      if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(sub)) {
-        return sub;
-      }
-    }
-  }
-  return null;
+  return resolveSlugFromHostname(window.location.hostname);
 }
 
 // Helper to detect if user requested a public store/company page by slug
@@ -99,28 +67,32 @@ function getPublicSlugFromUrl(): string | null {
   const pathParts = rawPath ? rawPath.split('/') : [];
   const firstSeg = (pathParts[0] || '').toLowerCase();
 
-  // If accessed via a verified tenant subdomain (e.g. https://una-otica.DOMINIO_PROPRIO/p/)
+  // If accessed via a verified tenant subdomain (e.g. https://una-otica.minihub.tech)
   if (subdomainSlug) {
-    // 1. If path is empty, /p, /p/, /site, /site/
+    // 1. Root path '/', '/p', '/p/', '/site', '/site/'
     if (!rawPath || firstSeg === 'p' || firstSeg === 'site') {
       const explicitPathSlug = pathParts[1]?.toLowerCase();
-      // Cross-tenant protection: if a different store slug is explicitly specified in the path, reject it
+      // Cross-tenant protection: if a different store slug is explicitly specified in the path, block it
       if (explicitPathSlug && explicitPathSlug !== subdomainSlug) {
-        return null;
+        return CROSS_TENANT_BLOCKED_SENTINEL;
       }
       return subdomainSlug;
     }
 
-    // If path is a single direct slug matching tenant: /una-otica
+    // 2. If path is a single direct slug matching tenant: /una-otica
     if (firstSeg === subdomainSlug) {
       return subdomainSlug;
     }
 
-    // Any other explicit different store slug is cross-tenant attempt
-    return null;
+    // 3. Any other explicit store slug on a tenant subdomain is blocked (prevents cross-tenant access)
+    if (!RESERVED_APP_PATHS.has(firstSeg)) {
+      return CROSS_TENANT_BLOCKED_SENTINEL;
+    }
+
+    return subdomainSlug;
   }
 
-  // Standard domain access (e.g. minisitenovo.vercel.app/p/:slug or localhost:3000/p/:slug)
+  // Standard / Legacy domain access (e.g. minisitenovo.vercel.app/p/:slug or minihub.tech/p/:slug)
   if (firstSeg === 'p' && pathParts[1]) {
     return pathParts[1].toLowerCase();
   }
@@ -145,18 +117,33 @@ function getPublicSlugFromUrl(): string | null {
 // Helper to detect if user opened a table catalog via QR Code
 function getTableParamsFromUrl(): { slug: string; token: string } | null {
   if (typeof window === 'undefined') return null;
+  const subdomainSlug = getTenantSubdomainSlug();
   const params = new URLSearchParams(window.location.search);
   const tableToken = params.get('mesa') || params.get('t') || params.get('table');
-  const slug = params.get('r') || params.get('slug') || params.get('p');
-  if (tableToken && slug) {
-    return { slug, token: tableToken };
+  const querySlug = (params.get('r') || params.get('slug') || params.get('p'))?.toLowerCase();
+
+  if (tableToken) {
+    if (subdomainSlug) {
+      // Cross-tenant protection on QR table URLs
+      if (querySlug && querySlug !== subdomainSlug) {
+        return null;
+      }
+      return { slug: subdomainSlug, token: tableToken };
+    }
+    if (querySlug) {
+      return { slug: querySlug, token: tableToken };
+    }
   }
 
   // Path check: /m/:slug/:token or /mesa/:slug/:token
   const path = window.location.pathname.replace(/^\/+|\/+$/g, '');
   const segments = path.split('/');
   if ((segments[0] === 'm' || segments[0] === 'mesa') && segments.length >= 3) {
-    return { slug: segments[1], token: segments[2] };
+    const pathSlug = segments[1].toLowerCase();
+    if (subdomainSlug && pathSlug !== subdomainSlug) {
+      return null;
+    }
+    return { slug: pathSlug, token: segments[2] };
   }
 
   return null;
@@ -392,6 +379,17 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     if (!publicSlug) {
       setPublicSiteData(null);
+      return;
+    }
+
+    if (publicSlug === CROSS_TENANT_BLOCKED_SENTINEL) {
+      setPublicSiteData({
+        loading: false,
+        tenant: null,
+        site: null,
+        isPublished: false,
+        error: 'O endereço solicitado não pertence a este domínio.',
+      });
       return;
     }
 

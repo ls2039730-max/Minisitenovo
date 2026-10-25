@@ -10,7 +10,7 @@ import {
   UserRole,
   AuditLog,
 } from '../../src/types/saas.js';
-import { validateSlug } from '../tenantResolver.js';
+import { validateSlug, getServerBaseDomain, getTenantSubdomain } from '../tenantResolver.js';
 import { SYSTEM_FEATURES } from '../../src/utils/features.js';
 
 export class SaasRepository {
@@ -946,8 +946,8 @@ export class SaasRepository {
 
     const tenantId = crypto.randomUUID(); // Clean PostgreSQL UUID
     const cleanSlug = payload.slug.trim().toLowerCase();
-    const effectiveBaseDomain = payload.baseDomain || process.env.APP_BASE_DOMAIN || process.env.VERCEL_URL || 'meudominio.com';
-    const subdomain = payload.subdomain || `${cleanSlug}.${effectiveBaseDomain}`;
+    const effectiveBaseDomain = getServerBaseDomain(payload.baseDomain);
+    const subdomain = getTenantSubdomain(cleanSlug, effectiveBaseDomain);
     const now = new Date().toISOString();
 
     // Resolve target plan ID (ensure valid UUID)
@@ -1120,7 +1120,7 @@ export class SaasRepository {
       if (!check.available) throw new Error(check.error || 'Slug indisponível.');
       const cleanSlug = payload.slug.trim().toLowerCase();
       tenantPatch.slug = cleanSlug;
-      tenantPatch.subdomain = `${cleanSlug}.${process.env.APP_BASE_DOMAIN || 'meudominio.com'}`;
+      tenantPatch.subdomain = getTenantSubdomain(cleanSlug, getServerBaseDomain());
     }
 
     if (payload.name) tenantPatch.name = payload.name.trim();
@@ -1558,6 +1558,11 @@ export class SaasRepository {
   }
 
   private formatTenant(t: any, s: any, overrides: any): Tenant {
+    const cleanSlug = String(t.slug || '').trim().toLowerCase();
+    const canonicalSubdomain = cleanSlug
+      ? getTenantSubdomain(cleanSlug, getServerBaseDomain())
+      : t.subdomain;
+
     return {
       id: t.id,
       name: t.name,
@@ -1572,7 +1577,7 @@ export class SaasRepository {
       ownerName: t.owner_name,
       ownerEmail: t.owner_email,
       ownerPhone: t.owner_phone,
-      subdomain: t.subdomain,
+      subdomain: canonicalSubdomain,
       cep: t.cep || undefined,
       street: t.street || undefined,
       number: t.number || undefined,

@@ -1,29 +1,31 @@
 import { TenantStatus } from '../src/types/saas.js';
+import {
+  DEFAULT_BASE_DOMAIN,
+  RESERVED_PLATFORM_HOSTS,
+  RESERVED_SUBDOMAIN_SLUGS,
+  cleanDomainString,
+  isValidCustomBaseDomain,
+  getPublicStoreUrl,
+  getTenantSubdomain,
+} from '../src/utils/url.js';
 
-export const RESERVED_SLUGS = new Set([
-  'www',
-  'admin',
-  'api',
-  'app',
-  'dashboard',
-  'login',
-  'signup',
-  'suporte',
-  'support',
-  'mail',
-  'auth',
-  'billing',
-  'cdn',
-  'static',
-  'assets',
-  'help',
-  'status',
-  'portal',
-  'account',
-  'webmail',
-  'root',
-  'sysadmin',
-]);
+export const RESERVED_SLUGS = RESERVED_SUBDOMAIN_SLUGS;
+
+export { DEFAULT_BASE_DOMAIN, getPublicStoreUrl, getTenantSubdomain };
+
+/**
+ * Returns the configured base domain on the server, defaulting to "minihub.tech".
+ */
+export function getServerBaseDomain(overrideDomain?: string | null): string {
+  if (overrideDomain && isValidCustomBaseDomain(overrideDomain)) {
+    return cleanDomainString(overrideDomain);
+  }
+  const envDomain = process.env.APP_BASE_DOMAIN || process.env.VITE_APP_BASE_DOMAIN;
+  if (isValidCustomBaseDomain(envDomain)) {
+    return cleanDomainString(envDomain);
+  }
+  return DEFAULT_BASE_DOMAIN;
+}
 
 /**
  * Normalizes text to a clean slug:
@@ -74,52 +76,61 @@ export function validateSlug(slug: string): { valid: boolean; error?: string } {
 }
 
 /**
- * Resolves tenant slug from the incoming HTTP Host / header.
- * 
+ * Resolves tenant slug from the incoming HTTP Host / X-Forwarded-Host header.
+ *
  * Security rules:
  * - Does NOT trust arbitrary or reserved hosts.
- * - Does NOT allow subdomains of platform hosts (vercel.app, run.app) to act as store subdomains.
- * - Only resolves subdomains when APP_BASE_DOMAIN is set with a verified domain.
- * - Restricts to a single subdomain level and verifies valid slug format.
+ * - Does NOT allow subdomains of platform hosts (vercel.app, run.app, localhost) to act as store subdomains.
+ * - Treats "minihub.tech" and "www.minihub.tech" as main platform hosts (returns null).
+ * - Restricts to a single subdomain level ({slug}.minihub.tech) and verifies valid slug format.
  */
 export function resolveSlugFromHost(
   hostHeader: string | undefined,
-  baseDomain: string = process.env.APP_BASE_DOMAIN || '',
+  baseDomain?: string,
   simulationHeader?: string
 ): string | null {
-  // Allow explicit development simulation header
+  // Allow explicit development simulation header when valid and not reserved
   if (simulationHeader && simulationHeader.trim()) {
     const simSlug = simulationHeader.trim().toLowerCase();
-    if (!RESERVED_SLUGS.has(simSlug)) {
+    if (!RESERVED_SLUGS.has(simSlug) && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(simSlug)) {
       return simSlug;
     }
   }
 
   if (!hostHeader) return null;
 
-  // Clean raw host (strip port, take first host if comma-separated from proxies)
+  // Clean raw host (strip port, take first host if comma-separated from reverse proxies)
   const host = hostHeader.split(',')[0].trim().split(':')[0].toLowerCase();
-  const cleanBase = baseDomain
-    .replace(/^https?:\/\//, '')
-    .replace(/\/$/, '')
-    .trim()
-    .toLowerCase();
+  if (!host) return null;
 
-  // Infrastructure hosts where 4th-level wildcard is not supported
-  const RESERVED_HOSTS = ['vercel.app', 'run.app', 'localhost', '127.0.0.1', '0.0.0.0'];
-  if (!cleanBase || cleanBase === 'meudominio.com' || RESERVED_HOSTS.some((h) => cleanBase.includes(h))) {
+  // Never interpret internal Vercel / Cloud Run / localhost domains as tenant slugs
+  if (RESERVED_PLATFORM_HOSTS.some((h) => host === h || host.endsWith(`.${h}`) || host.includes(h))) {
     return null;
   }
 
-  // Exact match on base domain or main portal
+  // If caller explicitly passed a non-empty baseDomain that is invalid/placeholder, return null
+  if (baseDomain !== undefined && baseDomain !== '') {
+    const rawClean = cleanDomainString(baseDomain);
+    if (
+      rawClean === 'meudominio.com' ||
+      RESERVED_PLATFORM_HOSTS.some((h) => rawClean.includes(h))
+    ) {
+      return null;
+    }
+  }
+
+  const cleanBase = getServerBaseDomain(baseDomain);
+  if (!cleanBase) return null;
+
+  // Exact match on root domain (minihub.tech) or www (www.minihub.tech) -> Not a tenant slug
   if (host === cleanBase || host === `www.${cleanBase}`) {
     return null;
   }
 
-  // Check if host ends with .cleanBase
+  // Check if host ends with .{cleanBase} (e.g., una-otica.minihub.tech)
   if (host.endsWith(`.${cleanBase}`)) {
     const sub = host.slice(0, -(cleanBase.length + 1));
-    // Ensure it's a single subdomain level (no nested dots), not reserved, and valid slug
+    // Ensure single subdomain level (no nested dots), not reserved, and valid slug format
     if (sub && !sub.includes('.') && !RESERVED_SLUGS.has(sub)) {
       if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(sub)) {
         return sub;
@@ -132,7 +143,7 @@ export function resolveSlugFromHost(
 
 /**
  * Safely extracts tenant slug from any request, checking:
- * 1. Hostname subdomain (if APP_BASE_DOMAIN is configured)
+ * 1. Hostname subdomain (e.g., una-otica.minihub.tech)
  * 2. URL path (/p/:slug, /site/:slug, or /:slug)
  * 3. Query string (?p=, ?slug=)
  */
@@ -142,8 +153,12 @@ export function extractTenantSlugFromRequest(req: any): {
   isCustomDomainSubdomain: boolean;
 } {
   const hostHeader = (req.headers?.['x-forwarded-host'] || req.headers?.host || '').toString();
-  const baseDomain = process.env.APP_BASE_DOMAIN || '';
-  const subSlug = resolveSlugFromHost(hostHeader, baseDomain, req.headers?.['x-simulate-tenant'] as string);
+  const baseDomain = getServerBaseDomain();
+  const subSlug = resolveSlugFromHost(
+    hostHeader,
+    baseDomain,
+    (req.headers?.['x-tenant-slug'] || req.headers?.['x-simulate-tenant']) as string
+  );
 
   if (subSlug) {
     return { slug: subSlug, source: 'subdomain', isCustomDomainSubdomain: true };

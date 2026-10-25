@@ -1,4 +1,5 @@
 import QRCode from 'qrcode';
+import { getPublicStoreUrl } from './url';
 
 export interface QrCodeOptions {
   width?: number;
@@ -51,9 +52,10 @@ export async function generateQrCodeSvg(
 }
 
 export function buildTableCatalogUrl(tenantSlug: string, tableToken: string): string {
-  if (typeof window === 'undefined') {
-    return `/?mesa=${tableToken}&r=${tenantSlug}`;
+  const cleanSlug = (tenantSlug || '').trim().toLowerCase();
+  const baseStoreUrl = getPublicStoreUrl(cleanSlug);
+  if (!baseStoreUrl) {
+    return `/?mesa=${tableToken}&r=${cleanSlug}`;
   }
-  const origin = window.location.origin;
-  return `${origin}/?mesa=${tableToken}&r=${tenantSlug}`;
+  return `${baseStoreUrl}/?mesa=${tableToken}&r=${cleanSlug}`;
 }

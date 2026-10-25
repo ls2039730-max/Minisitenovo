@@ -3,6 +3,7 @@ import { api } from '../../services/api';
 import { FeatureKey, Plan, Tenant, TenantStatus, User, UserRole, FeatureDefinition } from '../../types/saas';
 import { OrdersSummary } from '../../types/order';
 import { SYSTEM_FEATURES, getFeatureResolution } from '../../utils/features';
+import { getPublicStoreUrl, getTenantSubdomain } from '../../utils/url';
 import { StatusBadge } from '../common/Badge';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { useAuth } from '../../context/AuthContext';
@@ -351,9 +352,15 @@ export const TenantDetailView: React.FC<TenantDetailViewProps> = ({
                 <StatusBadge status={tenant.status} />
               </div>
               <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
-                <span className="font-mono text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
-                  {tenant.subdomain}
-                </span>
+                <a
+                  href={getPublicStoreUrl(tenant.slug)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded-md flex items-center gap-1 transition-colors"
+                >
+                  {getTenantSubdomain(tenant.slug)}
+                  <ExternalLink className="w-3 h-3" />
+                </a>
                 <span>•</span>
                 <span>Plano: {currentPlan?.name || 'Personalizado'}</span>
                 <span>•</span>
@@ -424,11 +431,17 @@ export const TenantDetailView: React.FC<TenantDetailViewProps> = ({
                   <span className="text-indigo-600 font-mono font-bold text-sm mt-0.5 block">{tenant.slug}</span>
                 </div>
                 <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
-                  <span className="text-slate-400 block font-medium">Subdomínio Previsto</span>
-                  <span className="text-slate-900 font-mono font-bold text-sm mt-0.5 block flex items-center gap-1.5">
-                    <Globe className="w-3.5 h-3.5 text-indigo-500" />
-                    {tenant.subdomain}
-                  </span>
+                  <span className="text-slate-400 block font-medium">Endereço Público (Subdomínio)</span>
+                  <a
+                    href={getPublicStoreUrl(tenant.slug)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-indigo-600 hover:text-indigo-800 font-mono font-bold text-sm mt-0.5 flex items-center gap-1.5"
+                  >
+                    <Globe className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                    <span className="truncate">{getPublicStoreUrl(tenant.slug)}</span>
+                    <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                  </a>
                 </div>
                 <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
                   <span className="text-slate-400 block font-medium">Segmento</span>

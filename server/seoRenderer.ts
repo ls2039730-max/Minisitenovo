@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import type { Request, Response } from 'express';
 import { siteRepo } from './db/siteRepository.js';
-import { resolveSlugFromHost } from './tenantResolver.js';
+import { resolveSlugFromHost, getServerBaseDomain, getPublicStoreUrl } from './tenantResolver.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -162,9 +162,16 @@ export function buildTenantMetaTags(
   }
   const faviconUrl = escapeHtml(rawFavicon);
 
-  // Canonical and og:url: on subdomain https://{slug}.DOMINIO/p/, on standard host https://minisitenovo.vercel.app/p/{slug}
-  const targetPath = isSubdomain ? '/p/' : `/p/${slug}`;
-  const canonicalUrl = escapeHtml(`${baseUrl}${targetPath}`);
+  // Canonical and og:url:
+  // On custom subdomain (e.g. https://una-otica.minihub.tech), canonical URL is https://una-otica.minihub.tech (no /p/ suffix).
+  // Even on legacy path (/p/una-otica), point canonical & og:url to the official https://{slug}.minihub.tech address.
+  const activeBaseDomain = getServerBaseDomain();
+  const rawCanonicalUrl = isSubdomain
+    ? baseUrl.replace(/\/$/, '')
+    : activeBaseDomain
+      ? getPublicStoreUrl(slug, { baseDomain: activeBaseDomain })
+      : `${baseUrl.replace(/\/$/, '')}/p/${slug}`;
+  const canonicalUrl = escapeHtml(rawCanonicalUrl);
   const escapedTenantName = escapeHtml(tenantName);
 
   // Determine image MIME type
@@ -183,7 +190,7 @@ export function buildTenantMetaTags(
     description: rawDescription,
     telephone: tenant?.whatsapp || tenant?.phone || undefined,
     email: tenant?.email || undefined,
-    url: `${baseUrl}${targetPath}`,
+    url: rawCanonicalUrl,
   });
 
   return `
@@ -296,9 +303,13 @@ export async function handlePublicSiteHtml(
   transformHtml?: (url: string, html: string) => Promise<string>
 ): Promise<void> {
   try {
+    // Always vary by Host so CDNs / edge caches never mix HTML between different tenant subdomains
+    res.setHeader('Vary', 'Host, X-Forwarded-Host');
+    res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+
     const forwardedHost = (req.headers['x-forwarded-host'] as string) || '';
     const hostHeader = forwardedHost.split(',')[0].trim() || req.get('host') || '';
-    const baseDomain = process.env.APP_BASE_DOMAIN || '';
+    const baseDomain = getServerBaseDomain();
     const simHeader = (req.headers['x-tenant-slug'] || req.headers['x-simulate-tenant']) as string | undefined;
     const simQuery = req.query?.simulate_subdomain as string | undefined;
     const subdomainSlug = resolveSlugFromHost(hostHeader, baseDomain, simHeader || simQuery);
@@ -307,7 +318,7 @@ export async function handlePublicSiteHtml(
 
     let slug = (slugParam || '').trim().toLowerCase();
 
-    // If path did not specify a slug (e.g. /p, /p/, or / on subdomain), use subdomainSlug or query/url
+    // If path did not specify a slug (e.g. / on https://una-otica.minihub.tech), use subdomainSlug or query/url
     if (!slug) {
       if (subdomainSlug) {
         slug = subdomainSlug;
@@ -317,8 +328,8 @@ export async function handlePublicSiteHtml(
     }
 
     // Security & Tenant Isolation:
-    // If request arrives on a tenant subdomain (e.g. una-otica.dominio.com),
-    // and an explicit different slug is passed in the path (e.g. /p/outra-loja),
+    // If request arrives on a tenant subdomain (e.g. una-otica.minihub.tech),
+    // and an explicit different slug is passed in the path (e.g. /p/outra-loja or /outra-loja),
     // block cross-tenant leakage immediately!
     if (subdomainSlug && slug && subdomainSlug.toLowerCase() !== slug.toLowerCase()) {
       const notFoundHtml = injectMetaIntoHtml(
@@ -327,7 +338,7 @@ export async function handlePublicSiteHtml(
       );
       if (transformHtml) {
         try {
-          const transformed = await transformHtml(req.originalUrl || `/p/`, notFoundHtml);
+          const transformed = await transformHtml(req.originalUrl || `/`, notFoundHtml);
           res.setHeader('Content-Type', 'text/html; charset=utf-8');
           res.status(404).send(transformed);
           return;
@@ -346,7 +357,7 @@ export async function handlePublicSiteHtml(
 
     // Determine Base URL: always prioritize https in cloud/production
     const forwardedProto = (req.headers['x-forwarded-proto'] as string) || '';
-    const host = hostHeader || 'minisitenovo.vercel.app';
+    const host = hostHeader || `www.${baseDomain}`;
     const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
     const proto = isLocal ? 'http' : (forwardedProto.split(',')[0].trim() || 'https');
     const baseUrl = `${proto}://${host}`;
@@ -361,12 +372,11 @@ export async function handlePublicSiteHtml(
 
       if (transformHtml) {
         try {
-          finalHtml = await transformHtml(req.originalUrl || (isSubdomain ? '/p/' : `/p/${slug}`), finalHtml);
+          finalHtml = await transformHtml(req.originalUrl || (isSubdomain ? '/' : `/p/${slug}`), finalHtml);
         } catch (e) {}
       }
 
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
       res.status(200).send(finalHtml);
       return;
     }

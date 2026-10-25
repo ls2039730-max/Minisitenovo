@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
 import { Plan, TenantStatus } from '../../types/saas';
+import { getConfiguredBaseDomain, getTenantSubdomain, getPublicStoreUrl } from '../../utils/url';
 import {
   X,
   Building2,
@@ -27,19 +28,7 @@ export const NewTenantModal: React.FC<NewTenantModalProps> = ({
   plans,
 }) => {
   const baseDomain = React.useMemo(() => {
-    let domain = 'meudominio.com';
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('localhub_base_domain');
-      if (saved) {
-        domain = saved;
-      } else {
-        const host = window.location.host;
-        if (host && !host.includes('localhost') && !host.includes('127.0.0.1') && !host.includes('run.app')) {
-          domain = host;
-        }
-      }
-    }
-    return domain.replace(/^https?:\/\//, '').replace(/\/$/, '').trim();
+    return getConfiguredBaseDomain();
   }, []);
 
   const [name, setName] = useState('');
@@ -144,7 +133,7 @@ export const NewTenantModal: React.FC<NewTenantModalProps> = ({
       const res = await api.createTenant({
         name: name.trim(),
         slug: slug.trim().toLowerCase(),
-        subdomain: `${slug.trim().toLowerCase()}.${baseDomain}`,
+        subdomain: getTenantSubdomain(slug.trim().toLowerCase(), baseDomain),
         baseDomain,
         segment: segment.trim() || 'Comércio & Serviços Locais',
         cnpj: cnpj.trim(),
@@ -269,7 +258,7 @@ export const NewTenantModal: React.FC<NewTenantModalProps> = ({
                 </div>
                 <div className="mt-1 flex items-center justify-between">
                   <p className="text-[11px] text-slate-400 font-mono">
-                    Subdomínio previsto: <span className="text-indigo-600 font-semibold">{slug || 'nome'}.{baseDomain}</span>
+                    URL pública: <span className="text-indigo-600 font-semibold">{getPublicStoreUrl(slug || 'nome', { baseDomain })}</span>
                   </p>
                   {slugAvailable === false && (
                     <button

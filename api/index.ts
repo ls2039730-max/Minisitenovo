@@ -13,6 +13,7 @@ import { apiRouter } from '../server/routes.js';
 import { bootstrapDatabaseIfNeeded } from '../server/db/bootstrap.js';
 import { handlePublicSiteHtml, extractSlugFromUrl, getBaseHtml } from '../server/seoRenderer.js';
 import { repo } from '../server/db/repository.js';
+import { resolveSlugFromHost, getServerBaseDomain } from '../server/tenantResolver.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,7 +24,10 @@ app.use(express.json({ limit: '10mb' }));
 app.use(cookieParser());
 
 // Static uploads directory fallback
-const uploadsDir = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME ? '/tmp/uploads' : path.resolve(process.cwd(), 'data', 'uploads');
+const uploadsDir =
+  process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME
+    ? '/tmp/uploads'
+    : path.resolve(process.cwd(), 'data', 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   try {
     fs.mkdirSync(uploadsDir, { recursive: true });
@@ -48,7 +52,25 @@ setTimeout(() => {
   bootstrapDatabaseIfNeeded().catch((e) => console.error('[BOOTSTRAP] Startup error on Vercel:', e));
 }, 0);
 
-// 1. Dynamic Tenant OpenGraph / Social Sharing routes:
+// Mount API routes first so /api/* never gets intercepted by HTML handlers
+app.use('/api', apiRouter);
+
+// 1. Root '/' and '/p', '/p/', '/site', '/site/' on custom tenant subdomains (e.g. https://una-otica.minihub.tech/)
+app.get(['/', '/p', '/p/', '/site', '/site/'], (req, res, next) => {
+  const forwardedHost = (req.headers['x-forwarded-host'] as string) || '';
+  const hostHeader = forwardedHost.split(',')[0].trim() || req.get('host') || '';
+  const baseDomain = getServerBaseDomain();
+  const simHeader = (req.headers['x-tenant-slug'] || req.headers['x-simulate-tenant']) as string | undefined;
+  const simQuery = req.query?.simulate_subdomain as string | undefined;
+  const subdomainSlug = resolveSlugFromHost(hostHeader, baseDomain, simHeader || simQuery);
+
+  if (subdomainSlug) {
+    return handlePublicSiteHtml(req, res, subdomainSlug);
+  }
+  next();
+});
+
+// 2. Dynamic Tenant OpenGraph / Social Sharing routes (/p/:slug and /site/:slug):
 app.get(['/p/:slug', '/p/:slug/*', '/site/:slug', '/site/:slug/*'], (req, res, next) => {
   if (req.path.includes('.') && !req.path.endsWith('.html')) {
     return next();
@@ -56,7 +78,7 @@ app.get(['/p/:slug', '/p/:slug/*', '/site/:slug', '/site/:slug/*'], (req, res, n
   return handlePublicSiteHtml(req, res, req.params.slug);
 });
 
-// 2. Direct slug / query interception (e.g. /costela-mania or ?slug=costela-mania)
+// 3. Direct slug / query interception (e.g. /costela-mania or ?slug=costela-mania)
 app.use(async (req, res, next) => {
   if (
     req.path.startsWith('/api') ||
@@ -66,7 +88,20 @@ app.use(async (req, res, next) => {
   ) {
     return next();
   }
+
+  const forwardedHost = (req.headers['x-forwarded-host'] as string) || '';
+  const hostHeader = forwardedHost.split(',')[0].trim() || req.get('host') || '';
+  const baseDomain = getServerBaseDomain();
+  const simHeader = (req.headers['x-tenant-slug'] || req.headers['x-simulate-tenant']) as string | undefined;
+  const simQuery = req.query?.simulate_subdomain as string | undefined;
+  const subdomainSlug = resolveSlugFromHost(hostHeader, baseDomain, simHeader || simQuery);
+
   const slug = extractSlugFromUrl(req);
+  if (subdomainSlug && slug) {
+    // On a tenant subdomain, enforce strict cross-tenant check inside handlePublicSiteHtml
+    return handlePublicSiteHtml(req, res, slug);
+  }
+
   if (slug) {
     try {
       const tenant = await repo.getTenantBySlug(slug);
@@ -78,13 +113,23 @@ app.use(async (req, res, next) => {
   next();
 });
 
-// Mount API routes
-app.use('/api', apiRouter);
+// Mount fallback API routes
 app.use('/', apiRouter);
 
-// Catch-all: check if it's a tenant link, otherwise return index.html
+// Catch-all: check if it's a tenant subdomain or tenant link, otherwise return index.html
 app.get('*', async (req, res) => {
+  const forwardedHost = (req.headers['x-forwarded-host'] as string) || '';
+  const hostHeader = forwardedHost.split(',')[0].trim() || req.get('host') || '';
+  const baseDomain = getServerBaseDomain();
+  const simHeader = (req.headers['x-tenant-slug'] || req.headers['x-simulate-tenant']) as string | undefined;
+  const simQuery = req.query?.simulate_subdomain as string | undefined;
+  const subdomainSlug = resolveSlugFromHost(hostHeader, baseDomain, simHeader || simQuery);
+
   const slug = extractSlugFromUrl(req);
+  if (subdomainSlug) {
+    return handlePublicSiteHtml(req, res, slug || subdomainSlug);
+  }
+
   if (slug) {
     try {
       const tenant = await repo.getTenantBySlug(slug);
