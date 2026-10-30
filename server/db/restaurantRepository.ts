@@ -25,6 +25,10 @@ import {
   getCurrentDayOfWeek,
   getDayName,
 } from '../../src/utils/productAvailability.js';
+import {
+  restaurantAnalyticsService,
+  toTimezoneDateKey,
+} from '../services/restaurantAnalyticsService.js';
 
 // In-memory rate limiting map for table orders
 interface RateLimitEntry {
@@ -98,18 +102,27 @@ export class RestaurantRepository {
     const result: RestaurantTable[] = tables.map((t: any) => {
       const activeSession = sessionMap.get(t.id);
       const metrics = activeSession ? ordersBySession.get(activeSession.id) : null;
+      const resolvedStatus = !activeSession
+        ? 'available'
+        : activeSession.closing_requested_at || t.status === 'closing'
+        ? 'closing'
+        : 'occupied';
 
       return {
         id: t.id,
         tenantId: t.tenant_id,
         tableNumber: t.table_number,
         name: t.name || null,
-        status: t.status || 'available',
+        status: resolvedStatus,
         isActive: t.is_active !== false,
         notes: t.notes || null,
         qrCodeToken: t.qr_code_token,
-        currentSessionId: activeSession?.id || t.current_session_id || null,
-        currentSessionTotal: metrics ? Math.round(metrics.total * 100) / 100 : activeSession ? Number(activeSession.total_amount || 0) : 0,
+        currentSessionId: activeSession ? activeSession.id : null,
+        currentSessionTotal: metrics
+          ? Math.round(metrics.total * 100) / 100
+          : activeSession
+          ? Number(activeSession.total_amount || 0)
+          : 0,
         currentSessionOrdersCount: metrics ? metrics.count : 0,
         currentSessionOpenedAt: activeSession ? activeSession.opened_at : null,
         createdAt: t.created_at,
@@ -167,16 +180,22 @@ export class RestaurantRepository {
       });
     }
 
+    const resolvedStatus = !session
+      ? 'available'
+      : session.closing_requested_at || t.status === 'closing'
+      ? 'closing'
+      : 'occupied';
+
     return {
       id: t.id,
       tenantId: t.tenant_id,
       tableNumber: t.table_number,
       name: t.name || null,
-      status: t.status || 'available',
+      status: resolvedStatus,
       isActive: t.is_active !== false,
       notes: t.notes || null,
       qrCodeToken: t.qr_code_token,
-      currentSessionId: session?.id || null,
+      currentSessionId: session ? session.id : null,
       currentSessionTotal: Math.round(sessionTotal * 100) / 100,
       currentSessionOrdersCount: ordersCount,
       currentSessionOpenedAt: session?.opened_at || null,
@@ -956,7 +975,8 @@ export class RestaurantRepository {
     tableId: string,
     actor: User,
     notes?: string,
-    paymentMethod?: string
+    paymentMethod?: string,
+    expectedSessionId?: string
   ): Promise<{ session: RestaurantSession; totalAmount: number }> {
     // 0. Strict Authorization: Professionals cannot close restaurant sessions
     if (actor.role === 'PROFESSIONAL') {
@@ -967,6 +987,84 @@ export class RestaurantRepository {
     }
 
     const method = paymentMethod?.trim() || 'Cartão';
+
+    // Check if an explicit sessionId was passed and is already closed (prevents duplicate closing)
+    if (expectedSessionId) {
+      const { data: targetSession } = await supabaseAdmin
+        .from('restaurant_sessions')
+        .select('id, status')
+        .eq('id', expectedSessionId)
+        .eq('tenant_id', tenantId)
+        .single();
+
+      if (targetSession && targetSession.status === 'closed') {
+        throw new Error('Esta comanda já foi encerrada anteriormente.');
+      }
+    }
+
+    // Validate table and active open session for this tenant
+    const { data: table, error: tableErr } = await supabaseAdmin
+      .from('restaurant_tables')
+      .select('*')
+      .eq('id', tableId)
+      .eq('tenant_id', tenantId)
+      .single();
+
+    if (tableErr) {
+      checkTableDbError(tableErr, 'restaurant_tables');
+    }
+    if (!table) {
+      throw new Error('Mesa não encontrada para este estabelecimento.');
+    }
+
+    const { data: session, error: sessionErr } = await supabaseAdmin
+      .from('restaurant_sessions')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .eq('table_id', tableId)
+      .eq('status', 'open')
+      .single();
+
+    if (sessionErr && sessionErr.code !== 'PGRST116') {
+      checkTableDbError(sessionErr, 'restaurant_sessions');
+    }
+
+    if (!session) {
+      throw new Error('Nenhuma comanda aberta para esta mesa.');
+    }
+
+    if (expectedSessionId && session.id !== expectedSessionId) {
+      throw new Error('Esta comanda já foi encerrada anteriormente.');
+    }
+
+    // If table.current_session_id points to another session, check whether that other session is actually open
+    if (table.current_session_id && table.current_session_id !== session.id) {
+      const { data: linkedSession } = await supabaseAdmin
+        .from('restaurant_sessions')
+        .select('id, status')
+        .eq('id', table.current_session_id)
+        .eq('tenant_id', tenantId)
+        .single();
+
+      if (linkedSession && linkedSession.status === 'open') {
+        throw new Error('Inconsistência de integridade: a mesa está vinculada a outra comanda aberta.');
+      }
+    }
+
+    // Ensure table.current_session_id is aligned with session.id before calling PostgreSQL RPC
+    if (table.current_session_id !== session.id) {
+      await supabaseAdmin
+        .from('restaurant_tables')
+        .update({
+          current_session_id: session.id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', tableId)
+        .eq('tenant_id', tenantId);
+    }
+
+    const ledger = await restaurantAnalyticsService.getFinancialLedger(tenantId);
+    const sessionDiscount = Math.max(0, Number(ledger.sessions[session.id]?.discount || 0));
 
     // 1. Tenta a função transacional atômica (RPC) no PostgreSQL se disponível
     if (typeof supabaseAdmin.rpc === 'function') {
@@ -980,7 +1078,27 @@ export class RestaurantRepository {
         });
 
         if (!rpcErr && rpcData && rpcData.session_id) {
-          const finalTotal = Number(rpcData.total_amount || 0);
+          const grossFromRpc = Number(rpcData.total_amount || 0);
+          const finalTotal = Math.max(0, Math.round((grossFromRpc - sessionDiscount) * 100) / 100);
+          const closedAtIso = new Date().toISOString();
+
+          if (sessionDiscount > 0) {
+            await supabaseAdmin
+              .from('restaurant_sessions')
+              .update({ total_amount: finalTotal, updated_at: closedAtIso })
+              .eq('id', rpcData.session_id)
+              .eq('tenant_id', tenantId);
+          }
+
+          await restaurantAnalyticsService.reconcileClosedSessionInLedger(
+            tenantId,
+            rpcData.session_id,
+            finalTotal,
+            method,
+            closedAtIso,
+            actor.name || actor.email || 'Admin'
+          );
+
           await repo.logAudit({
             actorUserId: actor.id,
             actorUserName: actor.name,
@@ -988,57 +1106,37 @@ export class RestaurantRepository {
             action: 'TABLE_SESSION_CLOSE' as any,
             entity: 'restaurant_sessions',
             entityId: rpcData.session_id,
-            metadata: { tableId, totalAmount: finalTotal, paymentMethod: method },
+            metadata: { tableId, totalAmount: finalTotal, discount: sessionDiscount, paymentMethod: method },
           });
 
           const fullSession = await this.getSessionDetails(tenantId, rpcData.session_id);
           return { session: fullSession!, totalAmount: finalTotal };
         } else if (rpcErr) {
-          // Se for erro de validação/permissão, repassa diretamente
-          if (rpcErr.message && (rpcErr.message.includes('Acesso negado') || rpcErr.message.includes('Não autorizado') || rpcErr.message.includes('Inconsistência'))) {
+          if (
+            rpcErr.message &&
+            (rpcErr.message.includes('Acesso negado') ||
+              rpcErr.message.includes('Não autorizado') ||
+              rpcErr.message.includes('Inconsistência'))
+          ) {
             throw new Error(rpcErr.message);
           }
         }
       } catch (e: any) {
-        if (e.message && (e.message.includes('Acesso negado') || e.message.includes('Não autorizado') || e.message.includes('Inconsistência'))) {
+        if (
+          e.message &&
+          (e.message.includes('Acesso negado') ||
+            e.message.includes('Não autorizado') ||
+            e.message.includes('Inconsistência'))
+        ) {
           throw e;
         }
         // Fallback para sequência se RPC não existir no banco
       }
     }
 
-    // 2. Fallback Transacional em Node.js com Validações Estritas
-    const { data: table } = await supabaseAdmin
-      .from('restaurant_tables')
-      .select('*')
-      .eq('id', tableId)
-      .eq('tenant_id', tenantId)
-      .single();
-
-    if (!table) {
-      throw new Error('Mesa não encontrada para este estabelecimento.');
-    }
-
-    const { data: session } = await supabaseAdmin
-      .from('restaurant_sessions')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .eq('table_id', tableId)
-      .eq('status', 'open')
-      .single();
-
-    if (!session) {
-      throw new Error('Nenhuma comanda aberta para esta mesa.');
-    }
-
-    // Integridade: Mesa não pode ser liberada se já estiver vinculada a outra sessão
-    if (table.current_session_id && table.current_session_id !== session.id) {
-      throw new Error('Inconsistência de integridade: a mesa está vinculada a outra comanda.');
-    }
-
     const now = new Date().toISOString();
 
-    // 3. Finaliza pedidos que ainda estavam em preparação ou não entregues
+    // 2. Finaliza pedidos que ainda estavam em preparação ou não entregues
     const { data: activeOrders } = await supabaseAdmin
       .from('restaurant_orders')
       .select('id, status')
@@ -1064,7 +1162,7 @@ export class RestaurantRepository {
       }
     }
 
-    // 4. Calcula subtotal de pedidos válidos (estritamente desconsiderando cancelados)
+    // 3. Calcula subtotal de pedidos válidos (estritamente desconsiderando cancelados)
     const { data: orders } = await supabaseAdmin
       .from('restaurant_orders')
       .select('total, status')
@@ -1079,7 +1177,7 @@ export class RestaurantRepository {
     });
     ordersSubtotal = Math.round(ordersSubtotal * 100) / 100;
 
-    // 5. Calcula e consolida taxas adicionais
+    // 4. Calcula e consolida taxas adicionais
     const { data: fees } = await supabaseAdmin
       .from('restaurant_session_fees')
       .select('*')
@@ -1090,7 +1188,7 @@ export class RestaurantRepository {
     for (const f of fees || []) {
       let feeAmt = Number(f.rate_or_amount || 0);
       if (f.type === 'percentage') {
-        feeAmt = Math.round((ordersSubtotal * (feeAmt / 100)) * 100) / 100;
+        feeAmt = Math.round(ordersSubtotal * (feeAmt / 100) * 100) / 100;
       }
       feesTotal += feeAmt;
       await supabaseAdmin
@@ -1100,9 +1198,9 @@ export class RestaurantRepository {
     }
     feesTotal = Math.round(feesTotal * 100) / 100;
 
-    const finalTotal = Math.round((ordersSubtotal + feesTotal) * 100) / 100;
+    const finalTotal = Math.max(0, Math.round((ordersSubtotal + feesTotal - sessionDiscount) * 100) / 100);
 
-    // 6. Encerra a comanda registrando método de pagamento e quitação (payment_status: 'paid')
+    // 5. Encerra a comanda registrando método de pagamento e quitação (payment_status: 'paid')
     const { error: closeErr } = await supabaseAdmin
       .from('restaurant_sessions')
       .update({
@@ -1125,8 +1223,8 @@ export class RestaurantRepository {
       throw new Error(`Erro ao fechar comanda: ${closeErr.message}`);
     }
 
-    // 7. Libera a mesa apenas se ainda apontar para esta sessão
-    await supabaseAdmin
+    // 6. Libera a mesa
+    const { error: releaseErr } = await supabaseAdmin
       .from('restaurant_tables')
       .update({
         status: 'available',
@@ -1134,8 +1232,20 @@ export class RestaurantRepository {
         updated_at: now,
       })
       .eq('id', tableId)
-      .eq('tenant_id', tenantId)
-      .eq('current_session_id', session.id);
+      .eq('tenant_id', tenantId);
+
+    if (releaseErr) {
+      checkTableDbError(releaseErr, 'restaurant_tables');
+    }
+
+    await restaurantAnalyticsService.reconcileClosedSessionInLedger(
+      tenantId,
+      session.id,
+      finalTotal,
+      method,
+      now,
+      actor.name || actor.email || 'Admin'
+    );
 
     await repo.logAudit({
       actorUserId: actor.id,
@@ -1144,7 +1254,7 @@ export class RestaurantRepository {
       action: 'TABLE_SESSION_CLOSE' as any,
       entity: 'restaurant_sessions',
       entityId: session.id,
-      metadata: { tableId, totalAmount: finalTotal, paymentMethod: method },
+      metadata: { tableId, totalAmount: finalTotal, discount: sessionDiscount, paymentMethod: method },
     });
 
     const fullSession = await this.getSessionDetails(tenantId, session.id);
@@ -1810,21 +1920,80 @@ export class RestaurantRepository {
       status?: string;
       tableId?: string;
       sessionId?: string;
+      sessionStatus?: 'open' | 'closed' | 'all';
+      includeClosedSessions?: boolean;
       date?: string;
       search?: string;
     }
   ): Promise<RestaurantOrder[]> {
-    const { data: rawOrders } = await supabaseAdmin
-      .from('restaurant_orders')
-      .select('*')
-      .eq('tenant_id', tenantId);
+    const [
+      { data: rawOrders },
+      { data: rawSessions },
+      { data: rawFees },
+      { data: rawTables },
+      ledger,
+    ] = await Promise.all([
+      supabaseAdmin.from('restaurant_orders').select('*').eq('tenant_id', tenantId),
+      supabaseAdmin.from('restaurant_sessions').select('*').eq('tenant_id', tenantId),
+      supabaseAdmin.from('restaurant_session_fees').select('*').eq('tenant_id', tenantId),
+      supabaseAdmin.from('restaurant_tables').select('*').eq('tenant_id', tenantId),
+      restaurantAnalyticsService.getFinancialLedger(tenantId).catch(() => ({ orders: {}, sessions: {} })),
+    ]);
 
-    let list = rawOrders || [];
+    const allOrders = rawOrders || [];
+    const sessionMap = new Map<string, any>((rawSessions || []).map((s: any) => [s.id, s]));
+    const tableMap = new Map<string, any>((rawTables || []).map((t: any) => [t.id, t]));
 
+    // Map active open session per table
+    const openSessionByTableMap = new Map<string, any>();
+    (rawSessions || []).forEach((s: any) => {
+      if (s.status === 'open' && !s.closed_at) {
+        openSessionByTableMap.set(s.table_id, s);
+      }
+    });
+
+    // Calculate subtotal of non-cancelled orders per session
+    const ordersSubtotalBySession = new Map<string, number>();
+    allOrders.forEach((o: any) => {
+      if (o.status !== 'cancelled' && o.session_id) {
+        const prev = ordersSubtotalBySession.get(o.session_id) || 0;
+        ordersSubtotalBySession.set(o.session_id, Math.round((prev + Number(o.total || 0)) * 100) / 100);
+      }
+    });
+
+    // Calculate fees per session
+    const feesBySession = new Map<string, any[]>();
+    (rawFees || []).forEach((f: any) => {
+      const arr = feesBySession.get(f.session_id) || [];
+      arr.push(f);
+      feesBySession.set(f.session_id, arr);
+    });
+
+    let list = [...allOrders];
+
+    // 1. Session filtering rule:
+    // - If a specific sessionId is queried (e.g. getSessionDetails), filter strictly by that sessionId.
+    // - Otherwise, respect sessionStatus ('open' by default for operational KDS, 'closed' for history, 'all' when includeClosedSessions/all).
     if (filters?.sessionId) {
       list = list.filter((o: any) => o.session_id === filters.sessionId);
+    } else {
+      const effectiveSessionStatus: 'open' | 'closed' | 'all' =
+        filters?.sessionStatus || (filters?.includeClosedSessions ? 'all' : 'open');
+
+      if (effectiveSessionStatus === 'open') {
+        list = list.filter((o: any) => {
+          const sess = sessionMap.get(o.session_id);
+          return Boolean(sess && sess.status === 'open' && !sess.closed_at);
+        });
+      } else if (effectiveSessionStatus === 'closed') {
+        list = list.filter((o: any) => {
+          const sess = sessionMap.get(o.session_id);
+          return !sess || sess.status === 'closed' || Boolean(sess.closed_at);
+        });
+      }
     }
-    if (filters?.tableId) {
+
+    if (filters?.tableId && filters.tableId !== 'all') {
       list = list.filter((o: any) => o.table_id === filters.tableId);
     }
     if (filters?.status && filters.status !== 'all') {
@@ -1832,58 +2001,113 @@ export class RestaurantRepository {
     }
     if (filters?.date) {
       const filterDateStr = filters.date.slice(0, 10);
-      list = list.filter((o: any) => o.created_at && o.created_at.slice(0, 10) === filterDateStr);
+      list = list.filter((o: any) => {
+        if (!o.created_at) return false;
+        const localDateKey = toTimezoneDateKey(o.created_at);
+        return localDateKey === filterDateStr || o.created_at.slice(0, 10) === filterDateStr;
+      });
     }
     if (filters?.search && filters.search.trim()) {
       const q = filters.search.toLowerCase().trim();
-      list = list.filter(
-        (o: any) =>
+      list = list.filter((o: any) => {
+        const tInfo = tableMap.get(o.table_id);
+        const sInfo = sessionMap.get(o.session_id);
+        return (
           String(o.order_number).includes(q) ||
-          (o.customer_name && o.customer_name.toLowerCase().includes(q))
-      );
+          (o.customer_name && o.customer_name.toLowerCase().includes(q)) ||
+          (tInfo?.table_number && String(tInfo.table_number).toLowerCase().includes(q)) ||
+          (tInfo?.name && String(tInfo.name).toLowerCase().includes(q)) ||
+          (sInfo?.session_code && String(sInfo.session_code).toLowerCase().includes(q))
+        );
+      });
     }
 
     // Sort by recent first
     list.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-    // Fetch tables to enrich table_number & name
-    const { data: tables } = await supabaseAdmin
-      .from('restaurant_tables')
-      .select('id, table_number, name')
-      .eq('tenant_id', tenantId);
-
-    const tableMap = new Map<string, any>((tables || []).map((t: any) => [t.id, t]));
-
     // Fetch items
     const orderIds = list.map((o: any) => o.id);
-    const { data: items } = await supabaseAdmin
-      .from('restaurant_order_items')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .in('order_id', orderIds);
-
     const itemsByOrder = new Map<string, RestaurantOrderItem[]>();
-    (items || []).forEach((it: any) => {
-      const oItems = itemsByOrder.get(it.order_id) || [];
-      oItems.push({
-        id: it.id,
-        orderId: it.order_id,
-        tenantId: it.tenant_id,
-        productId: it.product_id,
-        variantId: it.variant_id || null,
-        productName: it.product_name,
-        variantName: it.variant_name || null,
-        unitPrice: Number(it.unit_price),
-        quantity: Number(it.quantity),
-        subtotal: Number(it.subtotal),
-        notes: it.notes || null,
-        createdAt: it.created_at,
+
+    if (orderIds.length > 0) {
+      const { data: items } = await supabaseAdmin
+        .from('restaurant_order_items')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .in('order_id', orderIds);
+
+      (items || []).forEach((it: any) => {
+        const oItems = itemsByOrder.get(it.order_id) || [];
+        oItems.push({
+          id: it.id,
+          orderId: it.order_id,
+          tenantId: it.tenant_id,
+          productId: it.product_id,
+          variantId: it.variant_id || null,
+          productName: it.product_name,
+          variantName: it.variant_name || null,
+          unitPrice: Number(it.unit_price),
+          quantity: Number(it.quantity),
+          subtotal: Number(it.subtotal),
+          notes: it.notes || null,
+          createdAt: it.created_at,
+        });
+        itemsByOrder.set(it.order_id, oItems);
       });
-      itemsByOrder.set(it.order_id, oItems);
-    });
+    }
 
     return list.map((o: any) => {
       const tableInfo = tableMap.get(o.table_id);
+      const sess = sessionMap.get(o.session_id);
+      const openSessForTable = openSessionByTableMap.get(o.table_id);
+
+      const sOrdersSubtotal = ordersSubtotalBySession.get(o.session_id) || 0;
+      const sFees = feesBySession.get(o.session_id) || [];
+      let sFeesTotal = 0;
+      for (const f of sFees) {
+        if (f.type === 'percentage') {
+          sFeesTotal += Math.round(sOrdersSubtotal * (Number(f.rate_or_amount || 0) / 100) * 100) / 100;
+        } else {
+          sFeesTotal += Number(f.rate_or_amount || f.calculated_amount || 0);
+        }
+      }
+      sFeesTotal = Math.round(sFeesTotal * 100) / 100;
+
+      const sLedger = ((ledger?.sessions || {}) as Record<string, any>)[o.session_id];
+      const sDiscount = Math.max(0, Number(sLedger?.discount || 0));
+      const calculatedNet = Math.max(0, Math.round((sOrdersSubtotal + sFeesTotal - sDiscount) * 100) / 100);
+      const sessionTotalAmount =
+        sess?.status === 'closed' && sess?.total_amount !== undefined && sess?.total_amount !== null
+          ? Number(sess.total_amount)
+          : calculatedNet;
+
+      const sPayments = Array.isArray(sLedger?.payments) ? sLedger.payments : [];
+      const paidFromLedger = Math.round(
+        sPayments.reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0) * 100
+      ) / 100;
+
+      const isSessionClosed = !sess || sess.status === 'closed' || Boolean(sess.closed_at);
+      const sessionPaidAmount = isSessionClosed
+        ? sessionTotalAmount
+        : Math.min(sessionTotalAmount, paidFromLedger);
+      const sessionPendingAmount = isSessionClosed
+        ? 0
+        : Math.max(0, Math.round((sessionTotalAmount - sessionPaidAmount) * 100) / 100);
+
+      const sessionPaymentStatus = isSessionClosed
+        ? 'paid'
+        : sessionPaidAmount >= sessionTotalAmount && sessionTotalAmount > 0
+        ? 'paid'
+        : sessionPaidAmount > 0
+        ? 'partial'
+        : sLedger?.paymentStatus || sess?.payment_status || 'pending';
+
+      const resolvedTableStatus = !openSessForTable
+        ? 'available'
+        : openSessForTable.closing_requested_at || tableInfo?.status === 'closing'
+        ? 'closing'
+        : 'occupied';
+
       return {
         id: o.id,
         tenantId: o.tenant_id,
@@ -1899,6 +2123,18 @@ export class RestaurantRepository {
         items: itemsByOrder.get(o.id) || [],
         tableNumber: tableInfo?.table_number,
         tableName: tableInfo?.name || null,
+        tableStatus: resolvedTableStatus as any,
+        sessionCode: sess?.session_code || null,
+        sessionStatus: isSessionClosed ? 'closed' : 'open',
+        sessionOpenedAt: sess?.opened_at || null,
+        sessionClosedAt: sess?.closed_at || null,
+        sessionClosingRequestedAt: sess?.closing_requested_at || null,
+        sessionTotalAmount,
+        sessionPaidAmount,
+        sessionPendingAmount,
+        sessionPaymentStatus,
+        sessionPaymentMethod: sess?.payment_method || sLedger?.paymentMethod || null,
+        isCurrentTableSession: Boolean(openSessForTable && openSessForTable.id === o.session_id),
         createdAt: o.created_at,
         updatedAt: o.updated_at,
       };
@@ -1915,24 +2151,30 @@ export class RestaurantRepository {
 
     if (!o) return null;
 
-    const { data: table } = await supabaseAdmin
-      .from('restaurant_tables')
-      .select('table_number, name')
-      .eq('id', o.table_id)
-      .eq('tenant_id', tenantId)
-      .single();
-
-    const { data: items } = await supabaseAdmin
-      .from('restaurant_order_items')
-      .select('*')
-      .eq('order_id', orderId)
-      .eq('tenant_id', tenantId);
-
-    const { data: history } = await supabaseAdmin
-      .from('restaurant_order_status_history')
-      .select('*')
-      .eq('order_id', orderId)
-      .eq('tenant_id', tenantId);
+    const [{ data: table }, { data: sess }, { data: items }, { data: history }] = await Promise.all([
+      supabaseAdmin
+        .from('restaurant_tables')
+        .select('table_number, name, status, current_session_id')
+        .eq('id', o.table_id)
+        .eq('tenant_id', tenantId)
+        .single(),
+      supabaseAdmin
+        .from('restaurant_sessions')
+        .select('*')
+        .eq('id', o.session_id)
+        .eq('tenant_id', tenantId)
+        .single(),
+      supabaseAdmin
+        .from('restaurant_order_items')
+        .select('*')
+        .eq('order_id', orderId)
+        .eq('tenant_id', tenantId),
+      supabaseAdmin
+        .from('restaurant_order_status_history')
+        .select('*')
+        .eq('order_id', orderId)
+        .eq('tenant_id', tenantId),
+    ]);
 
     const formattedHistory: RestaurantOrderStatusHistory[] = (history || [])
       .map((h: any) => ({
@@ -1944,7 +2186,12 @@ export class RestaurantRepository {
         changedBy: h.changed_by || 'system',
         createdAt: h.created_at,
       }))
-      .sort((a: RestaurantOrderStatusHistory, b: RestaurantOrderStatusHistory) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      .sort(
+        (a: RestaurantOrderStatusHistory, b: RestaurantOrderStatusHistory) =>
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+
+    const isSessionClosed = !sess || sess.status === 'closed' || Boolean(sess.closed_at);
 
     return {
       id: o.id,
@@ -1975,6 +2222,16 @@ export class RestaurantRepository {
       history: formattedHistory,
       tableNumber: table?.table_number,
       tableName: table?.name || null,
+      tableStatus: (table?.status as any) || 'available',
+      sessionCode: sess?.session_code || null,
+      sessionStatus: isSessionClosed ? 'closed' : 'open',
+      sessionOpenedAt: sess?.opened_at || null,
+      sessionClosedAt: sess?.closed_at || null,
+      sessionClosingRequestedAt: sess?.closing_requested_at || null,
+      sessionTotalAmount: Number(sess?.total_amount || o.total || 0),
+      sessionPaymentStatus: sess?.payment_status || null,
+      sessionPaymentMethod: sess?.payment_method || null,
+      isCurrentTableSession: !isSessionClosed,
       createdAt: o.created_at,
       updatedAt: o.updated_at,
     };
@@ -1990,6 +2247,10 @@ export class RestaurantRepository {
     const existing = await this.getOrderById(tenantId, orderId);
     if (!existing) {
       throw new Error('Pedido não encontrado.');
+    }
+
+    if (existing.sessionStatus === 'closed') {
+      throw new Error('Não é permitido alterar o status de pedidos pertencentes a uma comanda já encerrada.');
     }
 
     const previousStatus = existing.status;
@@ -2075,6 +2336,10 @@ export class RestaurantRepository {
     const existing = await this.getOrderById(tenantId, orderId);
     if (!existing) {
       throw new Error('Pedido não encontrado.');
+    }
+
+    if (existing.sessionStatus === 'closed') {
+      throw new Error('Não é permitido editar itens de um pedido cuja comanda já foi encerrada.');
     }
 
     const now = new Date().toISOString();
@@ -2285,20 +2550,31 @@ export class RestaurantRepository {
     const occupied = tables.filter((t) => t.status === 'occupied').length;
     const closing = tables.filter((t) => t.status === 'closing').length;
 
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const orders = await this.listOrders(tenantId, { date: todayStr });
+    const todayStr = toTimezoneDateKey(new Date());
+    const [todayAllOrders, openSessionOrders] = await Promise.all([
+      this.listOrders(tenantId, {
+        date: todayStr,
+        sessionStatus: 'all',
+        includeClosedSessions: true,
+      }),
+      this.listOrders(tenantId, {
+        sessionStatus: 'open',
+      }),
+    ]);
 
-    const activeOrders = orders.filter((o) => o.status !== 'cancelled');
-    const pendingOrders = orders.filter((o) => ['received', 'confirmed', 'preparing'].includes(o.status));
-    const revenueToday = activeOrders.reduce((sum, o) => sum + o.total, 0);
+    const activeOrdersToday = todayAllOrders.filter((o) => o.status !== 'cancelled');
+    const pendingOperationalOrders = openSessionOrders.filter((o) =>
+      ['received', 'confirmed', 'preparing', 'ready'].includes(o.status)
+    );
+    const revenueToday = activeOrdersToday.reduce((sum, o) => sum + o.total, 0);
 
     return {
       totalTables: tables.length,
       availableTables: available,
       occupiedTables: occupied,
       closingTables: closing,
-      activeOrdersToday: activeOrders.length,
-      ordersPendingAction: pendingOrders.length,
+      activeOrdersToday: activeOrdersToday.length,
+      ordersPendingAction: pendingOperationalOrders.length,
       totalRevenueToday: Math.round(revenueToday * 100) / 100,
     };
   }

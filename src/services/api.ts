@@ -1250,10 +1250,15 @@ class ApiService {
     return res.data;
   }
 
-  async closeTableSession(tableId: string, notes?: string, paymentMethod?: string): Promise<{ session: RestaurantSession; totalAmount: number }> {
+  async closeTableSession(
+    tableId: string,
+    notes?: string,
+    paymentMethod?: string,
+    sessionId?: string
+  ): Promise<{ session: RestaurantSession; totalAmount: number }> {
     return this.request(`/api/restaurant/tables/${tableId}/close-session`, {
       method: 'POST',
-      body: JSON.stringify({ notes, paymentMethod }),
+      body: JSON.stringify({ notes, paymentMethod, sessionId }),
     });
   }
 
@@ -1319,6 +1324,8 @@ class ApiService {
     status?: string;
     tableId?: string;
     sessionId?: string;
+    sessionStatus?: 'open' | 'closed' | 'all';
+    includeClosedSessions?: boolean;
     date?: string;
     search?: string;
   }): Promise<RestaurantOrder[]> {
@@ -1326,6 +1333,10 @@ class ApiService {
     if (filters?.status) params.set('status', filters.status);
     if (filters?.tableId) params.set('tableId', filters.tableId);
     if (filters?.sessionId) params.set('sessionId', filters.sessionId);
+    if (filters?.sessionStatus) params.set('sessionStatus', filters.sessionStatus);
+    if (filters?.includeClosedSessions !== undefined) {
+      params.set('includeClosedSessions', String(filters.includeClosedSessions));
+    }
     if (filters?.date) params.set('date', filters.date);
     if (filters?.search) params.set('search', filters.search);
     const qs = params.toString() ? `?${params.toString()}` : '';

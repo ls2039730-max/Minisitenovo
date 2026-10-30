@@ -98,20 +98,30 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
   const [tablePeriodFilter, setTablePeriodFilter] = useState<PeriodFilterPreset>('today');
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>('all');
   const [orderSearch, setOrderSearch] = useState('');
+  const [kdsTableFilter, setKdsTableFilter] = useState<string>('all');
+  const [kdsScope, setKdsScope] = useState<'operational' | 'history'>('operational');
+  const [kdsViewMode, setKdsViewMode] = useState<'by_table' | 'cards'>('by_table');
+  const [historyOrders, setHistoryOrders] = useState<RestaurantOrder[]>([]);
 
   // Modals state
   const [tableModalOpen, setTableModalOpen] = useState(false);
   const [selectedTable, setSelectedTable] = useState<RestaurantTable | null>(null);
   const [batchModalOpen, setBatchModalOpen] = useState(false);
   const [sessionModalOpen, setSessionModalOpen] = useState(false);
+  const [sessionModalInitialConfirmClose, setSessionModalInitialConfirmClose] = useState(false);
   const [sessionTable, setSessionTable] = useState<RestaurantTable | null>(null);
   const [printQrModalOpen, setPrintQrModalOpen] = useState(false);
   const [printQrTable, setPrintQrTable] = useState<RestaurantTable | null>(null);
 
-  // Restaurant Order Edit / Delete state
+  // Restaurant Order Edit / Delete / Cancel state
   const [editingRestaurantOrder, setEditingRestaurantOrder] = useState<RestaurantOrder | null>(null);
   const [deletingRestaurantOrder, setDeletingRestaurantOrder] = useState<RestaurantOrder | null>(null);
   const [deletingOrderLoading, setDeletingOrderLoading] = useState(false);
+  const [cancellingKdsOrder, setCancellingKdsOrder] = useState<RestaurantOrder | null>(null);
+  const [cancellingKdsReason, setCancellingKdsReason] = useState('');
+  const [cancellingKdsLoading, setCancellingKdsLoading] = useState(false);
+  const [advancingOrderId, setAdvancingOrderId] = useState<string | null>(null);
+  const [kdsActionError, setKdsActionError] = useState<string | null>(null);
 
   const handleDeleteRestaurantOrder = async () => {
     if (!deletingRestaurantOrder) return;
@@ -162,22 +172,28 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
       if (!isSilent) setLoading(true);
       else setRefreshing(true);
 
-      const [tablesData, ordersData, summaryData, overviewData] = await Promise.all([
+      const [tablesData, openOrdersData, closedOrdersData, summaryData, overviewData] = await Promise.all([
         api.getRestaurantTables(),
-        api.getRestaurantOrders(),
+        api.getRestaurantOrders({ sessionStatus: 'open' }),
+        kdsScope === 'history'
+          ? api.getRestaurantOrders({ sessionStatus: 'closed' }).catch(() => [])
+          : Promise.resolve<RestaurantOrder[] | null>(null),
         api.getRestaurantSummary(),
         api.getEnrichedTablesOverview({ period: tablePeriodFilter }).catch(() => null),
       ]);
 
       setTables(tablesData);
-      setOrders(ordersData);
+      setOrders(openOrdersData);
+      if (closedOrdersData !== null) {
+        setHistoryOrders(closedOrdersData);
+      }
       setSummary(summaryData);
       if (overviewData) {
         setEnrichedOverview(overviewData);
       }
 
       const closingCount = (tablesData || []).filter((t: RestaurantTable) => t.status === 'closing').length;
-      if (closingCount > prevClosingCountRef.current) {
+      if (closingCount > prevClosingCountRef.current && !soundMuted) {
         playChime();
       }
       prevClosingCountRef.current = closingCount;
@@ -187,16 +203,67 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
       setLoading(false);
       setRefreshing(false);
     }
-  }, [tenant, playChime, tablePeriodFilter]);
+  }, [tenant, playChime, soundMuted, tablePeriodFilter, kdsScope]);
 
   useEffect(() => {
     loadData();
-    // Auto refresh every 12 seconds for responsive closing alerts and table orders
+    // Auto refresh every 6 seconds for responsive closing alerts and KDS synchronization
     const interval = setInterval(() => {
       loadData(true);
-    }, 12000);
+    }, 6000);
     return () => clearInterval(interval);
   }, [loadData]);
+
+  // Listen for real-time cross-tab and cross-modal sync events
+  useEffect(() => {
+    const handleSyncEvent = (evt?: any) => {
+      const detail = evt?.detail || evt?.data;
+      if (detail?.eventType === 'SESSION_CLOSED' && detail?.sessionId) {
+        setOrders((prev) => prev.filter((o) => o.sessionId !== detail.sessionId));
+      }
+      loadData(true);
+    };
+
+    const handleWindowFocus = () => {
+      loadData(true);
+    };
+
+    window.addEventListener('localhub:restaurant-updated', handleSyncEvent as EventListener);
+    window.addEventListener('focus', handleWindowFocus);
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        bc = new BroadcastChannel('localhub_restaurant_sync');
+        bc.onmessage = handleSyncEvent;
+      }
+    } catch (e) {
+      // Ignore if BroadcastChannel is not supported
+    }
+
+    return () => {
+      window.removeEventListener('localhub:restaurant-updated', handleSyncEvent as EventListener);
+      window.removeEventListener('focus', handleWindowFocus);
+      if (bc) bc.close();
+    };
+  }, [loadData]);
+
+  // Open TableSessionModal helper (reused by Hall and KDS)
+  const openTableSessionModal = useCallback(
+    (tableIdOrTable: string | RestaurantTable, startWithConfirmClose = false) => {
+      const targetTable =
+        typeof tableIdOrTable === 'string'
+          ? tables.find((t) => t.id === tableIdOrTable) || null
+          : tableIdOrTable;
+
+      if (!targetTable) return;
+      const et = (enrichedOverview?.tables || []).find((item) => item.id === targetTable.id);
+      setSessionTable({ ...targetTable, ...(et || {}) });
+      setSessionModalInitialConfirmClose(startWithConfirmClose);
+      setSessionModalOpen(true);
+    },
+    [tables, enrichedOverview]
+  );
 
   // Table handlers
   const handleSaveTable = async (payload: any) => {
@@ -216,17 +283,14 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
 
   const handleDeleteTable = async (table: RestaurantTable) => {
     if (table.currentSessionId) {
-      alert('Não é possível excluir uma mesa com comanda aberta. Feche a conta antes de excluir.');
-      return;
-    }
-    if (!confirm(`Tem certeza que deseja excluir a Mesa ${table.tableNumber}?`)) {
+      setKdsActionError('Não é possível excluir uma mesa com comanda aberta. Feche a conta antes de excluir.');
       return;
     }
     try {
       await api.deleteRestaurantTable(table.id);
       await loadData(true);
     } catch (err: any) {
-      alert(err.message || 'Erro ao excluir mesa.');
+      setKdsActionError(err.message || 'Erro ao excluir mesa.');
     }
   };
 
@@ -235,7 +299,7 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
       await api.updateRestaurantTable(table.id, { isActive: !table.isActive });
       await loadData(true);
     } catch (err: any) {
-      alert(err.message || 'Erro ao alterar ativação da mesa.');
+      setKdsActionError(err.message || 'Erro ao alterar ativação da mesa.');
     }
   };
 
@@ -250,22 +314,36 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
     if (!nextStatus) return;
 
     try {
+      setAdvancingOrderId(order.id);
+      setKdsActionError(null);
       await api.updateRestaurantOrderStatus(order.id, nextStatus);
       await loadData(true);
     } catch (err: any) {
-      alert(err.message || 'Erro ao atualizar status do pedido.');
+      setKdsActionError(err.message || 'Erro ao atualizar status do pedido.');
+    } finally {
+      setAdvancingOrderId(null);
     }
   };
 
-  const handleCancelOrderQuick = async (order: RestaurantOrder) => {
-    const reason = prompt(`Informe a justificativa do cancelamento do Pedido #${order.orderNumber}:`);
-    if (!reason || !reason.trim()) return;
+  const handleConfirmCancelKdsOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cancellingKdsOrder) return;
+    if (!cancellingKdsReason.trim()) {
+      setKdsActionError('Informe a justificativa do cancelamento do pedido.');
+      return;
+    }
 
     try {
-      await api.cancelRestaurantOrder(order.id, reason.trim());
+      setCancellingKdsLoading(true);
+      setKdsActionError(null);
+      await api.cancelRestaurantOrder(cancellingKdsOrder.id, cancellingKdsReason.trim());
+      setCancellingKdsOrder(null);
+      setCancellingKdsReason('');
       await loadData(true);
     } catch (err: any) {
-      alert(err.message || 'Erro ao cancelar pedido.');
+      setKdsActionError(err.message || 'Erro ao cancelar pedido.');
+    } finally {
+      setCancellingKdsLoading(false);
     }
   };
 
@@ -273,6 +351,7 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
   const enrichedTablesMap = new Map<string, EnrichedRestaurantTable>(
     (enrichedOverview?.tables || []).map((et: EnrichedRestaurantTable) => [et.id, et])
   );
+  const tablesByIdMap = new Map<string, RestaurantTable>(tables.map((t) => [t.id, t]));
 
   const filteredTables = tables.filter((t) => {
     const et = enrichedTablesMap.get(t.id);
@@ -290,21 +369,166 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
     return true;
   });
 
-  // Filtered orders
-  const filteredOrders = orders.filter((o) => {
-    if (orderStatusFilter !== 'all' && o.status !== orderStatusFilter) return false;
+  // Centralized rule: An order is operational in KDS if and only if its table session is currently OPEN.
+  // Orders from closed sessions are strictly excluded from operational KDS (including the "Todos" filter).
+  const isOrderInOpenOperationalSession = useCallback(
+    (order: RestaurantOrder): boolean => {
+      if (order.sessionStatus === 'closed' || Boolean(order.sessionClosedAt)) {
+        return false;
+      }
+      if (order.isCurrentTableSession === false) {
+        return false;
+      }
+      const linkedTable = tablesByIdMap.get(order.tableId);
+      if (linkedTable && (!linkedTable.currentSessionId || linkedTable.currentSessionId !== order.sessionId)) {
+        return false;
+      }
+      return true;
+    },
+    [tablesByIdMap]
+  );
+
+  // Operational orders (only open sessions) vs Historical orders (closed sessions)
+  const operationalOrders = orders.filter(isOrderInOpenOperationalSession);
+  const baseKdsOrders = kdsScope === 'operational' ? operationalOrders : historyOrders;
+
+  // Apply table and search filters first so status pill counters reflect the current table/search selection
+  const kdsOrdersMatchingTableAndSearch = baseKdsOrders.filter((o) => {
+    if (kdsTableFilter !== 'all' && o.tableId !== kdsTableFilter) return false;
     if (orderSearch.trim()) {
       const q = orderSearch.toLowerCase().trim();
       return (
         String(o.orderNumber).includes(q) ||
         (o.customerName && o.customerName.toLowerCase().includes(q)) ||
-        (o.tableNumber && o.tableNumber.toLowerCase().includes(q))
+        (o.tableNumber && o.tableNumber.toLowerCase().includes(q)) ||
+        (o.sessionCode && o.sessionCode.toLowerCase().includes(q))
       );
     }
     return true;
   });
 
+  const kdsStatusCounts: Record<string, number> = {
+    all: kdsOrdersMatchingTableAndSearch.length,
+    received: kdsOrdersMatchingTableAndSearch.filter((o) => o.status === 'received').length,
+    confirmed: kdsOrdersMatchingTableAndSearch.filter((o) => o.status === 'confirmed').length,
+    preparing: kdsOrdersMatchingTableAndSearch.filter((o) => o.status === 'preparing').length,
+    ready: kdsOrdersMatchingTableAndSearch.filter((o) => o.status === 'ready').length,
+    delivered: kdsOrdersMatchingTableAndSearch.filter((o) => o.status === 'delivered').length,
+    cancelled: kdsOrdersMatchingTableAndSearch.filter((o) => o.status === 'cancelled').length,
+  };
+
+  // Final filtered orders for the selected status tab (including "Todos")
+  const filteredOrders = kdsOrdersMatchingTableAndSearch.filter((o) => {
+    if (orderStatusFilter !== 'all' && o.status !== orderStatusFilter) return false;
+    return true;
+  });
+
+  // Group filtered orders by (tableId + sessionId) for complete table/session operational view in KDS
+  const groupedSessionsInKds = React.useMemo(() => {
+    const groupsMap = new Map<
+      string,
+      {
+        sessionId: string;
+        sessionCode: string | null;
+        sessionStatus: 'open' | 'closed';
+        sessionOpenedAt: string | null;
+        sessionClosedAt: string | null;
+        sessionClosingRequestedAt: string | null;
+        tableId: string;
+        tableNumber: string;
+        tableName: string | null;
+        tableStatus: TableStatus;
+        sessionTotalAmount: number;
+        sessionPaidAmount: number;
+        sessionPendingAmount: number;
+        sessionPaymentStatus: string;
+        sessionPaymentMethod: string | null;
+        orders: RestaurantOrder[];
+      }
+    >();
+
+    for (const order of filteredOrders) {
+      const key = `${order.tableId}::${order.sessionId}`;
+      const existing = groupsMap.get(key);
+      const tObj = tablesByIdMap.get(order.tableId);
+      const etObj = enrichedTablesMap.get(order.tableId);
+      const isClosed = order.sessionStatus === 'closed' || Boolean(order.sessionClosedAt);
+
+      if (!existing) {
+        const totalAmt =
+          order.sessionTotalAmount !== undefined
+            ? order.sessionTotalAmount
+            : !isClosed && etObj
+            ? etObj.currentSessionTotal
+            : !isClosed && tObj?.currentSessionTotal
+            ? tObj.currentSessionTotal
+            : order.total;
+
+        const paidAmt =
+          order.sessionPaidAmount !== undefined
+            ? order.sessionPaidAmount
+            : !isClosed && etObj
+            ? etObj.currentSessionPaidAmount
+            : isClosed
+            ? totalAmt
+            : 0;
+
+        const pendingAmt =
+          order.sessionPendingAmount !== undefined
+            ? order.sessionPendingAmount
+            : !isClosed && etObj
+            ? etObj.currentSessionPendingAmount
+            : isClosed
+            ? 0
+            : Math.max(0, Math.round((totalAmt - paidAmt) * 100) / 100);
+
+        groupsMap.set(key, {
+          sessionId: order.sessionId,
+          sessionCode: order.sessionCode || null,
+          sessionStatus: isClosed ? 'closed' : 'open',
+          sessionOpenedAt: order.sessionOpenedAt || tObj?.currentSessionOpenedAt || null,
+          sessionClosedAt: order.sessionClosedAt || null,
+          sessionClosingRequestedAt: order.sessionClosingRequestedAt || null,
+          tableId: order.tableId,
+          tableNumber: order.tableNumber || tObj?.tableNumber || '?',
+          tableName: order.tableName ?? tObj?.name ?? null,
+          tableStatus: (order.tableStatus || tObj?.status || 'occupied') as TableStatus,
+          sessionTotalAmount: totalAmt,
+          sessionPaidAmount: paidAmt,
+          sessionPendingAmount: pendingAmt,
+          sessionPaymentStatus:
+            order.sessionPaymentStatus ||
+            (!isClosed && etObj?.currentSessionPaymentStatus) ||
+            (isClosed ? 'paid' : 'pending'),
+          sessionPaymentMethod: order.sessionPaymentMethod || null,
+          orders: [order],
+        });
+      } else {
+        existing.orders.push(order);
+      }
+    }
+
+    const list = Array.from(groupsMap.values());
+    list.sort((a, b) => {
+      // Prioritize closing requested tables first in operational mode
+      if (a.sessionStatus === 'open' && b.sessionStatus === 'open') {
+        const aClosing = Boolean(a.sessionClosingRequestedAt) || a.tableStatus === 'closing';
+        const bClosing = Boolean(b.sessionClosingRequestedAt) || b.tableStatus === 'closing';
+        if (aClosing !== bClosing) return aClosing ? -1 : 1;
+      }
+      const numA = parseInt(String(a.tableNumber).replace(/\D/g, ''), 10);
+      const numB = parseInt(String(b.tableNumber).replace(/\D/g, ''), 10);
+      if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
+        return numA - numB;
+      }
+      return String(a.tableNumber).localeCompare(String(b.tableNumber), undefined, { numeric: true });
+    });
+
+    return list;
+  }, [filteredOrders, tablesByIdMap, enrichedTablesMap]);
+
   const closingTables = tables.filter((t) => t.status === 'closing');
+  const openTablesList = tables.filter((t) => Boolean(t.currentSessionId));
 
   return (
     <div className="flex-1 flex flex-col p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6 print:p-0 print:m-0 print:max-w-none">
@@ -936,62 +1160,582 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
       {/* ======================================================== */}
       {activeTab === 'orders' && (
         <div className="space-y-4">
-          {/* Orders Filter Bar */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200">
-            <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
-              {[
-                { key: 'all', label: 'Todos' },
-                { key: 'received', label: 'Recebidos' },
-                { key: 'confirmed', label: 'Confirmados' },
-                { key: 'preparing', label: 'Em Preparo' },
-                { key: 'ready', label: 'Prontos' },
-                { key: 'delivered', label: 'Entregues' },
-                { key: 'cancelled', label: 'Cancelados' },
-              ].map((f) => (
-                <button
-                  key={f.key}
-                  onClick={() => setOrderStatusFilter(f.key)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                    orderStatusFilter === f.key
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'text-slate-600 hover:bg-slate-100'
-                  }`}
+          {kdsActionError && (
+            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-3 text-xs text-rose-800">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span className="font-semibold">{kdsActionError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setKdsActionError(null)}
+                className="text-rose-600 hover:text-rose-900 font-bold cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+          )}
+
+          {/* Top KDS Operational Controls: Scope (Active Open Bills vs Closed History), View Mode & Table Filter */}
+          <div className="bg-white p-3.5 rounded-2xl border border-slate-200 space-y-3 shadow-xs">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setKdsScope('operational');
+                      setOrderStatusFilter('all');
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      kdsScope === 'operational'
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <UtensilsCrossed className="w-3.5 h-3.5" />
+                    <span>Pedidos Operacionais (Contas Abertas)</span>
+                    <span
+                      className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                        kdsScope === 'operational'
+                          ? 'bg-emerald-400 text-slate-950'
+                          : 'bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      {operationalOrders.length}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setKdsScope('history');
+                      setOrderStatusFilter('all');
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      kdsScope === 'history'
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>Histórico (Contas Encerradas)</span>
+                  </button>
+                </div>
+
+                <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setKdsViewMode('by_table')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      kdsViewMode === 'by_table'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Agrupado por Mesa & Conta
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setKdsViewMode('cards')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      kdsViewMode === 'cards'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Cards de Pedidos
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={kdsTableFilter}
+                  onChange={(e) => setKdsTableFilter(e.target.value)}
+                  className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
                 >
-                  {f.label}
-                </button>
-              ))}
+                  <option value="all">
+                    {kdsScope === 'operational'
+                      ? `Todas as Mesas com Conta Aberta (${openTablesList.length})`
+                      : 'Todas as Mesas'}
+                  </option>
+                  {tables.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      Mesa {t.tableNumber}
+                      {t.name ? ` (${t.name})` : ''}
+                      {t.currentSessionId ? ' • Conta Aberta' : ''}
+                    </option>
+                  ))}
+                </select>
+
+                <div className="relative flex-1 sm:w-64">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={orderSearch}
+                    onChange={(e) => setOrderSearch(e.target.value)}
+                    placeholder="Buscar nº pedido, cliente, mesa ou comanda..."
+                    className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
             </div>
 
-            <div className="relative w-full sm:w-64">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={orderSearch}
-                onChange={(e) => setOrderSearch(e.target.value)}
-                placeholder="Buscar pedido, cliente ou mesa..."
-                className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-              />
+            {/* Status Filter Bar with Live Operational Counts */}
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+                {[
+                  { key: 'all', label: 'Todos' },
+                  { key: 'received', label: 'Recebidos' },
+                  { key: 'confirmed', label: 'Confirmados' },
+                  { key: 'preparing', label: 'Em Preparo' },
+                  { key: 'ready', label: 'Prontos' },
+                  { key: 'delivered', label: 'Entregues' },
+                  { key: 'cancelled', label: 'Cancelados' },
+                ].map((f) => {
+                  const count = kdsStatusCounts[f.key] ?? 0;
+                  const isActive = orderStatusFilter === f.key;
+                  return (
+                    <button
+                      key={f.key}
+                      onClick={() => setOrderStatusFilter(f.key)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                        isActive
+                          ? 'bg-slate-900 text-white shadow-xs'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span>{f.label}</span>
+                      <span
+                        className={`px-1.5 py-0.2 rounded-full text-[10px] font-extrabold ${
+                          isActive
+                            ? 'bg-white/20 text-white'
+                            : count > 0
+                            ? 'bg-slate-200 text-slate-800'
+                            : 'bg-slate-100 text-slate-400'
+                        }`}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {kdsScope === 'operational' && (
+                <span className="text-[11px] text-slate-500 font-medium">
+                  Exibindo apenas pedidos de <strong>contas abertas</strong>. Ao encerrar uma conta, seus pedidos saem imediatamente do KDS.
+                </span>
+              )}
             </div>
           </div>
 
-          {/* Orders List */}
+          {/* Inline Cancel Order Modal Prompt */}
+          {cancellingKdsOrder && (
+            <div className="p-4 bg-rose-50 border-2 border-rose-200 rounded-2xl space-y-3 animate-in fade-in">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-rose-900 uppercase tracking-wider">
+                  Cancelar Pedido #{cancellingKdsOrder.orderNumber} (Mesa {cancellingKdsOrder.tableNumber || '?'})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCancellingKdsOrder(null);
+                    setCancellingKdsReason('');
+                  }}
+                  className="text-xs font-bold text-rose-700 hover:underline cursor-pointer"
+                >
+                  Fechar
+                </button>
+              </div>
+              <form onSubmit={handleConfirmCancelKdsOrder} className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="text"
+                  value={cancellingKdsReason}
+                  onChange={(e) => setCancellingKdsReason(e.target.value)}
+                  placeholder="Informe o motivo do cancelamento (ex: cliente desistiu, item indisponível)..."
+                  required
+                  className="flex-1 px-3 py-2 bg-white border border-rose-300 rounded-xl text-xs"
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCancellingKdsOrder(null);
+                      setCancellingKdsReason('');
+                    }}
+                    className="px-3 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+                  >
+                    Voltar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={cancellingKdsLoading}
+                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold cursor-pointer disabled:opacity-50"
+                  >
+                    {cancellingKdsLoading ? 'Cancelando...' : 'Confirmar Cancelamento'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Orders Content */}
           {loading ? (
             <div className="py-20 text-center text-slate-400">
               <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2 text-indigo-500" />
-              <p className="text-xs">Carregando pedidos das mesas...</p>
+              <p className="text-xs">Carregando pedidos e comandas das mesas...</p>
             </div>
           ) : filteredOrders.length === 0 ? (
             <div className="p-12 text-center text-slate-400 bg-white rounded-3xl border border-slate-200 space-y-2">
               <Receipt className="w-12 h-12 stroke-[1.5] mx-auto text-slate-300" />
-              <h3 className="text-sm font-bold text-slate-700">Nenhum pedido encontrado</h3>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Assim que clientes realizarem pedidos através dos QR Codes das mesas, eles aparecerão aqui em tempo real.
+              <h3 className="text-sm font-bold text-slate-700">
+                {kdsScope === 'operational'
+                  ? 'Nenhum pedido operacional em aberto para este filtro'
+                  : 'Nenhum pedido de conta encerrada encontrado'}
+              </h3>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                {kdsScope === 'operational'
+                  ? 'Pedidos de contas já encerradas são arquivados automaticamente. Assim que clientes enviarem novos pedidos em mesas abertas, eles aparecerão aqui em tempo real.'
+                  : 'Os pedidos de contas encerradas ficam preservados no histórico e relatórios financeiros.'}
               </p>
             </div>
+          ) : kdsViewMode === 'by_table' ? (
+            /* ================================================================ */
+            /* MODE A: AGRUPADO POR MESA & COMANDA (FLUXO OPERACIONAL COMPLETO) */
+            /* ================================================================ */
+            <div className="space-y-5">
+              {groupedSessionsInKds.map((group) => {
+                const isSessionOpen = group.sessionStatus === 'open';
+                const isClosingReq =
+                  isSessionOpen &&
+                  (Boolean(group.sessionClosingRequestedAt) || group.tableStatus === 'closing');
+
+                return (
+                  <div
+                    key={`${group.tableId}::${group.sessionId}`}
+                    className={`rounded-3xl border-2 overflow-hidden transition-all shadow-xs ${
+                      isClosingReq
+                        ? 'bg-orange-50/40 border-orange-400 ring-2 ring-orange-300'
+                        : isSessionOpen
+                        ? 'bg-white border-slate-200'
+                        : 'bg-slate-50/80 border-slate-200'
+                    }`}
+                  >
+                    {/* Table & Session Header with Full Bill Summary and Direct Closing Actions */}
+                    <div
+                      className={`px-5 py-4 border-b flex flex-col lg:flex-row lg:items-center justify-between gap-4 ${
+                        isClosingReq
+                          ? 'bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-rose-500/10 border-orange-200'
+                          : isSessionOpen
+                          ? 'bg-slate-50 border-slate-200/80'
+                          : 'bg-slate-100 border-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-start sm:items-center gap-3.5">
+                        <div
+                          className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-base shrink-0 border shadow-xs ${
+                            isClosingReq
+                              ? 'bg-orange-500 text-white border-orange-600'
+                              : isSessionOpen
+                              ? 'bg-slate-900 text-white border-slate-800'
+                              : 'bg-slate-200 text-slate-700 border-slate-300'
+                          }`}
+                        >
+                          {group.tableNumber}
+                        </div>
+
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="text-base font-black text-slate-900">
+                              Mesa {group.tableNumber}
+                            </h3>
+                            {group.tableName && (
+                              <span className="text-xs font-semibold text-slate-600 bg-white px-2 py-0.5 rounded-full border border-slate-200">
+                                {group.tableName}
+                              </span>
+                            )}
+                            {group.sessionCode && (
+                              <span className="text-[11px] font-mono font-bold text-slate-600 bg-slate-200/70 px-2 py-0.5 rounded-md">
+                                Comanda {group.sessionCode}
+                              </span>
+                            )}
+
+                            {isClosingReq ? (
+                              <span className="text-[11px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-orange-500 text-white flex items-center gap-1 animate-pulse">
+                                <Bell className="w-3 h-3" />
+                                Solicitou Fechamento
+                              </span>
+                            ) : isSessionOpen ? (
+                              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                Conta Aberta
+                              </span>
+                            ) : (
+                              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-700">
+                                Conta Encerrada
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-slate-600">
+                            {group.sessionOpenedAt && (
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                Aberta às{' '}
+                                {new Date(group.sessionOpenedAt).toLocaleTimeString([], {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </span>
+                            )}
+                            {group.sessionClosedAt && (
+                              <span className="text-slate-500 font-medium">
+                                • Encerrada às{' '}
+                                {new Date(group.sessionClosedAt).toLocaleTimeString([], {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </span>
+                            )}
+                            <span>
+                              • <strong>{group.orders.length}</strong>{' '}
+                              {group.orders.length === 1 ? 'pedido no filtro' : 'pedidos no filtro'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Financial Bill Summary & Direct Action Buttons ("Ver Conta / Pagamentos" & "Encerrar Conta") */}
+                      <div className="flex flex-wrap items-center justify-between lg:justify-end gap-3 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-200/70">
+                        <div className="flex items-center gap-3 bg-white px-3.5 py-2 rounded-2xl border border-slate-200 shadow-2xs">
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                              Total da Conta
+                            </span>
+                            <span className="text-sm font-black text-slate-900">
+                              R$ {group.sessionTotalAmount.toFixed(2).replace('.', ',')}
+                            </span>
+                          </div>
+
+                          {group.sessionPaidAmount > 0 && (
+                            <div className="pl-3 border-l border-slate-100">
+                              <span className="text-[10px] uppercase font-bold text-emerald-600 block">
+                                Já Pago
+                              </span>
+                              <span className="text-sm font-black text-emerald-700">
+                                R$ {group.sessionPaidAmount.toFixed(2).replace('.', ',')}
+                              </span>
+                            </div>
+                          )}
+
+                          {isSessionOpen && (
+                            <div className="pl-3 border-l border-slate-100">
+                              <span className="text-[10px] uppercase font-bold text-amber-700 block">
+                                Falta Receber
+                              </span>
+                              <span className="text-sm font-black text-amber-900">
+                                R$ {group.sessionPendingAmount.toFixed(2).replace('.', ',')}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {isSessionOpen && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openTableSessionModal(group.tableId, false)}
+                              className="px-3.5 py-2.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Receipt className="w-3.5 h-3.5 text-indigo-600" />
+                              <span>Ver Conta / Pagamentos</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => openTableSessionModal(group.tableId, true)}
+                              className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md flex items-center gap-1.5 cursor-pointer ${
+                                isClosingReq
+                                  ? 'bg-orange-500 hover:bg-orange-400 text-slate-950'
+                                  : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                              }`}
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                              <span>Encerrar Conta</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Orders Grid inside this Table Session */}
+                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {group.orders.map((order) => {
+                        const isCancelled = order.status === 'cancelled';
+                        const statusStyle = RESTAURANT_STATUS_COLORS[order.status] || {
+                          bg: 'bg-slate-50',
+                          text: 'text-slate-700',
+                          border: 'border-slate-200',
+                          dot: 'bg-slate-400',
+                        };
+
+                        let nextButtonLabel = '';
+                        if (order.status === 'received') nextButtonLabel = 'Confirmar Pedido';
+                        else if (order.status === 'confirmed') nextButtonLabel = 'Iniciar Preparo';
+                        else if (order.status === 'preparing') nextButtonLabel = 'Marcar Pronto';
+                        else if (order.status === 'ready') nextButtonLabel = 'Marcar Entregue';
+
+                        return (
+                          <div
+                            key={order.id}
+                            className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${
+                              isCancelled
+                                ? 'bg-slate-50 border-slate-200 opacity-60'
+                                : order.status === 'received'
+                                ? 'bg-blue-50/40 border-blue-200 shadow-xs'
+                                : order.status === 'ready'
+                                ? 'bg-purple-50/40 border-purple-200 shadow-xs'
+                                : 'bg-white border-slate-200 shadow-2xs'
+                            }`}
+                          >
+                            <div>
+                              <div className="flex items-start justify-between border-b border-slate-100 pb-2.5 mb-3">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-black text-slate-900">
+                                      Pedido #{order.orderNumber}
+                                    </span>
+                                  </div>
+                                  <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5">
+                                    <Clock className="w-3 h-3 text-slate-400" />
+                                    <span>
+                                      {new Date(order.createdAt).toLocaleTimeString([], {
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                      })}
+                                    </span>
+                                    {order.customerName && (
+                                      <span className="truncate max-w-[140px] font-medium text-slate-700">
+                                        · {order.customerName}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <span
+                                  className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}
+                                >
+                                  <span className={`w-1.5 h-1.5 rounded-full ${statusStyle.dot}`} />
+                                  {RESTAURANT_STATUS_LABELS[order.status] || order.status}
+                                </span>
+                              </div>
+
+                              {/* Items */}
+                              <div className="space-y-1.5 mb-3">
+                                {order.items.map((item) => (
+                                  <div key={item.id} className="text-xs flex items-start justify-between gap-2">
+                                    <div className="flex items-start gap-1.5">
+                                      <span className="font-black text-slate-900 shrink-0">
+                                        {item.quantity}x
+                                      </span>
+                                      <div>
+                                        <span className="font-semibold text-slate-800">
+                                          {item.productName}
+                                        </span>
+                                        {item.variantName && (
+                                          <span className="text-slate-500 ml-1">({item.variantName})</span>
+                                        )}
+                                        {item.notes && (
+                                          <div className="text-[11px] text-amber-700 italic font-medium mt-0.5">
+                                            Obs: {item.notes}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <span className="font-bold text-slate-700 shrink-0">
+                                      R$ {item.subtotal.toFixed(2).replace('.', ',')}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+
+                              {order.notes && (
+                                <div className="p-2 bg-amber-50/70 border border-amber-200 rounded-xl text-[11px] text-amber-900 mb-3">
+                                  <span className="font-bold">Obs. do pedido:</span> {order.notes}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
+                              <div>
+                                <span className="text-[10px] text-slate-400 block uppercase font-bold">
+                                  Subtotal Pedido
+                                </span>
+                                <span className="text-sm font-black text-slate-900">
+                                  R$ {order.total.toFixed(2).replace('.', ',')}
+                                </span>
+                              </div>
+
+                              {isSessionOpen && (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingRestaurantOrder(order)}
+                                    className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors cursor-pointer"
+                                    title="Editar itens do pedido"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </button>
+
+                                  {!isCancelled && order.status !== 'delivered' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setCancellingKdsOrder(order);
+                                        setCancellingKdsReason('');
+                                      }}
+                                      className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-xl transition-colors cursor-pointer"
+                                      title="Cancelar pedido"
+                                    >
+                                      <Ban className="w-4 h-4" />
+                                    </button>
+                                  )}
+
+                                  {nextButtonLabel && !isCancelled && (
+                                    <button
+                                      type="button"
+                                      disabled={advancingOrderId === order.id}
+                                      onClick={() => handleAdvanceOrderStatus(order)}
+                                      className="px-3 py-1.5 bg-slate-900 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                    >
+                                      <span>{nextButtonLabel}</span>
+                                      <ArrowRight className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           ) : (
+            /* ================================================================ */
+            /* MODE B: CARDS INDIVIDUAIS DE PEDIDOS COM AÇÕES DA CONTA DA MESA  */
+            /* ================================================================ */
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredOrders.map((order) => {
                 const isCancelled = order.status === 'cancelled';
+                const isSessionOpen = order.sessionStatus !== 'closed' && !order.sessionClosedAt;
+                const isClosingReq =
+                  isSessionOpen &&
+                  (Boolean(order.sessionClosingRequestedAt) || order.tableStatus === 'closing');
+
                 const statusStyle = RESTAURANT_STATUS_COLORS[order.status] || {
                   bg: 'bg-slate-50',
                   text: 'text-slate-700',
@@ -1022,21 +1766,34 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
                       {/* Top Order Bar */}
                       <div className="flex items-start justify-between border-b border-slate-100 pb-3 mb-3">
                         <div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-base font-black text-slate-900">
                               Pedido #{order.orderNumber}
                             </span>
                             <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-slate-900 text-white">
                               Mesa {order.tableNumber || '?'}
                             </span>
+                            {isClosingReq && (
+                              <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-orange-500 text-white animate-pulse">
+                                Pediu a Conta
+                              </span>
+                            )}
                           </div>
-                          <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
+                          <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
                             <Clock className="w-3.5 h-3.5 text-slate-400" />
                             <span>
-                              {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              {new Date(order.createdAt).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
                             </span>
                             {order.customerName && (
                               <span className="truncate max-w-[130px]">· {order.customerName}</span>
+                            )}
+                            {order.sessionCode && (
+                              <span className="font-mono text-[10px] text-slate-400">
+                                ({order.sessionCode})
+                              </span>
                             )}
                           </div>
                         </div>
@@ -1085,55 +1842,89 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
                       )}
                     </div>
 
-                    {/* Bottom Order Bar */}
-                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                      <div>
-                        <span className="text-[10px] text-slate-400 block uppercase font-bold">Total</span>
-                        <span className="text-base font-black text-slate-900">
-                          R$ {order.total.toFixed(2).replace('.', ',')}
-                        </span>
-                      </div>
+                    {/* Bottom Order & Table Account Actions */}
+                    <div className="pt-3 border-t border-slate-100 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-[10px] text-slate-400 block uppercase font-bold">
+                            Total do Pedido
+                          </span>
+                          <span className="text-base font-black text-slate-900">
+                            R$ {order.total.toFixed(2).replace('.', ',')}
+                          </span>
+                        </div>
 
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setEditingRestaurantOrder(order)}
-                          className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors cursor-pointer"
-                          title="Editar pedido"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeletingRestaurantOrder(order)}
-                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
-                          title="Excluir pedido"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-
-                        {!isCancelled && order.status !== 'delivered' && (
-                          <button
-                            type="button"
-                            onClick={() => handleCancelOrderQuick(order)}
-                            className="p-2 text-amber-600 hover:bg-amber-50 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
-                            title="Cancelar pedido"
-                          >
-                            <Ban className="w-4 h-4" />
-                          </button>
-                        )}
-
-                        {nextButtonLabel && !isCancelled && (
-                          <button
-                            type="button"
-                            onClick={() => handleAdvanceOrderStatus(order)}
-                            className="px-3.5 py-2 bg-slate-900 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <span>{nextButtonLabel}</span>
-                            <ArrowRight className="w-3.5 h-3.5" />
-                          </button>
+                        {order.sessionTotalAmount !== undefined && (
+                          <div className="text-right">
+                            <span className="text-[10px] text-slate-400 block uppercase font-bold">
+                              Total da Mesa {order.tableNumber}
+                            </span>
+                            <span className="text-xs font-extrabold text-indigo-700">
+                              R$ {order.sessionTotalAmount.toFixed(2).replace('.', ',')}
+                            </span>
+                          </div>
                         )}
                       </div>
+
+                      {isSessionOpen && (
+                        <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1">
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setEditingRestaurantOrder(order)}
+                              className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-colors cursor-pointer"
+                              title="Editar pedido"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+
+                            {!isCancelled && order.status !== 'delivered' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCancellingKdsOrder(order);
+                                  setCancellingKdsReason('');
+                                }}
+                                className="p-2 text-amber-600 hover:bg-amber-50 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                                title="Cancelar pedido"
+                              >
+                                <Ban className="w-4 h-4" />
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => openTableSessionModal(order.tableId, false)}
+                              className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-[11px] font-bold transition-colors cursor-pointer flex items-center gap-1"
+                              title="Ver conta completa e pagamentos da mesa"
+                            >
+                              <Receipt className="w-3.5 h-3.5 text-indigo-600" />
+                              <span>Conta</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => openTableSessionModal(order.tableId, true)}
+                              className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[11px] font-bold transition-colors cursor-pointer"
+                              title="Encerrar conta da mesa"
+                            >
+                              Encerrar Conta
+                            </button>
+                          </div>
+
+                          {nextButtonLabel && !isCancelled && (
+                            <button
+                              type="button"
+                              disabled={advancingOrderId === order.id}
+                              onClick={() => handleAdvanceOrderStatus(order)}
+                              className="px-3 py-1.5 bg-slate-900 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                            >
+                              <span>{nextButtonLabel}</span>
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -1358,8 +2149,33 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
       <TableSessionModal
         isOpen={sessionModalOpen}
         table={sessionTable}
-        onClose={() => setSessionModalOpen(false)}
-        onSessionClosed={() => loadData(true)}
+        initialConfirmClose={sessionModalInitialConfirmClose}
+        onClose={() => {
+          setSessionModalOpen(false);
+          setSessionModalInitialConfirmClose(false);
+        }}
+        onSessionClosed={(closedSessionId, closedTableId) => {
+          if (closedSessionId) {
+            setOrders((prev) => prev.filter((o) => o.sessionId !== closedSessionId));
+          }
+          if (closedTableId) {
+            setTables((prev) =>
+              prev.map((t) =>
+                t.id === closedTableId
+                  ? {
+                      ...t,
+                      status: 'available',
+                      currentSessionId: null,
+                      currentSessionTotal: 0,
+                      currentSessionOrdersCount: 0,
+                      currentSessionOpenedAt: null,
+                    }
+                  : t
+              )
+            );
+          }
+          loadData(true);
+        }}
       />
 
       <PrintQrModal

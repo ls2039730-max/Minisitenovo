@@ -19,11 +19,13 @@ import {
   Bell,
   Tag,
   Split,
+  ArrowRight,
 } from 'lucide-react';
 import {
   RestaurantTable,
   RestaurantSession,
   RestaurantOrder,
+  RestaurantOrderStatus,
   RestaurantFeeTemplate,
   RESTAURANT_STATUS_LABELS,
   RESTAURANT_STATUS_COLORS,
@@ -35,9 +37,29 @@ import { useBackHandler } from '../../../services/navigationManager';
 interface TableSessionModalProps {
   isOpen: boolean;
   table: (RestaurantTable & Partial<EnrichedRestaurantTable>) | null;
+  initialConfirmClose?: boolean;
   onClose: () => void;
-  onSessionClosed: () => void;
+  onSessionClosed: (closedSessionId?: string, closedTableId?: string) => void;
 }
+
+const broadcastRestaurantSync = (eventType: string, detail?: Record<string, any>) => {
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('localhub:restaurant-updated', {
+          detail: { eventType, timestamp: Date.now(), ...(detail || {}) },
+        })
+      );
+      if ('BroadcastChannel' in window) {
+        const bc = new BroadcastChannel('localhub_restaurant_sync');
+        bc.postMessage({ eventType, timestamp: Date.now(), ...(detail || {}) });
+        bc.close();
+      }
+    }
+  } catch (e) {
+    // Ignore BroadcastChannel errors in unsupported environments
+  }
+};
 
 const PAYMENT_METHODS = [
   { id: 'PIX', label: 'PIX', icon: QrCode },
@@ -51,6 +73,7 @@ const PAYMENT_METHODS = [
 export const TableSessionModal: React.FC<TableSessionModalProps> = ({
   isOpen,
   table,
+  initialConfirmClose = false,
   onClose,
   onSessionClosed,
 }) => {
@@ -60,6 +83,7 @@ export const TableSessionModal: React.FC<TableSessionModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [closing, setClosing] = useState(false);
   const [cancellingClosing, setCancellingClosing] = useState(false);
+  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [cancellingOrderId, setCancellingOrderId] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
@@ -147,29 +171,53 @@ export const TableSessionModal: React.FC<TableSessionModalProps> = ({
   useEffect(() => {
     if (isOpen && table) {
       loadSession();
-      setConfirmCloseOpen(false);
+      setConfirmCloseOpen(Boolean(initialConfirmClose));
       setCancellingOrderId(null);
       setCancelReason('');
       setAddCustomFeeOpen(false);
     }
-  }, [isOpen, table, loadSession]);
+  }, [isOpen, table, initialConfirmClose, loadSession]);
 
   if (!isOpen || !table) return null;
 
+  const handleAdvanceOrderInModal = async (order: RestaurantOrder) => {
+    let nextStatus: RestaurantOrderStatus | null = null;
+    if (order.status === 'received') nextStatus = 'confirmed';
+    else if (order.status === 'confirmed') nextStatus = 'preparing';
+    else if (order.status === 'preparing') nextStatus = 'ready';
+    else if (order.status === 'ready') nextStatus = 'delivered';
+
+    if (!nextStatus) return;
+    try {
+      setUpdatingOrderId(order.id);
+      setError(null);
+      await api.updateRestaurantOrderStatus(order.id, nextStatus);
+      await loadSession();
+      broadcastRestaurantSync('ORDER_STATUS_UPDATED', { orderId: order.id, tableId: table.id, sessionId: session?.id });
+      onSessionClosed();
+    } catch (err: any) {
+      setError(err.message || 'Erro ao atualizar status do pedido.');
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  };
+
   const handleCancelOrder = async (orderId: string) => {
     if (!cancelReason.trim()) {
-      alert('Informe o motivo do cancelamento.');
+      setError('Informe o motivo do cancelamento.');
       return;
     }
     try {
       setLoading(true);
+      setError(null);
       await api.cancelRestaurantOrder(orderId, cancelReason.trim());
       setCancellingOrderId(null);
       setCancelReason('');
       await loadSession();
+      broadcastRestaurantSync('ORDER_CANCELLED', { orderId, tableId: table.id, sessionId: session?.id });
       onSessionClosed();
     } catch (err: any) {
-      alert(err.message || 'Erro ao cancelar pedido.');
+      setError(err.message || 'Erro ao cancelar pedido.');
     } finally {
       setLoading(false);
     }
@@ -179,8 +227,19 @@ export const TableSessionModal: React.FC<TableSessionModalProps> = ({
     try {
       setClosing(true);
       setError(null);
-      await api.closeTableSession(table.id, closeNotes.trim() || undefined, paymentMethod);
-      onSessionClosed();
+      const targetSessionId = session?.id;
+      const result = await api.closeTableSession(
+        table.id,
+        closeNotes.trim() || undefined,
+        paymentMethod,
+        targetSessionId
+      );
+      const closedId = result?.session?.id || targetSessionId;
+      broadcastRestaurantSync('SESSION_CLOSED', {
+        sessionId: closedId,
+        tableId: table.id,
+      });
+      onSessionClosed(closedId, table.id);
       onClose();
     } catch (err: any) {
       setError(err.message || 'Erro ao fechar conta da mesa.');
@@ -192,11 +251,13 @@ export const TableSessionModal: React.FC<TableSessionModalProps> = ({
   const handleCancelClosing = async () => {
     try {
       setCancellingClosing(true);
+      setError(null);
       await api.cancelTableClosing(table.id);
       await loadSession();
+      broadcastRestaurantSync('SESSION_REOPENED', { tableId: table.id, sessionId: session?.id });
       onSessionClosed();
     } catch (err: any) {
-      alert(err.message || 'Erro ao reabrir comanda.');
+      setError(err.message || 'Erro ao reabrir comanda.');
     } finally {
       setCancellingClosing(false);
     }
@@ -821,6 +882,12 @@ export const TableSessionModal: React.FC<TableSessionModalProps> = ({
                         dot: 'bg-slate-400',
                       };
 
+                      let nextStepLabel = '';
+                      if (order.status === 'received') nextStepLabel = 'Confirmar';
+                      else if (order.status === 'confirmed') nextStepLabel = 'Iniciar Preparo';
+                      else if (order.status === 'preparing') nextStepLabel = 'Marcar Pronto';
+                      else if (order.status === 'ready') nextStepLabel = 'Marcar Entregue';
+
                       return (
                         <div
                           key={order.id}
@@ -830,7 +897,7 @@ export const TableSessionModal: React.FC<TableSessionModalProps> = ({
                               : 'bg-white border-slate-200 shadow-xs'
                           }`}
                         >
-                          <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 mb-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5 mb-3">
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-sm text-slate-900">
                                 Pedido #{order.orderNumber}
@@ -848,7 +915,7 @@ export const TableSessionModal: React.FC<TableSessionModalProps> = ({
                               </span>
                             </div>
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span
                                 className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}
                               >
@@ -856,7 +923,23 @@ export const TableSessionModal: React.FC<TableSessionModalProps> = ({
                                 {RESTAURANT_STATUS_LABELS[order.status] || order.status}
                               </span>
 
-                              {!isCancelled && (
+                              {nextStepLabel && !isCancelled && session?.status === 'open' && (
+                                <button
+                                  type="button"
+                                  disabled={updatingOrderId === order.id}
+                                  onClick={() => handleAdvanceOrderInModal(order)}
+                                  className="px-2.5 py-1 bg-slate-900 hover:bg-indigo-600 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
+                                >
+                                  {updatingOrderId === order.id ? (
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <ArrowRight className="w-3 h-3" />
+                                  )}
+                                  <span>{nextStepLabel}</span>
+                                </button>
+                              )}
+
+                              {!isCancelled && session?.status === 'open' && (
                                 <button
                                   type="button"
                                   onClick={() => {

@@ -1103,14 +1103,22 @@ export class RestaurantAnalyticsService {
   public async updateOrderFinancialsAndPayments(
     tenantId: string,
     orderId: string,
-    payload: {
-      action: 'add_payment' | 'remove_payment' | 'set_discount' | 'set_payment_status';
+    rawPayload: {
+      action?: 'add_payment' | 'remove_payment' | 'set_discount' | 'set_payment_status';
       amount?: number;
       paymentMethod?: string;
       paymentId?: string;
       discount?: number;
       paymentStatus?: FinancialPaymentStatus;
       notes?: string;
+      addPayment?: {
+        amount: number;
+        paymentMethod: string;
+        notes?: string;
+      };
+      removePaymentId?: string;
+      markFullPaid?: boolean;
+      paymentMethodForFullPaid?: string;
     },
     actor: User
   ): Promise<UnifiedOrder> {
@@ -1119,10 +1127,31 @@ export class RestaurantAnalyticsService {
       throw new Error('Pedido não encontrado para este estabelecimento.');
     }
 
+    // Normalize both frontend payload formats into canonical action fields
+    const payload = { ...rawPayload };
+    if (!payload.action) {
+      if (payload.addPayment) {
+        payload.action = 'add_payment';
+        payload.amount = payload.addPayment.amount;
+        payload.paymentMethod = payload.addPayment.paymentMethod;
+        payload.notes = payload.addPayment.notes;
+      } else if (payload.removePaymentId) {
+        payload.action = 'remove_payment';
+        payload.paymentId = payload.removePaymentId;
+      } else if (payload.markFullPaid) {
+        payload.action = 'set_payment_status';
+        payload.paymentStatus = 'paid';
+        payload.paymentMethod = payload.paymentMethodForFullPaid || payload.paymentMethod || existing.paymentMethod || 'PIX';
+      } else if (payload.discount !== undefined) {
+        payload.action = 'set_discount';
+      } else if (payload.paymentStatus !== undefined) {
+        payload.action = 'set_payment_status';
+      }
+    }
+
     const ledger = await this.getFinancialLedger(tenantId);
     const now = new Date().toISOString();
 
-    // If it's a table order linked to a session, and user wants to record payment at order level or session level
     const currentEntry: LedgerRecord = ledger.orders[orderId] || {
       discount: existing.discount,
       paymentStatus: existing.paymentStatus,
@@ -1264,13 +1293,19 @@ export class RestaurantAnalyticsService {
   public async updateSessionFinancialsAndPayments(
     tenantId: string,
     sessionId: string,
-    payload: {
-      action: 'add_payment' | 'remove_payment' | 'set_discount';
+    rawPayload: {
+      action?: 'add_payment' | 'remove_payment' | 'set_discount';
       amount?: number;
       paymentMethod?: string;
       paymentId?: string;
       discount?: number;
       notes?: string;
+      addPayment?: {
+        amount: number;
+        paymentMethod: string;
+        notes?: string;
+      };
+      removePaymentId?: string;
     },
     actor: User
   ): Promise<{
@@ -1290,6 +1325,26 @@ export class RestaurantAnalyticsService {
 
     if (!session) {
       throw new Error('Comanda não encontrada para este estabelecimento.');
+    }
+
+    if (session.status === 'closed') {
+      throw new Error('Esta comanda já foi encerrada e não permite novos lançamentos ou alterações financeiras.');
+    }
+
+    // Normalize both frontend payload formats into canonical action fields
+    const payload = { ...rawPayload };
+    if (!payload.action) {
+      if (payload.addPayment) {
+        payload.action = 'add_payment';
+        payload.amount = payload.addPayment.amount;
+        payload.paymentMethod = payload.addPayment.paymentMethod;
+        payload.notes = payload.addPayment.notes;
+      } else if (payload.removePaymentId) {
+        payload.action = 'remove_payment';
+        payload.paymentId = payload.removePaymentId;
+      } else if (payload.discount !== undefined) {
+        payload.action = 'set_discount';
+      }
     }
 
     const ledger = await this.getFinancialLedger(tenantId);
@@ -1420,6 +1475,57 @@ export class RestaurantAnalyticsService {
       paymentStatus,
       payments: finalPayments,
     };
+  }
+
+  public async reconcileClosedSessionInLedger(
+    tenantId: string,
+    sessionId: string,
+    finalNetTotal: number,
+    paymentMethod: string,
+    closedAt: string,
+    actorName: string
+  ): Promise<void> {
+    const ledger = await this.getFinancialLedger(tenantId);
+    const currentEntry: LedgerRecord = ledger.sessions[sessionId] || {
+      discount: 0,
+      paymentStatus: 'paid',
+      paymentMethod,
+      payments: [],
+      history: [],
+    };
+
+    const payments = Array.isArray(currentEntry.payments) ? [...currentEntry.payments] : [];
+    const history = Array.isArray(currentEntry.history) ? [...currentEntry.history] : [];
+    const alreadyPaid = round2(payments.reduce((acc, p) => acc + Number(p.amount || 0), 0));
+    const remainingToSettle = round2(Math.max(0, finalNetTotal - alreadyPaid));
+
+    if (remainingToSettle > 0) {
+      payments.push({
+        id: crypto.randomUUID(),
+        amount: remainingToSettle,
+        paymentMethod,
+        paidAt: closedAt,
+        notes: 'Quitação final no encerramento da comanda',
+        recordedBy: actorName,
+      });
+    }
+
+    currentEntry.payments = payments;
+    currentEntry.paymentStatus = 'paid';
+    currentEntry.paymentMethod = paymentMethod;
+    currentEntry.paidAt = closedAt;
+    history.push({
+      id: crypto.randomUUID(),
+      timestamp: closedAt,
+      type: 'status_change',
+      description: `Comanda encerrada e quitada (${paymentMethod}) — Total R$ ${finalNetTotal.toFixed(2).replace('.', ',')}`,
+      actorName,
+    });
+    currentEntry.history = history;
+
+    await this.saveFinancialLedger(tenantId, {
+      sessions: { [sessionId]: currentEntry },
+    });
   }
 
   // =========================================================================

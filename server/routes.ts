@@ -2792,7 +2792,8 @@ apiRouter.post('/restaurant/tables/:id/close-session', authenticate, requireNonP
       req.params.id,
       req.user!,
       req.body?.notes,
-      req.body?.paymentMethod
+      req.body?.paymentMethod,
+      req.body?.sessionId
     );
     return res.json({ success: true, ...result });
   } catch (err: any) {
@@ -2886,10 +2887,18 @@ apiRouter.delete('/restaurant/sessions/:sessionId/fees/:feeId', authenticate, re
 apiRouter.get('/restaurant/orders', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
+    const sessionStatusParam = req.query.sessionStatus as string | undefined;
+    const validSessionStatus: 'open' | 'closed' | 'all' | undefined =
+      sessionStatusParam === 'open' || sessionStatusParam === 'closed' || sessionStatusParam === 'all'
+        ? sessionStatusParam
+        : undefined;
+
     const orders = await restaurantRepo.listOrders(tenantId, {
       status: req.query.status as string,
       tableId: req.query.tableId as string,
       sessionId: req.query.sessionId as string,
+      sessionStatus: validSessionStatus,
+      includeClosedSessions: req.query.includeClosedSessions === 'true',
       date: req.query.date as string,
       search: req.query.search as string,
     });

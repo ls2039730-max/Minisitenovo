@@ -87,6 +87,18 @@ export interface RestaurantOrder {
   history?: RestaurantOrderStatusHistory[];
   tableNumber?: string;
   tableName?: string | null;
+  tableStatus?: TableStatus;
+  sessionCode?: string | null;
+  sessionStatus?: 'open' | 'closed';
+  sessionOpenedAt?: string | null;
+  sessionClosedAt?: string | null;
+  sessionClosingRequestedAt?: string | null;
+  sessionTotalAmount?: number;
+  sessionPaidAmount?: number;
+  sessionPendingAmount?: number;
+  sessionPaymentStatus?: 'paid' | 'partial' | 'pending' | 'unpaid' | null;
+  sessionPaymentMethod?: string | null;
+  isCurrentTableSession?: boolean;
   createdAt: string;
   updatedAt: string;
 }
