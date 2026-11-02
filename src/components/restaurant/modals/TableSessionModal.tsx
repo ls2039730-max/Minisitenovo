@@ -40,6 +40,7 @@ interface TableSessionModalProps {
   initialConfirmClose?: boolean;
   onClose: () => void;
   onSessionClosed: (closedSessionId?: string, closedTableId?: string) => void;
+  onOpenAddItems?: (table: RestaurantTable, session: RestaurantSession) => void;
 }
 
 const broadcastRestaurantSync = (eventType: string, detail?: Record<string, any>) => {
@@ -76,6 +77,7 @@ export const TableSessionModal: React.FC<TableSessionModalProps> = ({
   initialConfirmClose = false,
   onClose,
   onSessionClosed,
+  onOpenAddItems,
 }) => {
   const [session, setSession] = useState<RestaurantSession | null>(null);
   const [enrichedTable, setEnrichedTable] = useState<EnrichedRestaurantTable | null>(null);
@@ -177,6 +179,20 @@ export const TableSessionModal: React.FC<TableSessionModalProps> = ({
       setAddCustomFeeOpen(false);
     }
   }, [isOpen, table, initialConfirmClose, loadSession]);
+
+  useEffect(() => {
+    if (!isOpen || !table) return;
+    const handleSync = (evt: Event) => {
+      const custom = evt as CustomEvent;
+      if (custom.detail?.type === 'ORDER_ADDED_TO_SESSION' && custom.detail?.tableId === table.id) {
+        loadSession();
+      }
+    };
+    window.addEventListener('localhub:restaurant-updated', handleSync);
+    return () => {
+      window.removeEventListener('localhub:restaurant-updated', handleSync);
+    };
+  }, [isOpen, table, loadSession]);
 
   if (!isOpen || !table) return null;
 
@@ -470,12 +486,24 @@ export const TableSessionModal: React.FC<TableSessionModalProps> = ({
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-200/50 transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {session && session.status === 'open' && onOpenAddItems && (
+              <button
+                type="button"
+                onClick={() => onOpenAddItems(table, session)}
+                className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Adicionar Itens</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-200/50 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Content Body */}
@@ -857,14 +885,26 @@ export const TableSessionModal: React.FC<TableSessionModalProps> = ({
 
               {/* Orders Linked to this Session */}
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                     <Utensils className="w-3.5 h-3.5" />
                     Pedidos Vinculados à Conta ({orders.length})
                   </h4>
-                  <span className="text-xs text-slate-500 font-semibold">
-                    Subtotal Itens: R$ {ordersSubtotal.toFixed(2).replace('.', ',')}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-slate-500 font-semibold">
+                      Subtotal Itens: R$ {ordersSubtotal.toFixed(2).replace('.', ',')}
+                    </span>
+                    {session && session.status === 'open' && onOpenAddItems && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenAddItems(table, session)}
+                        className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Adicionar Pedido</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {orders.length === 0 ? (
@@ -873,47 +913,81 @@ export const TableSessionModal: React.FC<TableSessionModalProps> = ({
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {orders.map((order: RestaurantOrder) => {
-                      const isCancelled = order.status === 'cancelled';
-                      const statusStyle = RESTAURANT_STATUS_COLORS[order.status] || {
-                        bg: 'bg-slate-50',
-                        text: 'text-slate-700',
-                        border: 'border-slate-200',
-                        dot: 'bg-slate-400',
-                      };
+                    {(() => {
+                      // Compute chronological sequence within this session so initial vs additional orders are unambiguous
+                      const chronologicalIds = [...orders]
+                        .sort((a, b) => {
+                          const tA = new Date(a.createdAt).getTime();
+                          const tB = new Date(b.createdAt).getTime();
+                          if (tA !== tB) return tA - tB;
+                          return Number(a.orderNumber || 0) - Number(b.orderNumber || 0);
+                        })
+                        .map((o) => o.id);
 
-                      let nextStepLabel = '';
-                      if (order.status === 'received') nextStepLabel = 'Confirmar';
-                      else if (order.status === 'confirmed') nextStepLabel = 'Iniciar Preparo';
-                      else if (order.status === 'preparing') nextStepLabel = 'Marcar Pronto';
-                      else if (order.status === 'ready') nextStepLabel = 'Marcar Entregue';
+                      return orders.map((order: RestaurantOrder) => {
+                        const isCancelled = order.status === 'cancelled';
+                        const statusStyle = RESTAURANT_STATUS_COLORS[order.status] || {
+                          bg: 'bg-slate-50',
+                          text: 'text-slate-700',
+                          border: 'border-slate-200',
+                          dot: 'bg-slate-400',
+                        };
 
-                      return (
-                        <div
-                          key={order.id}
-                          className={`p-4 rounded-2xl border transition-all ${
-                            isCancelled
-                              ? 'bg-slate-50 border-slate-200 opacity-60'
-                              : 'bg-white border-slate-200 shadow-xs'
-                          }`}
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5 mb-3">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-sm text-slate-900">
-                                Pedido #{order.orderNumber}
-                              </span>
-                              {order.customerName && (
-                                <span className="text-xs text-slate-500">
-                                  por <u>{order.customerName}</u>
+                        const seqNumber =
+                          order.sessionOrderSequence ||
+                          chronologicalIds.indexOf(order.id) + 1 ||
+                          1;
+                        const isAdditional = order.isAdditionalOrder ?? seqNumber > 1;
+
+                        let nextStepLabel = '';
+                        if (order.status === 'received') nextStepLabel = 'Confirmar';
+                        else if (order.status === 'confirmed') nextStepLabel = 'Iniciar Preparo';
+                        else if (order.status === 'preparing') nextStepLabel = 'Marcar Pronto';
+                        else if (order.status === 'ready') nextStepLabel = 'Marcar Entregue';
+
+                        return (
+                          <div
+                            key={order.id}
+                            className={`p-4 rounded-2xl border transition-all ${
+                              isCancelled
+                                ? 'bg-slate-50 border-slate-200 opacity-60'
+                                : isAdditional
+                                ? 'bg-amber-50/20 border-amber-200/80 shadow-xs'
+                                : 'bg-white border-slate-200 shadow-xs'
+                            }`}
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5 mb-3">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-sm text-slate-900">
+                                  Pedido #{order.orderNumber}
                                 </span>
-                              )}
-                              <span className="text-[11px] text-slate-400">
-                                {new Date(order.createdAt).toLocaleTimeString([], {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}
-                              </span>
-                            </div>
+                                {isAdditional ? (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300">
+                                    Pedido adicional ({seqNumber - 1}º adicional)
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                    Pedido inicial
+                                  </span>
+                                )}
+                                {order.customerName && (
+                                  <span className="text-xs text-slate-500">
+                                    por <u>{order.customerName}</u>
+                                  </span>
+                                )}
+                                {order.launchedBy && order.launchedBy !== 'customer' && (
+                                  <span className="text-[10px] font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">
+                                    Garçom/Atendente
+                                  </span>
+                                )}
+                                <span className="text-[11px] text-slate-400">
+                                  às{' '}
+                                  {new Date(order.createdAt).toLocaleTimeString([], {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </span>
+                              </div>
 
                             <div className="flex items-center gap-2 flex-wrap">
                               <span
@@ -1039,7 +1113,8 @@ export const TableSessionModal: React.FC<TableSessionModalProps> = ({
                           </div>
                         </div>
                       );
-                    })}
+                    });
+                  })()}
                   </div>
                 )}
               </div>
@@ -1174,7 +1249,7 @@ export const TableSessionModal: React.FC<TableSessionModalProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <button
                     type="button"
                     onClick={onClose}
@@ -1182,6 +1257,16 @@ export const TableSessionModal: React.FC<TableSessionModalProps> = ({
                   >
                     Fechar Janela
                   </button>
+                  {session.status === 'open' && onOpenAddItems && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenAddItems(table, session)}
+                      className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Adicionar Itens
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setConfirmCloseOpen(true)}

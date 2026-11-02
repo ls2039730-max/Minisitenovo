@@ -669,7 +669,8 @@ export class RestaurantAnalyticsService {
       const isSessionClosedAndPaid =
         session &&
         session.status === 'closed' &&
-        (session.payment_status === 'paid' || !session.payment_status);
+        (session.payment_status === 'paid' || !session.payment_status) &&
+        (!sessionLedger.paymentStatus || sessionLedger.paymentStatus === 'paid');
 
       if (isSessionClosedAndPaid && sessionPaidAmount < sessionNetTotal) {
         const remainder = round2(sessionNetTotal - sessionPaidAmount);
@@ -1127,6 +1128,19 @@ export class RestaurantAnalyticsService {
       throw new Error('Pedido não encontrado para este estabelecimento.');
     }
 
+    if (existing.source === 'table' && existing.sessionId) {
+      const { data: tableSession } = await supabaseAdmin
+        .from('restaurant_sessions')
+        .select('id, status')
+        .eq('id', existing.sessionId)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+
+      if (tableSession && tableSession.status === 'closed') {
+        throw new Error('Não é permitido alterar valores ou pagamentos de um pedido pertencente a uma comanda já encerrada.');
+      }
+    }
+
     // Normalize both frontend payload formats into canonical action fields
     const payload = { ...rawPayload };
     if (!payload.action) {
@@ -1483,12 +1497,22 @@ export class RestaurantAnalyticsService {
     finalNetTotal: number,
     paymentMethod: string,
     closedAt: string,
-    actorName: string
-  ): Promise<void> {
+    actorName: string,
+    options?: {
+      settleRemainingBalance?: boolean;
+      paymentStatus?: FinancialPaymentStatus;
+    }
+  ): Promise<{
+    paidAmount: number;
+    pendingAmount: number;
+    paymentStatus: FinancialPaymentStatus;
+    discount: number;
+  }> {
     const ledger = await this.getFinancialLedger(tenantId);
-    const currentEntry: LedgerRecord = ledger.sessions[sessionId] || {
+    const existingEntry = ledger.sessions[sessionId];
+    const currentEntry: LedgerRecord = existingEntry || {
       discount: 0,
-      paymentStatus: 'paid',
+      paymentStatus: 'pending',
       paymentMethod,
       payments: [],
       history: [],
@@ -1499,9 +1523,30 @@ export class RestaurantAnalyticsService {
     const alreadyPaid = round2(payments.reduce((acc, p) => acc + Number(p.amount || 0), 0));
     const remainingToSettle = round2(Math.max(0, finalNetTotal - alreadyPaid));
 
-    if (remainingToSettle > 0) {
+    const closePaymentId = `close_pay_${sessionId}`;
+    const closeHistoryId = `close_hist_${sessionId}`;
+    const alreadyHasClosePayment = payments.some((p) => p.id === closePaymentId);
+    const alreadyHasCloseHistory = history.some((h) => h.id === closeHistoryId);
+
+    const hasPartialPaymentOnly = alreadyPaid > 0 && alreadyPaid < finalNetTotal;
+    const isExplicitlyUnsettled =
+      options?.settleRemainingBalance === false ||
+      options?.paymentStatus === 'pending' ||
+      options?.paymentStatus === 'unpaid' ||
+      options?.paymentStatus === 'partial' ||
+      currentEntry.paymentStatus === 'unpaid' ||
+      paymentMethod === 'pending' ||
+      paymentMethod === 'unpaid';
+
+    const shouldSettleRemaining =
+      remainingToSettle > 0 &&
+      !alreadyHasClosePayment &&
+      !isExplicitlyUnsettled &&
+      (!hasPartialPaymentOnly || options?.settleRemainingBalance === true || options?.paymentStatus === 'paid');
+
+    if (shouldSettleRemaining) {
       payments.push({
-        id: crypto.randomUUID(),
+        id: closePaymentId,
         amount: remainingToSettle,
         paymentMethod,
         paidAt: closedAt,
@@ -1510,22 +1555,59 @@ export class RestaurantAnalyticsService {
       });
     }
 
+    const totalPaidAfter = round2(
+      Math.min(finalNetTotal, payments.reduce((acc, p) => acc + Number(p.amount || 0), 0))
+    );
+    const pendingAfter = round2(Math.max(0, finalNetTotal - totalPaidAfter));
+
+    let finalPaymentStatus: FinancialPaymentStatus = 'pending';
+    if (totalPaidAfter >= finalNetTotal && finalNetTotal >= 0 && (finalNetTotal > 0 || !isExplicitlyUnsettled)) {
+      finalPaymentStatus = 'paid';
+    } else if (totalPaidAfter > 0 && totalPaidAfter < finalNetTotal) {
+      finalPaymentStatus = 'partial';
+    } else if (options?.paymentStatus === 'unpaid' || currentEntry.paymentStatus === 'unpaid' || paymentMethod === 'unpaid') {
+      finalPaymentStatus = 'unpaid';
+    } else {
+      finalPaymentStatus = 'pending';
+    }
+
     currentEntry.payments = payments;
-    currentEntry.paymentStatus = 'paid';
-    currentEntry.paymentMethod = paymentMethod;
-    currentEntry.paidAt = closedAt;
-    history.push({
-      id: crypto.randomUUID(),
-      timestamp: closedAt,
-      type: 'status_change',
-      description: `Comanda encerrada e quitada (${paymentMethod}) — Total R$ ${finalNetTotal.toFixed(2).replace('.', ',')}`,
-      actorName,
-    });
+    currentEntry.paymentStatus = finalPaymentStatus;
+    if (paymentMethod && paymentMethod !== 'pending' && paymentMethod !== 'unpaid') {
+      currentEntry.paymentMethod = paymentMethod;
+    }
+    if (finalPaymentStatus === 'paid' || totalPaidAfter > 0) {
+      currentEntry.paidAt = currentEntry.paidAt || closedAt;
+    }
+
+    if (!alreadyHasCloseHistory) {
+      const statusDesc =
+        finalPaymentStatus === 'paid'
+          ? `Comanda encerrada e quitada (${paymentMethod}) — Total R$ ${finalNetTotal.toFixed(2).replace('.', ',')}`
+          : finalPaymentStatus === 'partial'
+          ? `Comanda encerrada com pagamento parcial — Recebido R$ ${totalPaidAfter.toFixed(2).replace('.', ',')} / Pendente R$ ${pendingAfter.toFixed(2).replace('.', ',')}`
+          : `Comanda encerrada com saldo pendente — Total R$ ${finalNetTotal.toFixed(2).replace('.', ',')}`;
+
+      history.push({
+        id: closeHistoryId,
+        timestamp: closedAt,
+        type: 'status_change',
+        description: statusDesc,
+        actorName,
+      });
+    }
     currentEntry.history = history;
 
     await this.saveFinancialLedger(tenantId, {
       sessions: { [sessionId]: currentEntry },
     });
+
+    return {
+      paidAmount: totalPaidAfter,
+      pendingAmount: pendingAfter,
+      paymentStatus: finalPaymentStatus,
+      discount: round2(Number(currentEntry.discount || 0)),
+    };
   }
 
   // =========================================================================

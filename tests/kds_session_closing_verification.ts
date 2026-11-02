@@ -4,8 +4,8 @@ import { restaurantRepo } from '../server/db/restaurantRepository.js';
 import { restaurantAnalyticsService } from '../server/services/restaurantAnalyticsService.js';
 import { User } from '../src/types/saas.js';
 
-const TENANT_A_ID = 'd80351bc-52b8-46c8-96c0-9d6622f4a680';
-const TENANT_B_ID = 'a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d';
+let TENANT_A_ID = 'd80351bc-52b8-46c8-96c0-9d6622f4a680';
+let TENANT_B_ID = 'a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d';
 
 const actorA: User = {
   id: '00000000-0000-4000-8000-000000000001',
@@ -41,25 +41,56 @@ async function runVerification() {
   const createdTableIds: string[] = [];
   const createdSessionIds: string[] = [];
   const createdOrderIds: string[] = [];
+  const createdProductIds: string[] = [];
 
   try {
-    // Obter o slug real da empresa A no banco de dados
-    const { data: tenantRecord } = await supabaseAdmin
+    // Obter o slug real da empresa A no banco de dados (ou primeiro tenant disponível no adapter local)
+    let { data: tenantRecord } = await supabaseAdmin
       .from('tenants')
       .select('id, slug, name')
       .eq('id', TENANT_A_ID)
-      .single();
+      .maybeSingle();
+
+    if (!tenantRecord) {
+      const { data: allTenants } = await supabaseAdmin.from('tenants').select('id, slug, name').limit(2);
+      if (allTenants && allTenants.length > 0) {
+        tenantRecord = allTenants[0];
+        TENANT_A_ID = tenantRecord.id;
+        actorA.tenantId = TENANT_A_ID;
+        if (allTenants.length > 1) {
+          TENANT_B_ID = allTenants[1].id;
+          actorB.tenantId = TENANT_B_ID;
+        }
+      }
+    }
 
     assert(tenantRecord && tenantRecord.slug, 'Tenant de teste deve existir no banco');
     const tenantSlug = tenantRecord!.slug;
 
-    // Obter um produto ativo da empresa A para criar pedidos reais
-    const { data: products } = await supabaseAdmin
+    // Obter um produto ativo da empresa A para criar pedidos reais (ou criar um temporário se não houver)
+    let { data: products } = await supabaseAdmin
       .from('products')
       .select('id, name, price')
       .eq('tenant_id', TENANT_A_ID)
       .eq('is_active', true)
       .limit(2);
+
+    if (!products || products.length === 0) {
+      const tempProdId = crypto.randomUUID();
+      await supabaseAdmin.from('products').insert({
+        id: tempProdId,
+        tenant_id: TENANT_A_ID,
+        name: 'Produto Teste KDS Temporário',
+        slug: `prod-kds-temp-${Date.now()}`,
+        price: 35.0,
+        is_active: true,
+        stock_quantity: 100,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+      createdProductIds.push(tempProdId);
+      products = [{ id: tempProdId, name: 'Produto Teste KDS Temporário', price: 35.0 }];
+    }
 
     assert(products && products.length > 0, 'Empresa de teste deve possuir ao menos 1 produto ativo');
     const testProduct = products![0];
@@ -445,8 +476,258 @@ async function runVerification() {
     );
     console.log('  ✅ Teste 10 APROVADO: Filtros Todos, Recebidos, Em Preparo, Entregues e contadores 100% consistentes.\n');
 
+    // =========================================================================
+    // TESTE 11: Auditoria Financeira (Integral vs. Parcial vs. Pendente + Idempotência)
+    // =========================================================================
+    console.log('▶ Executando Teste 11: Conferência Financeira Obrigatória (Integral, Parcial, Pendente e Idempotência)...');
+
+    // 11.A — Tentativa de encerrar com saldo pendente (requireFullPayment: true) e Pagamento Parcial preservado
+    const orderPartial = await restaurantRepo.createOrderFromTable(
+      {
+        tenantSlug,
+        tableToken: table1.qrCodeToken,
+        customerName: 'Cliente Pagamento Parcial',
+        items: [{ productId: testProduct.id, quantity: 2 }],
+      },
+      '127.0.0.108'
+    );
+    createdOrderIds.push(orderPartial.id);
+    createdSessionIds.push(orderPartial.sessionId);
+
+    const partialSessionTotal = Number(orderPartial.total);
+    const partialPaidValue = Math.round(partialSessionTotal * 0.4 * 100) / 100;
+    const expectedPartialPending = Math.round((partialSessionTotal - partialPaidValue) * 100) / 100;
+
+    // Registrar pagamento parcial de 40% na comanda aberta
+    const partialUpdate = await restaurantAnalyticsService.updateSessionFinancialsAndPayments(
+      TENANT_A_ID,
+      orderPartial.sessionId,
+      {
+        action: 'add_payment',
+        amount: partialPaidValue,
+        paymentMethod: 'PIX',
+        notes: 'Entrada parcial de 40%',
+      },
+      actorA
+    );
+    assert(partialUpdate.paymentStatus === 'partial', 'Sessão aberta com pagamento parcial deve ter status partial');
+    assert(partialUpdate.paidAmount === partialPaidValue, 'paidAmount deve refletir exatamente o valor parcial pago');
+    assert(partialUpdate.pendingAmount === expectedPartialPending, 'pendingAmount deve refletir o saldo restante');
+
+    // Tentar encerrar exigindo pagamento integral (requireFullPayment: true) -> deve bloquear!
+    let blockedUnsettledClose = false;
+    try {
+      await restaurantRepo.closeSession(
+        TENANT_A_ID,
+        table1.id,
+        actorA,
+        'Tentativa de fechar exigindo quitação total',
+        'PIX',
+        orderPartial.sessionId,
+        { requireFullPayment: true }
+      );
+    } catch (err: any) {
+      blockedUnsettledClose = true;
+    }
+    assert(
+      blockedUnsettledClose,
+      'Tentativa de encerrar conta com saldo pendente quando requireFullPayment=true deve ser bloqueada'
+    );
+
+    // Confirmar que a sessão continua aberta após o bloqueio
+    const sessionStillOpen = await restaurantRepo.getSessionDetails(TENANT_A_ID, orderPartial.sessionId);
+    assert(sessionStillOpen?.status === 'open', 'Sessão deve permanecer aberta após bloqueio de saldo pendente');
+
+    // Agora encerrar a sessão mantendo o pagamento parcial (sem liquidar o restante)
+    const closedPartialRes = await restaurantRepo.closeSession(
+      TENANT_A_ID,
+      table1.id,
+      actorA,
+      'Fechamento mantendo saldo parcial pendente',
+      'PIX',
+      orderPartial.sessionId
+    );
+    assert(closedPartialRes.session.status === 'closed', 'Sessão deve ser encerrada');
+    assert(
+      closedPartialRes.session.paymentStatus === 'pending',
+      `No banco (CHECK constraint), sessão com pagamento parcial deve ficar como pending (recebido: ${closedPartialRes.session.paymentStatus})`
+    );
+
+    // Verificar no ledger e no relatório unificado que NÃO foi criado pagamento fictício e NÃO está marcada como 'paid'
+    const ledgerAfterPartial = await restaurantAnalyticsService.getFinancialLedger(TENANT_A_ID);
+    const partialLedgerEntry = ledgerAfterPartial.sessions[orderPartial.sessionId];
+    const partialPayments = partialLedgerEntry?.payments || [];
+    assert(
+      partialLedgerEntry && partialLedgerEntry.paymentStatus === 'partial',
+      `No ledger financeiro, a comanda com pagamento parcial NÃO pode ser marcada como paid (status atual: ${partialLedgerEntry?.paymentStatus})`
+    );
+    assert(
+      partialPayments.length === 1 && Number(partialPayments[0].amount) === partialPaidValue,
+      `O encerramento NÃO pode criar pagamentos fictícios (pagamentos encontrados: ${partialPayments.length})`
+    );
+
+    // Testar idempotência de reconcileClosedSessionInLedger quando chamado repetidamente
+    await restaurantAnalyticsService.reconcileClosedSessionInLedger(
+      TENANT_A_ID,
+      orderPartial.sessionId,
+      partialSessionTotal,
+      'PIX',
+      new Date().toISOString(),
+      actorA.name
+    );
+    const ledgerAfterRepeat = await restaurantAnalyticsService.getFinancialLedger(TENANT_A_ID);
+    const repeatPayments = ledgerAfterRepeat.sessions[orderPartial.sessionId]?.payments || [];
+    assert(
+      repeatPayments.length === 1,
+      'Chamadas repetidas a reconcileClosedSessionInLedger NÃO podem duplicar lançamentos financeiros'
+    );
+
+    const unifiedPartialOrder = await restaurantAnalyticsService.getUnifiedOrderById(TENANT_A_ID, orderPartial.id);
+    assert(
+      unifiedPartialOrder &&
+        unifiedPartialOrder.paymentStatus === 'partial' &&
+        unifiedPartialOrder.paidAmount === partialPaidValue &&
+        unifiedPartialOrder.pendingAmount === expectedPartialPending,
+      `Relatório unificado deve preservar status partial, valor recebido (${unifiedPartialOrder?.paidAmount}) e saldo pendente (${unifiedPartialOrder?.pendingAmount})`
+    );
+
+    // 11.B — Encerramento com pagamento integral (com desconto e quitação final do saldo restante)
+    const orderFull = await restaurantRepo.createOrderFromTable(
+      {
+        tenantSlug,
+        tableToken: table1.qrCodeToken,
+        customerName: 'Cliente Pagamento Integral com Desconto',
+        items: [{ productId: testProduct.id, quantity: 2 }],
+      },
+      '127.0.0.109'
+    );
+    createdOrderIds.push(orderFull.id);
+    createdSessionIds.push(orderFull.sessionId);
+
+    const grossFull = Number(orderFull.total);
+    const discountVal = Math.min(5, Math.round(grossFull * 0.1 * 100) / 100);
+    const expectedNetFull = Math.round((grossFull - discountVal) * 100) / 100;
+    const firstEntryPayment = Math.round(expectedNetFull * 0.5 * 100) / 100;
+
+    await restaurantAnalyticsService.updateSessionFinancialsAndPayments(
+      TENANT_A_ID,
+      orderFull.sessionId,
+      { action: 'set_discount', discount: discountVal },
+      actorA
+    );
+    await restaurantAnalyticsService.updateSessionFinancialsAndPayments(
+      TENANT_A_ID,
+      orderFull.sessionId,
+      { action: 'add_payment', amount: firstEntryPayment, paymentMethod: 'PIX' },
+      actorA
+    );
+
+    // Encerrar quitando explicitamente o saldo restante (settleRemainingBalance: true)
+    const closedFullRes = await restaurantRepo.closeSession(
+      TENANT_A_ID,
+      table1.id,
+      actorA,
+      'Fechamento com quitação total do saldo restante',
+      'Cartão de Crédito',
+      orderFull.sessionId,
+      { settleRemainingBalance: true, paymentStatus: 'paid' }
+    );
+    assert(closedFullRes.session.paymentStatus === 'paid', 'Sessão quitada integralmente deve constar como paid');
+
+    // Repetir chamada ao reconcileClosedSessionInLedger para provar que close_pay_ não é duplicado
+    await restaurantAnalyticsService.reconcileClosedSessionInLedger(
+      TENANT_A_ID,
+      orderFull.sessionId,
+      expectedNetFull,
+      'Cartão de Crédito',
+      new Date().toISOString(),
+      actorA.name,
+      { settleRemainingBalance: true, paymentStatus: 'paid' }
+    );
+
+    const unifiedFullOrder = await restaurantAnalyticsService.getUnifiedOrderById(TENANT_A_ID, orderFull.id);
+    assert(
+      unifiedFullOrder &&
+        unifiedFullOrder.paymentStatus === 'paid' &&
+        unifiedFullOrder.discount === discountVal &&
+        unifiedFullOrder.total === expectedNetFull &&
+        unifiedFullOrder.paidAmount === expectedNetFull &&
+        unifiedFullOrder.pendingAmount === 0,
+      'Conta com pagamento integral e desconto deve ficar com paidAmount === total e pendingAmount === 0 sem duplicar pagamentos'
+    );
+    console.log('  ✅ Teste 11 APROVADO: Regras financeiras (integral, parcial, pendente, descontos e idempotência) validadas.\n');
+
+    // =========================================================================
+    // TESTE 12: Bloqueio de todas as rotas operacionais e financeiras após fechamento
+    // =========================================================================
+    console.log('▶ Executando Teste 12: Validar bloqueio pós-fechamento em todas as rotas operacionais e financeiras...');
+    const closedOrderId = orderFull.id;
+    const closedSessId = orderFull.sessionId;
+
+    const assertThrows = async (fn: () => Promise<any>, label: string) => {
+      let threw = false;
+      try {
+        await fn();
+      } catch {
+        threw = true;
+      }
+      assert(threw, `Operação deveria ser bloqueada em comanda encerrada: ${label}`);
+    };
+
+    await assertThrows(
+      () => restaurantRepo.updateOrderStatus(TENANT_A_ID, closedOrderId, 'preparing', actorA),
+      'updateOrderStatus'
+    );
+    await assertThrows(
+      () => restaurantRepo.cancelOrder(TENANT_A_ID, closedOrderId, actorA, 'Tentativa cancelar'),
+      'cancelOrder'
+    );
+    await assertThrows(
+      () => restaurantRepo.updateRestaurantOrder(TENANT_A_ID, closedOrderId, { customerName: 'Alterado' }, actorA),
+      'updateRestaurantOrder'
+    );
+    await assertThrows(
+      () => restaurantRepo.deleteRestaurantOrder(TENANT_A_ID, closedOrderId, actorA),
+      'deleteRestaurantOrder'
+    );
+    await assertThrows(
+      () =>
+        restaurantRepo.addFeeToSession(
+          TENANT_A_ID,
+          closedSessId,
+          { name: 'Taxa Pós Fechamento', type: 'fixed', rateOrAmount: 10 },
+          actorA
+        ),
+      'addFeeToSession'
+    );
+    await assertThrows(
+      () => restaurantRepo.removeFeeFromSession(TENANT_A_ID, closedSessId, crypto.randomUUID(), actorA),
+      'removeFeeFromSession'
+    );
+    await assertThrows(
+      () =>
+        restaurantAnalyticsService.updateSessionFinancialsAndPayments(
+          TENANT_A_ID,
+          closedSessId,
+          { action: 'add_payment', amount: 10, paymentMethod: 'PIX' },
+          actorA
+        ),
+      'updateSessionFinancialsAndPayments'
+    );
+    await assertThrows(
+      () =>
+        restaurantAnalyticsService.updateOrderFinancialsAndPayments(
+          TENANT_A_ID,
+          closedOrderId,
+          { action: 'set_discount', discount: 1 },
+          actorA
+        ),
+      'updateOrderFinancialsAndPayments'
+    );
+    console.log('  ✅ Teste 12 APROVADO: Todas as 8 rotas operacionais e financeiras bloqueiam mutações pós-fechamento.\n');
+
     console.log('================================================================================');
-    console.log('🎉 TODOS OS 10 CENÁRIOS OBRIGATÓRIOS FORAM EXECUTADOS E APROVADOS COM SUCESSO!');
+    console.log('🎉 TODOS OS 12 CENÁRIOS DE AUDITORIA E REGRESSÃO FORAM APROVADOS COM SUCESSO!');
     console.log('================================================================================');
   } finally {
     // Limpar apenas os dados temporários criados por este script de verificação
@@ -461,6 +742,43 @@ async function runVerification() {
     }
     if (createdTableIds.length > 0) {
       await supabaseAdmin.from('restaurant_tables').delete().in('id', createdTableIds);
+    }
+    if (createdProductIds.length > 0) {
+      await supabaseAdmin.from('products').delete().in('id', createdProductIds);
+    }
+
+    // Limpar entradas temporárias do financial_ledger criadas durante o teste
+    try {
+      const { data: settingsRow } = await supabaseAdmin
+        .from('tenant_settings')
+        .select('id, settings')
+        .eq('tenant_id', TENANT_A_ID)
+        .maybeSingle();
+
+      if (settingsRow?.settings?.financial_ledger) {
+        const ledger = settingsRow.settings.financial_ledger;
+        if (ledger.sessions) {
+          for (const sid of createdSessionIds) {
+            delete ledger.sessions[sid];
+          }
+        }
+        if (ledger.orders) {
+          for (const oid of createdOrderIds) {
+            delete ledger.orders[oid];
+          }
+        }
+        await supabaseAdmin
+          .from('tenant_settings')
+          .update({
+            settings: {
+              ...settingsRow.settings,
+              financial_ledger: ledger,
+            },
+          })
+          .eq('id', settingsRow.id);
+      }
+    } catch {
+      // Ignorar se não houver ledger a limpar
     }
 
     // Garantir que a sessão aberta pré-existente na M01 esteja com current_session_id consistente

@@ -19,6 +19,7 @@ import {
   RestaurantFeeTemplate,
   RestaurantSessionFee,
   AddSessionFeePayload,
+  AddSessionOrderPayload,
 } from '../../src/types/restaurant.js';
 import {
   isProductAvailableOnDay,
@@ -754,11 +755,36 @@ export class RestaurantRepository {
       };
     });
 
-    const feesTotal = fees.reduce((sum, f) => sum + f.calculatedAmount, 0);
-    const calculatedTotal = Math.round((ordersSubtotal + feesTotal) * 100) / 100;
-    const finalTotal = session.status === 'closed' && session.total_amount !== undefined
-      ? Number(session.total_amount)
-      : calculatedTotal;
+    const feesTotal = Math.round(fees.reduce((sum, f) => sum + f.calculatedAmount, 0) * 100) / 100;
+    const ledger = await restaurantAnalyticsService
+      .getFinancialLedger(tenantId)
+      .catch(() => ({ orders: {}, sessions: {} }));
+    const sLedger = ((ledger?.sessions || {}) as Record<string, any>)[sessionId] || {};
+    const discountAmount = Math.max(0, Math.round(Number(sLedger.discount || 0) * 100) / 100);
+    const calculatedTotal = Math.max(0, Math.round((ordersSubtotal + feesTotal - discountAmount) * 100) / 100);
+    const finalTotal =
+      session.status === 'closed' && session.total_amount !== undefined && session.total_amount !== null
+        ? Number(session.total_amount)
+        : calculatedTotal;
+
+    const sPayments = Array.isArray(sLedger.payments) ? sLedger.payments : [];
+    const paidFromLedger =
+      Math.round(sPayments.reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0) * 100) / 100;
+    const isClosedAndFullyPaid =
+      session.status === 'closed' &&
+      (session.payment_status === 'paid' || !session.payment_status) &&
+      (!sLedger.paymentStatus || sLedger.paymentStatus === 'paid');
+
+    const paidAmount = isClosedAndFullyPaid ? finalTotal : Math.min(finalTotal, paidFromLedger);
+    const pendingAmount = Math.max(0, Math.round((finalTotal - paidAmount) * 100) / 100);
+    const resolvedPaymentStatus =
+      session.status === 'closed'
+        ? session.payment_status || 'pending'
+        : paidAmount >= finalTotal && finalTotal > 0
+        ? 'paid'
+        : paidAmount > 0
+        ? 'partial'
+        : sLedger.paymentStatus || session.payment_status || 'pending';
 
     return {
       id: session.id,
@@ -769,11 +795,14 @@ export class RestaurantRepository {
       openedAt: session.opened_at,
       closedAt: session.closed_at || null,
       closingRequestedAt: session.closing_requested_at || null,
-      paymentMethod: session.payment_method || null,
-      paymentStatus: session.payment_status || null,
+      paymentMethod: session.payment_method || sLedger.paymentMethod || null,
+      paymentStatus: resolvedPaymentStatus as any,
       closedByUserId: session.closed_by_user_id || null,
       ordersSubtotal: Math.round(ordersSubtotal * 100) / 100,
-      feesTotal: Math.round(feesTotal * 100) / 100,
+      feesTotal,
+      discountAmount,
+      paidAmount,
+      pendingAmount,
       totalAmount: finalTotal,
       notes: session.notes || null,
       tableNumber: table?.table_number,
@@ -976,7 +1005,12 @@ export class RestaurantRepository {
     actor: User,
     notes?: string,
     paymentMethod?: string,
-    expectedSessionId?: string
+    expectedSessionId?: string,
+    options?: {
+      settleRemainingBalance?: boolean;
+      paymentStatus?: 'paid' | 'partial' | 'pending' | 'unpaid';
+      requireFullPayment?: boolean;
+    }
   ): Promise<{ session: RestaurantSession; totalAmount: number }> {
     // 0. Strict Authorization: Professionals cannot close restaurant sessions
     if (actor.role === 'PROFESSIONAL') {
@@ -1064,7 +1098,41 @@ export class RestaurantRepository {
     }
 
     const ledger = await restaurantAnalyticsService.getFinancialLedger(tenantId);
-    const sessionDiscount = Math.max(0, Number(ledger.sessions[session.id]?.discount || 0));
+    const sessionLedgerEntry = ledger.sessions[session.id];
+    const sessionDiscount = Math.max(0, Number(sessionLedgerEntry?.discount || 0));
+    const existingLedgerPayments = Array.isArray(sessionLedgerEntry?.payments) ? sessionLedgerEntry.payments : [];
+    const alreadyPaidInLedger =
+      Math.round(existingLedgerPayments.reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0) * 100) / 100;
+
+    if (options?.requireFullPayment) {
+      const { data: preOrders } = await supabaseAdmin
+        .from('restaurant_orders')
+        .select('total, status')
+        .eq('session_id', session.id)
+        .eq('tenant_id', tenantId);
+      const preOrdersSub = (preOrders || [])
+        .filter((o: any) => o.status !== 'cancelled')
+        .reduce((acc: number, o: any) => acc + Number(o.total || 0), 0);
+
+      const { data: preFees } = await supabaseAdmin
+        .from('restaurant_session_fees')
+        .select('*')
+        .eq('session_id', session.id)
+        .eq('tenant_id', tenantId);
+      let preFeesTotal = 0;
+      for (const f of preFees || []) {
+        const rate = Number(f.rate_or_amount || 0);
+        preFeesTotal += f.type === 'percentage' ? Math.round(preOrdersSub * (rate / 100) * 100) / 100 : rate;
+      }
+      const expectedNet = Math.max(0, Math.round((preOrdersSub + preFeesTotal - sessionDiscount) * 100) / 100);
+      const pendingBeforeClose = Math.max(0, Math.round((expectedNet - alreadyPaidInLedger) * 100) / 100);
+
+      if (pendingBeforeClose > 0) {
+        throw new Error(
+          `Não é permitido encerrar a comanda com saldo pendente de R$ ${pendingBeforeClose.toFixed(2).replace('.', ',')}. Registre a quitação integral antes de encerrar.`
+        );
+      }
+    }
 
     // 1. Tenta a função transacional atômica (RPC) no PostgreSQL se disponível
     if (typeof supabaseAdmin.rpc === 'function') {
@@ -1082,22 +1150,34 @@ export class RestaurantRepository {
           const finalTotal = Math.max(0, Math.round((grossFromRpc - sessionDiscount) * 100) / 100);
           const closedAtIso = new Date().toISOString();
 
-          if (sessionDiscount > 0) {
-            await supabaseAdmin
-              .from('restaurant_sessions')
-              .update({ total_amount: finalTotal, updated_at: closedAtIso })
-              .eq('id', rpcData.session_id)
-              .eq('tenant_id', tenantId);
-          }
-
-          await restaurantAnalyticsService.reconcileClosedSessionInLedger(
+          const reconciled = await restaurantAnalyticsService.reconcileClosedSessionInLedger(
             tenantId,
             rpcData.session_id,
             finalTotal,
             method,
             closedAtIso,
-            actor.name || actor.email || 'Admin'
+            actor.name || actor.email || 'Admin',
+            options
           );
+
+          const dbPaymentStatus =
+            reconciled.paymentStatus === 'paid'
+              ? 'paid'
+              : reconciled.paymentStatus === 'unpaid'
+              ? 'unpaid'
+              : 'pending';
+
+          if (sessionDiscount > 0 || dbPaymentStatus !== 'paid') {
+            await supabaseAdmin
+              .from('restaurant_sessions')
+              .update({
+                total_amount: finalTotal,
+                payment_status: dbPaymentStatus,
+                updated_at: closedAtIso,
+              })
+              .eq('id', rpcData.session_id)
+              .eq('tenant_id', tenantId);
+          }
 
           await repo.logAudit({
             actorUserId: actor.id,
@@ -1106,7 +1186,15 @@ export class RestaurantRepository {
             action: 'TABLE_SESSION_CLOSE' as any,
             entity: 'restaurant_sessions',
             entityId: rpcData.session_id,
-            metadata: { tableId, totalAmount: finalTotal, discount: sessionDiscount, paymentMethod: method },
+            metadata: {
+              tableId,
+              totalAmount: finalTotal,
+              discount: sessionDiscount,
+              paidAmount: reconciled.paidAmount,
+              pendingAmount: reconciled.pendingAmount,
+              paymentStatus: reconciled.paymentStatus,
+              paymentMethod: method,
+            },
           });
 
           const fullSession = await this.getSessionDetails(tenantId, rpcData.session_id);
@@ -1200,7 +1288,24 @@ export class RestaurantRepository {
 
     const finalTotal = Math.max(0, Math.round((ordersSubtotal + feesTotal - sessionDiscount) * 100) / 100);
 
-    // 5. Encerra a comanda registrando método de pagamento e quitação (payment_status: 'paid')
+    const reconciled = await restaurantAnalyticsService.reconcileClosedSessionInLedger(
+      tenantId,
+      session.id,
+      finalTotal,
+      method,
+      now,
+      actor.name || actor.email || 'Admin',
+      options
+    );
+
+    const dbPaymentStatus =
+      reconciled.paymentStatus === 'paid'
+        ? 'paid'
+        : reconciled.paymentStatus === 'unpaid'
+        ? 'unpaid'
+        : 'pending';
+
+    // 5. Encerra a comanda registrando método de pagamento e status financeiro reconciliado
     const { error: closeErr } = await supabaseAdmin
       .from('restaurant_sessions')
       .update({
@@ -1210,7 +1315,7 @@ export class RestaurantRepository {
         fees_total: feesTotal,
         total_amount: finalTotal,
         payment_method: method,
-        payment_status: 'paid',
+        payment_status: dbPaymentStatus,
         closed_by_user_id: actor.id,
         notes: notes?.trim() || session.notes,
         updated_at: now,
@@ -1238,15 +1343,6 @@ export class RestaurantRepository {
       checkTableDbError(releaseErr, 'restaurant_tables');
     }
 
-    await restaurantAnalyticsService.reconcileClosedSessionInLedger(
-      tenantId,
-      session.id,
-      finalTotal,
-      method,
-      now,
-      actor.name || actor.email || 'Admin'
-    );
-
     await repo.logAudit({
       actorUserId: actor.id,
       actorUserName: actor.name,
@@ -1254,7 +1350,15 @@ export class RestaurantRepository {
       action: 'TABLE_SESSION_CLOSE' as any,
       entity: 'restaurant_sessions',
       entityId: session.id,
-      metadata: { tableId, totalAmount: finalTotal, discount: sessionDiscount, paymentMethod: method },
+      metadata: {
+        tableId,
+        totalAmount: finalTotal,
+        discount: sessionDiscount,
+        paidAmount: reconciled.paidAmount,
+        pendingAmount: reconciled.pendingAmount,
+        paymentStatus: reconciled.paymentStatus,
+        paymentMethod: method,
+      },
     });
 
     const fullSession = await this.getSessionDetails(tenantId, session.id);
@@ -1494,6 +1598,8 @@ export class RestaurantRepository {
       throw new Error(`Erro ao lançar taxa na comanda: ${error?.message || 'Erro'}`);
     }
 
+    await this.syncSessionTotalsAndFinancials(tenantId, sessionId);
+
     if (actor) {
       await repo.logAudit({
         actorUserId: actor.id,
@@ -1526,12 +1632,19 @@ export class RestaurantRepository {
     feeId: string,
     actor?: User
   ): Promise<boolean> {
+    const session = await this.getSessionDetails(tenantId, sessionId);
+    if (!session || session.status === 'closed') {
+      throw new Error('Comanda não encontrada ou já encerrada.');
+    }
+
     await supabaseAdmin
       .from('restaurant_session_fees')
       .delete()
       .eq('id', feeId)
       .eq('session_id', sessionId)
       .eq('tenant_id', tenantId);
+
+    await this.syncSessionTotalsAndFinancials(tenantId, sessionId);
 
     if (actor) {
       await repo.logAudit({
@@ -1914,6 +2027,652 @@ export class RestaurantRepository {
     return this.getOrderById(tenant.id, orderId) as Promise<RestaurantOrder>;
   }
 
+  private inFlightIdempotencyLocks = new Map<string, Promise<{ order: RestaurantOrder; session: RestaurantSession }>>();
+
+  public async syncSessionTotalsAndFinancials(
+    tenantId: string,
+    sessionId: string
+  ): Promise<{
+    ordersSubtotal: number;
+    feesTotal: number;
+    discount: number;
+    totalAmount: number;
+    paidAmount: number;
+    pendingAmount: number;
+    paymentStatus: string;
+  }> {
+    const now = new Date().toISOString();
+    const { data: sessionOrders } = await supabaseAdmin
+      .from('restaurant_orders')
+      .select('total, status')
+      .eq('session_id', sessionId)
+      .eq('tenant_id', tenantId);
+
+    let updatedOrdersSubtotal = 0;
+    (sessionOrders || []).forEach((o: any) => {
+      if (o.status !== 'cancelled') {
+        updatedOrdersSubtotal += Number(o.total || 0);
+      }
+    });
+    updatedOrdersSubtotal = Math.round(updatedOrdersSubtotal * 100) / 100;
+
+    const { data: sessionFees } = await supabaseAdmin
+      .from('restaurant_session_fees')
+      .select('*')
+      .eq('session_id', sessionId)
+      .eq('tenant_id', tenantId);
+
+    let updatedFeesTotal = 0;
+    for (const f of sessionFees || []) {
+      let feeAmt = Number(f.rate_or_amount || 0);
+      if (f.type === 'percentage') {
+        feeAmt = Math.round(updatedOrdersSubtotal * (feeAmt / 100) * 100) / 100;
+        await supabaseAdmin
+          .from('restaurant_session_fees')
+          .update({ calculated_amount: feeAmt })
+          .eq('id', f.id);
+      }
+      updatedFeesTotal += feeAmt;
+    }
+    updatedFeesTotal = Math.round(updatedFeesTotal * 100) / 100;
+
+    const ledger = await restaurantAnalyticsService
+      .getFinancialLedger(tenantId)
+      .catch(() => ({ orders: {} as Record<string, any>, sessions: {} as Record<string, any> }));
+    const existingSessionLedger = (ledger.sessions as Record<string, any>)?.[String(sessionId)];
+    const grossTotal = Math.round((updatedOrdersSubtotal + updatedFeesTotal) * 100) / 100;
+    const sessionDiscount = Math.min(
+      grossTotal,
+      Math.max(0, Number(existingSessionLedger?.discount || 0))
+    );
+    const finalSessionTotal = Math.max(
+      0,
+      Math.round((grossTotal - sessionDiscount) * 100) / 100
+    );
+
+    const existingPayments = Array.isArray(existingSessionLedger?.payments)
+      ? existingSessionLedger.payments
+      : [];
+    const totalPaidSoFar =
+      Math.round(existingPayments.reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0) * 100) / 100;
+
+    const updatedLedgerPaymentStatus =
+      totalPaidSoFar >= finalSessionTotal && finalSessionTotal > 0
+        ? 'paid'
+        : totalPaidSoFar > 0
+        ? 'partial'
+        : 'pending';
+
+    if (existingSessionLedger) {
+      await restaurantAnalyticsService.saveFinancialLedger(tenantId, {
+        sessions: {
+          [sessionId]: {
+            ...existingSessionLedger,
+            discount: sessionDiscount,
+            paymentStatus: updatedLedgerPaymentStatus,
+          },
+        },
+      });
+    }
+
+    await supabaseAdmin
+      .from('restaurant_sessions')
+      .update({
+        orders_subtotal: updatedOrdersSubtotal,
+        fees_total: updatedFeesTotal,
+        total_amount: finalSessionTotal,
+        payment_status: updatedLedgerPaymentStatus === 'paid' ? 'paid' : 'pending',
+        updated_at: now,
+      })
+      .eq('id', sessionId)
+      .eq('tenant_id', tenantId);
+
+    const paidAmount = Math.min(finalSessionTotal, totalPaidSoFar);
+    const pendingAmount = Math.max(0, Math.round((finalSessionTotal - paidAmount) * 100) / 100);
+
+    return {
+      ordersSubtotal: updatedOrdersSubtotal,
+      feesTotal: updatedFeesTotal,
+      discount: sessionDiscount,
+      totalAmount: finalSessionTotal,
+      paidAmount,
+      pendingAmount,
+      paymentStatus: updatedLedgerPaymentStatus,
+    };
+  }
+
+  public async addOrderToActiveSession(
+    tenantId: string,
+    tableId: string,
+    payload: AddSessionOrderPayload,
+    actor: User
+  ): Promise<{ order: RestaurantOrder; session: RestaurantSession }> {
+    const idemKey = payload.idempotencyKey?.trim();
+    if (idemKey) {
+      const lockKey = `${tenantId}::${idemKey}`;
+      const existingInFlight = this.inFlightIdempotencyLocks.get(lockKey);
+      if (existingInFlight) {
+        return existingInFlight;
+      }
+      const executionPromise = this._executeAddOrderToActiveSession(tenantId, tableId, payload, actor).finally(() => {
+        this.inFlightIdempotencyLocks.delete(lockKey);
+      });
+      this.inFlightIdempotencyLocks.set(lockKey, executionPromise);
+      return executionPromise;
+    }
+    return this._executeAddOrderToActiveSession(tenantId, tableId, payload, actor);
+  }
+
+  private async _executeAddOrderToActiveSession(
+    tenantId: string,
+    tableId: string,
+    payload: AddSessionOrderPayload,
+    actor: User
+  ): Promise<{ order: RestaurantOrder; session: RestaurantSession }> {
+    // 1. Strict Authorization & Multi-tenant Isolation
+    if (actor.role === 'PROFESSIONAL') {
+      throw new Error('Acesso restrito: profissionais não possuem permissão para lançar pedidos nas mesas.');
+    }
+    if (actor.role !== 'SUPER_ADMIN' && actor.tenantId !== tenantId) {
+      throw new Error('Acesso negado: o usuário não pertence a este estabelecimento.');
+    }
+
+    const tenant = await repo.getTenantById(tenantId, actor);
+    if (!tenant) {
+      throw new Error('Estabelecimento não encontrado.');
+    }
+
+    const op = canTenantOperate(tenant.status);
+    if (!op.canOperate) {
+      throw new Error(op.blockedReason || 'Este estabelecimento não está operando no momento.');
+    }
+
+    const features = await repo.resolveTenantFeatures(tenant.id);
+    if (!features.restaurant_tables) {
+      throw new Error('O módulo de catálogo digital para mesas (restaurant_tables) não está ativo para este estabelecimento.');
+    }
+
+    // 2. Validate Table belongs to Tenant
+    const { data: table, error: tableErr } = await supabaseAdmin
+      .from('restaurant_tables')
+      .select('*')
+      .eq('id', tableId)
+      .eq('tenant_id', tenantId)
+      .single();
+
+    if (tableErr && tableErr.code !== 'PGRST116') {
+      checkTableDbError(tableErr, 'restaurant_tables');
+    }
+    if (!table || !table.is_active) {
+      throw new Error('Mesa não encontrada ou temporariamente inativa para este estabelecimento.');
+    }
+
+    // 3. Validate Active Open Session (Strict Rule: NEVER create a new session or add to a closed session)
+    if (payload.sessionId) {
+      const { data: targetSession } = await supabaseAdmin
+        .from('restaurant_sessions')
+        .select('*')
+        .eq('id', payload.sessionId)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+
+      if (!targetSession) {
+        throw new Error('Comanda informada não foi encontrada para este estabelecimento.');
+      }
+      if (targetSession.table_id !== tableId) {
+        throw new Error('A comanda informada não pertence à mesa selecionada.');
+      }
+      if (targetSession.status === 'closed' || Boolean(targetSession.closed_at)) {
+        throw new Error('Esta conta já foi encerrada. Não é permitido adicionar novos itens a uma sessão encerrada.');
+      }
+    }
+
+    const { data: activeSession, error: sessErr } = await supabaseAdmin
+      .from('restaurant_sessions')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .eq('table_id', tableId)
+      .eq('status', 'open')
+      .maybeSingle();
+
+    if (sessErr && sessErr.code !== 'PGRST116') {
+      checkTableDbError(sessErr, 'restaurant_sessions');
+    }
+
+    if (!activeSession || Boolean(activeSession.closed_at)) {
+      throw new Error('Não há nenhuma conta aberta para esta mesa no momento. Os itens adicionais só podem ser lançados em uma sessão aberta.');
+    }
+
+    if (payload.sessionId && activeSession.id !== payload.sessionId) {
+      throw new Error('A conta anterior desta mesa foi encerrada antes da confirmação. Atualize a tela para visualizar a sessão atual.');
+    }
+
+    // 4. Idempotency check to prevent duplicate orders on repeated clicks or network retries
+    if (payload.idempotencyKey && payload.idempotencyKey.trim()) {
+      const { data: existingOrder } = await supabaseAdmin
+        .from('restaurant_orders')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('idempotency_key', payload.idempotencyKey.trim())
+        .maybeSingle();
+
+      if (existingOrder) {
+        const fullExisting = await this.getOrderById(tenantId, existingOrder.id);
+        const currentSess = await this.getSessionDetails(tenantId, activeSession.id);
+        if (fullExisting && currentSess) {
+          return { order: fullExisting, session: currentSess };
+        }
+      }
+    }
+
+    // 5. Validate items against official catalog in database (NEVER trust prices or totals from browser)
+    if (!payload.items || !Array.isArray(payload.items) || payload.items.length === 0) {
+      throw new Error('Selecione ao menos um produto para adicionar à comanda da mesa.');
+    }
+
+    const productIds = Array.from(new Set(payload.items.map((i) => i.productId)));
+    const { data: rawProducts } = await supabaseAdmin
+      .from('products')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .in('id', productIds);
+
+    const productMap = new Map<string, any>((rawProducts || []).map((p: any) => [p.id, p]));
+
+    const { data: allVariants } = await supabaseAdmin
+      .from('product_variants')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .in('product_id', productIds);
+
+    const variantMap = new Map<string, any>((allVariants || []).map((v: any) => [v.id, v]));
+
+    let calculatedSubtotal = 0;
+    const validatedItems: Array<{
+      productId: string;
+      variantId?: string | null;
+      productName: string;
+      variantName?: string | null;
+      unitPrice: number;
+      quantity: number;
+      subtotal: number;
+      notes?: string | null;
+    }> = [];
+
+    const currentDay = getCurrentDayOfWeek();
+
+    for (const item of payload.items) {
+      const product = productMap.get(item.productId);
+      if (!product || product.tenant_id !== tenantId) {
+        throw new Error('Um ou mais produtos selecionados não pertencem a este restaurante ou não existem.');
+      }
+      if (!product.is_active) {
+        throw new Error(`O produto "${product.name}" está inativo e não está disponível no catálogo.`);
+      }
+
+      if (product.price_on_request) {
+        throw new Error(`O produto "${product.name}" está configurado com preço sob consulta e precisa de preço definido no catálogo.`);
+      }
+
+      if (!isProductAvailableOnDay(product, currentDay, 'table')) {
+        throw new Error(
+          `O produto "${product.name}" não está disponível para pedidos na mesa hoje (${getDayName(currentDay)}).`
+        );
+      }
+
+      let variant: any = null;
+      if (item.variantId) {
+        variant = variantMap.get(item.variantId);
+        if (!variant || !variant.is_active || variant.product_id !== product.id) {
+          throw new Error(`A variação selecionada para "${product.name}" não está disponível.`);
+        }
+      }
+
+      const basePrice =
+        variant?.price !== null && variant?.price !== undefined
+          ? Number(variant.price)
+          : Number(product.price);
+
+      const promoPrice =
+        variant?.promotional_price !== null && variant?.promotional_price !== undefined
+          ? Number(variant.promotional_price)
+          : product.promotional_price !== null && product.promotional_price !== undefined
+          ? Number(product.promotional_price)
+          : null;
+
+      const hasDiscount = promoPrice !== null && promoPrice < basePrice;
+      const unitPrice = hasDiscount && promoPrice !== null ? promoPrice : basePrice;
+
+      if (isNaN(unitPrice) || unitPrice < 0) {
+        throw new Error(`Preço inválido no cadastro do produto "${product.name}".`);
+      }
+
+      const qty = Math.max(1, Math.min(99, Math.floor(Number(item.quantity || 1))));
+
+      const trackStock = variant
+        ? variant.stock_quantity !== null && variant.stock_quantity !== undefined
+        : Boolean(product.track_stock);
+      const allowOutOfStock = Boolean(product.allow_out_of_stock);
+      const currentStock = variant ? Number(variant.stock_quantity || 0) : Number(product.stock_quantity || 0);
+
+      if (trackStock && !allowOutOfStock && currentStock < qty) {
+        throw new Error(`Estoque insuficiente para "${product.name}". Disponível: ${currentStock} un.`);
+      }
+
+      const itemSubtotal = Math.round(unitPrice * qty * 100) / 100;
+      calculatedSubtotal += itemSubtotal;
+
+      validatedItems.push({
+        productId: product.id,
+        variantId: variant?.id || null,
+        productName: product.name,
+        variantName: variant?.name || null,
+        unitPrice,
+        quantity: qty,
+        subtotal: itemSubtotal,
+        notes: item.notes?.trim() || null,
+      });
+    }
+
+    calculatedSubtotal = Math.round(calculatedSubtotal * 100) / 100;
+
+    // 6. Re-verify right before insertion that the session was not concurrently closed
+    const { data: freshSessionCheck } = await supabaseAdmin
+      .from('restaurant_sessions')
+      .select('id, status, closed_at')
+      .eq('id', activeSession.id)
+      .eq('tenant_id', tenantId)
+      .single();
+
+    if (!freshSessionCheck || freshSessionCheck.status !== 'open' || Boolean(freshSessionCheck.closed_at)) {
+      throw new Error('A conta desta mesa foi encerrada simultaneamente. Não foi possível incluir os novos itens.');
+    }
+
+    // 7. Generate sequential order number atomically
+    const { data: latestOrder, error: numErr } = await supabaseAdmin
+      .from('restaurant_orders')
+      .select('order_number')
+      .eq('tenant_id', tenantId)
+      .order('order_number', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (numErr && numErr.code !== 'PGRST116') {
+      checkTableDbError(numErr, 'restaurant_orders');
+    }
+
+    const orderNumber = latestOrder?.order_number ? Number(latestOrder.order_number) + 1 : 1001;
+    const now = new Date().toISOString();
+    const orderId = crypto.randomUUID();
+    const cleanIdempotencyKey = payload.idempotencyKey?.trim() || null;
+
+    const orderRecord: any = {
+      id: orderId,
+      tenant_id: tenantId,
+      table_id: table.id,
+      session_id: activeSession.id,
+      order_number: orderNumber,
+      customer_name: payload.customerName?.trim() || null,
+      subtotal: calculatedSubtotal,
+      total: calculatedSubtotal,
+      status: 'received',
+      notes: payload.notes?.trim() || null,
+      idempotency_key: cleanIdempotencyKey,
+      created_at: now,
+      updated_at: now,
+    };
+
+    let insertedOrder: any = null;
+    let attempts = 0;
+    let currentOrderNumber = orderNumber;
+
+    while (attempts < 3) {
+      attempts++;
+      if (attempts === 1) {
+        delete orderRecord.order_number;
+      } else {
+        orderRecord.order_number = currentOrderNumber;
+      }
+
+      const { data: ins, error: insErr } = await supabaseAdmin
+        .from('restaurant_orders')
+        .insert(orderRecord)
+        .select()
+        .single();
+
+      if (!insErr && ins) {
+        insertedOrder = ins;
+        break;
+      }
+
+      if (cleanIdempotencyKey) {
+        const { data: concurrentOrder } = await supabaseAdmin
+          .from('restaurant_orders')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .eq('idempotency_key', cleanIdempotencyKey)
+          .maybeSingle();
+
+        if (concurrentOrder) {
+          const fullExisting = await this.getOrderById(tenantId, concurrentOrder.id);
+          const currentSess = await this.getSessionDetails(tenantId, activeSession.id);
+          if (fullExisting && currentSess) {
+            return { order: fullExisting, session: currentSess };
+          }
+        }
+      }
+
+      if (
+        insErr?.code === '23505' &&
+        (String(insErr.message).includes('order_number') ||
+          String(insErr.message).includes('uq_restaurant_orders_tenant_number'))
+      ) {
+        const { data: retryLatest } = await supabaseAdmin
+          .from('restaurant_orders')
+          .select('order_number')
+          .eq('tenant_id', tenantId)
+          .order('order_number', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        currentOrderNumber = retryLatest?.order_number ? Number(retryLatest.order_number) + 1 : currentOrderNumber + 1;
+        continue;
+      }
+
+      checkTableDbError(insErr, 'restaurant_orders');
+      throw new Error(`Falha ao registrar pedido adicional: ${insErr?.message || 'Erro'}`);
+    }
+
+    if (!insertedOrder) {
+      throw new Error('Falha ao registrar pedido adicional devido a conflito de concorrência.');
+    }
+
+    // 8. Insert validated items
+    const itemsToInsert = validatedItems.map((i) => ({
+      id: crypto.randomUUID(),
+      order_id: orderId,
+      tenant_id: tenantId,
+      product_id: i.productId,
+      variant_id: i.variantId,
+      product_name: i.productName,
+      variant_name: i.variantName,
+      unit_price: i.unitPrice,
+      quantity: i.quantity,
+      subtotal: i.subtotal,
+      notes: i.notes,
+      created_at: now,
+    }));
+
+    const { error: itemsErr } = await supabaseAdmin.from('restaurant_order_items').insert(itemsToInsert);
+    if (itemsErr) {
+      checkTableDbError(itemsErr, 'restaurant_order_items');
+    }
+
+    // 9. Record initial status history with waiter/user identification
+    const actorLabel = actor.name || actor.email || 'Atendente';
+    await supabaseAdmin.from('restaurant_order_status_history').insert({
+      id: crypto.randomUUID(),
+      order_id: orderId,
+      tenant_id: tenantId,
+      status: 'received',
+      notes: `Pedido adicional lançado na comanda aberta por ${actorLabel}.`,
+      changed_by: `Garçom/Atendente (${actorLabel})`,
+      created_at: now,
+    });
+
+    // 10. If table had requested closing, revert to 'occupied' so kitchen and hall reflect active consumption
+    if (table.status === 'closing' || activeSession.closing_requested_at || table.current_session_id !== activeSession.id) {
+      await supabaseAdmin
+        .from('restaurant_tables')
+        .update({
+          status: 'occupied',
+          current_session_id: activeSession.id,
+          updated_at: now,
+        })
+        .eq('id', table.id)
+        .eq('tenant_id', tenantId);
+
+      if (activeSession.closing_requested_at) {
+        await supabaseAdmin
+          .from('restaurant_sessions')
+          .update({ closing_requested_at: null, updated_at: now })
+          .eq('id', activeSession.id)
+          .eq('tenant_id', tenantId);
+      }
+    }
+
+    // 11. Recalculate session totals and preserve existing partial payments & discounts
+    const { data: sessionOrders } = await supabaseAdmin
+      .from('restaurant_orders')
+      .select('total, status')
+      .eq('session_id', activeSession.id)
+      .eq('tenant_id', tenantId);
+
+    let updatedOrdersSubtotal = 0;
+    (sessionOrders || []).forEach((o: any) => {
+      if (o.status !== 'cancelled') {
+        updatedOrdersSubtotal += Number(o.total || 0);
+      }
+    });
+    updatedOrdersSubtotal = Math.round(updatedOrdersSubtotal * 100) / 100;
+
+    const { data: sessionFees } = await supabaseAdmin
+      .from('restaurant_session_fees')
+      .select('*')
+      .eq('session_id', activeSession.id)
+      .eq('tenant_id', tenantId);
+
+    let updatedFeesTotal = 0;
+    for (const f of sessionFees || []) {
+      let feeAmt = Number(f.rate_or_amount || 0);
+      if (f.type === 'percentage') {
+        feeAmt = Math.round(updatedOrdersSubtotal * (feeAmt / 100) * 100) / 100;
+        await supabaseAdmin
+          .from('restaurant_session_fees')
+          .update({ calculated_amount: feeAmt })
+          .eq('id', f.id);
+      }
+      updatedFeesTotal += feeAmt;
+    }
+    updatedFeesTotal = Math.round(updatedFeesTotal * 100) / 100;
+
+    const ledger = await restaurantAnalyticsService
+      .getFinancialLedger(tenantId)
+      .catch(() => ({ orders: {} as Record<string, any>, sessions: {} as Record<string, any> }));
+    const existingSessionLedger = (ledger.sessions as Record<string, any>)?.[String(activeSession.id)];
+    const sessionDiscount = Math.max(0, Number(existingSessionLedger?.discount || 0));
+    const finalSessionTotal = Math.max(
+      0,
+      Math.round((updatedOrdersSubtotal + updatedFeesTotal - sessionDiscount) * 100) / 100
+    );
+
+    // Ensure the new order is never automatically considered paid, and if the session had partial/previous payments,
+    // update the session ledger status accurately without erasing any existing payments or discounts
+    const existingPayments = Array.isArray(existingSessionLedger?.payments)
+      ? existingSessionLedger.payments
+      : [];
+    const totalPaidSoFar =
+      Math.round(existingPayments.reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0) * 100) / 100;
+
+    const updatedLedgerPaymentStatus =
+      totalPaidSoFar >= finalSessionTotal && finalSessionTotal > 0
+        ? 'paid'
+        : totalPaidSoFar > 0
+        ? 'partial'
+        : 'pending';
+
+    await restaurantAnalyticsService.saveFinancialLedger(tenantId, {
+      orders: {
+        [orderId]: {
+          originChannel: 'table',
+          discount: 0,
+          paymentStatus: 'pending',
+          payments: [],
+          history: [
+            {
+              id: crypto.randomUUID(),
+              timestamp: now,
+              type: 'creation',
+              description: `Pedido adicional #${insertedOrder.order_number} lançado na Mesa ${table.table_number} por ${actorLabel}`,
+              actorName: actorLabel,
+            },
+          ],
+        },
+      },
+      ...(existingSessionLedger
+        ? {
+            sessions: {
+              [activeSession.id]: {
+                ...existingSessionLedger,
+                paymentStatus: updatedLedgerPaymentStatus,
+              },
+            },
+          }
+        : {}),
+    });
+
+    await supabaseAdmin
+      .from('restaurant_sessions')
+      .update({
+        orders_subtotal: updatedOrdersSubtotal,
+        fees_total: updatedFeesTotal,
+        total_amount: finalSessionTotal,
+        payment_status: updatedLedgerPaymentStatus === 'paid' ? 'paid' : 'pending',
+        updated_at: now,
+      })
+      .eq('id', activeSession.id)
+      .eq('tenant_id', tenantId);
+
+    await repo.logAudit({
+      actorUserId: actor.id,
+      actorUserName: actor.name,
+      tenantId,
+      action: 'TABLE_SESSION_ADD_ORDER' as any,
+      entity: 'restaurant_orders',
+      entityId: orderId,
+      metadata: {
+        tableId: table.id,
+        tableNumber: table.table_number,
+        sessionId: activeSession.id,
+        sessionCode: activeSession.session_code,
+        orderNumber: insertedOrder.order_number,
+        orderTotal: calculatedSubtotal,
+        updatedSessionTotal: finalSessionTotal,
+        itemsCount: validatedItems.reduce((acc, it) => acc + it.quantity, 0),
+      },
+    });
+
+    const [createdOrder, updatedSession] = await Promise.all([
+      this.getOrderById(tenantId, orderId),
+      this.getSessionDetails(tenantId, activeSession.id),
+    ]);
+
+    return {
+      order: createdOrder!,
+      session: updatedSession!,
+    };
+  }
+
   public async listOrders(
     tenantId: string,
     filters?: {
@@ -2022,19 +2781,49 @@ export class RestaurantRepository {
       });
     }
 
+    // Calculate chronological order sequence per session (1 = Pedido Inicial, 2+ = Pedido Adicional)
+    const orderSequenceByOrderId = new Map<string, number>();
+    const ordersGroupedBySession = new Map<string, any[]>();
+    allOrders.forEach((o: any) => {
+      if (o.session_id) {
+        const arr = ordersGroupedBySession.get(o.session_id) || [];
+        arr.push(o);
+        ordersGroupedBySession.set(o.session_id, arr);
+      }
+    });
+    ordersGroupedBySession.forEach((sOrders) => {
+      sOrders.sort((a: any, b: any) => {
+        const timeDiff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        if (timeDiff !== 0) return timeDiff;
+        return Number(a.order_number || 0) - Number(b.order_number || 0);
+      });
+      sOrders.forEach((so: any, idx: number) => {
+        orderSequenceByOrderId.set(so.id, idx + 1);
+      });
+    });
+
     // Sort by recent first
     list.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-    // Fetch items
+    // Fetch items & initial status history (launchedBy)
     const orderIds = list.map((o: any) => o.id);
     const itemsByOrder = new Map<string, RestaurantOrderItem[]>();
+    const launchedByOrder = new Map<string, string>();
 
     if (orderIds.length > 0) {
-      const { data: items } = await supabaseAdmin
-        .from('restaurant_order_items')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .in('order_id', orderIds);
+      const [{ data: items }, { data: initialHist }] = await Promise.all([
+        supabaseAdmin
+          .from('restaurant_order_items')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .in('order_id', orderIds),
+        supabaseAdmin
+          .from('restaurant_order_status_history')
+          .select('order_id, status, changed_by, created_at')
+          .eq('tenant_id', tenantId)
+          .eq('status', 'received')
+          .in('order_id', orderIds),
+      ]);
 
       (items || []).forEach((it: any) => {
         const oItems = itemsByOrder.get(it.order_id) || [];
@@ -2053,6 +2842,12 @@ export class RestaurantRepository {
           createdAt: it.created_at,
         });
         itemsByOrder.set(it.order_id, oItems);
+      });
+
+      (initialHist || []).forEach((h: any) => {
+        if (h.changed_by && !launchedByOrder.has(h.order_id)) {
+          launchedByOrder.set(h.order_id, h.changed_by);
+        }
       });
     }
 
@@ -2087,14 +2882,17 @@ export class RestaurantRepository {
       ) / 100;
 
       const isSessionClosed = !sess || sess.status === 'closed' || Boolean(sess.closed_at);
-      const sessionPaidAmount = isSessionClosed
+      const isClosedAndFullyPaid =
+        isSessionClosed &&
+        (sess?.payment_status === 'paid' || !sess?.payment_status) &&
+        (!sLedger?.paymentStatus || sLedger?.paymentStatus === 'paid');
+
+      const sessionPaidAmount = isClosedAndFullyPaid
         ? sessionTotalAmount
         : Math.min(sessionTotalAmount, paidFromLedger);
-      const sessionPendingAmount = isSessionClosed
-        ? 0
-        : Math.max(0, Math.round((sessionTotalAmount - sessionPaidAmount) * 100) / 100);
+      const sessionPendingAmount = Math.max(0, Math.round((sessionTotalAmount - sessionPaidAmount) * 100) / 100);
 
-      const sessionPaymentStatus = isSessionClosed
+      const sessionPaymentStatus = isClosedAndFullyPaid
         ? 'paid'
         : sessionPaidAmount >= sessionTotalAmount && sessionTotalAmount > 0
         ? 'paid'
@@ -2107,6 +2905,8 @@ export class RestaurantRepository {
         : openSessForTable.closing_requested_at || tableInfo?.status === 'closing'
         ? 'closing'
         : 'occupied';
+
+      const seq = orderSequenceByOrderId.get(o.id) || 1;
 
       return {
         id: o.id,
@@ -2135,6 +2935,9 @@ export class RestaurantRepository {
         sessionPaymentStatus,
         sessionPaymentMethod: sess?.payment_method || sLedger?.paymentMethod || null,
         isCurrentTableSession: Boolean(openSessForTable && openSessForTable.id === o.session_id),
+        sessionOrderSequence: seq,
+        isAdditionalOrder: seq > 1,
+        launchedBy: launchedByOrder.get(o.id) || null,
         createdAt: o.created_at,
         updatedAt: o.updated_at,
       };
@@ -2151,7 +2954,7 @@ export class RestaurantRepository {
 
     if (!o) return null;
 
-    const [{ data: table }, { data: sess }, { data: items }, { data: history }] = await Promise.all([
+    const [{ data: table }, { data: sess }, { data: items }, { data: history }, { data: sessionOrders }] = await Promise.all([
       supabaseAdmin
         .from('restaurant_tables')
         .select('table_number, name, status, current_session_id')
@@ -2174,7 +2977,21 @@ export class RestaurantRepository {
         .select('*')
         .eq('order_id', orderId)
         .eq('tenant_id', tenantId),
+      supabaseAdmin
+        .from('restaurant_orders')
+        .select('id, created_at, order_number')
+        .eq('session_id', o.session_id)
+        .eq('tenant_id', tenantId),
     ]);
+
+    const sortedSessionOrders = [...(sessionOrders || [])].sort((a: any, b: any) => {
+      const tA = new Date(a.created_at).getTime();
+      const tB = new Date(b.created_at).getTime();
+      if (tA !== tB) return tA - tB;
+      return Number(a.order_number || 0) - Number(b.order_number || 0);
+    });
+    const seqIdx = sortedSessionOrders.findIndex((so: any) => so.id === o.id);
+    const sessionOrderSequence = seqIdx >= 0 ? seqIdx + 1 : 1;
 
     const formattedHistory: RestaurantOrderStatusHistory[] = (history || [])
       .map((h: any) => ({
@@ -2190,6 +3007,9 @@ export class RestaurantRepository {
         (a: RestaurantOrderStatusHistory, b: RestaurantOrderStatusHistory) =>
           new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
       );
+
+    const initialHistoryEntry = formattedHistory.find((h) => h.status === 'received') || formattedHistory[0];
+    const launchedBy = initialHistoryEntry?.changedBy || null;
 
     const isSessionClosed = !sess || sess.status === 'closed' || Boolean(sess.closed_at);
 
@@ -2232,6 +3052,9 @@ export class RestaurantRepository {
       sessionPaymentStatus: sess?.payment_status || null,
       sessionPaymentMethod: sess?.payment_method || null,
       isCurrentTableSession: !isSessionClosed,
+      sessionOrderSequence,
+      isAdditionalOrder: sessionOrderSequence > 1,
+      launchedBy,
       createdAt: o.created_at,
       updatedAt: o.updated_at,
     };
@@ -2273,27 +3096,9 @@ export class RestaurantRepository {
       created_at: now,
     });
 
-    // If status changed to or from cancelled, recalculate session total
-    if (status === 'cancelled' || previousStatus === 'cancelled') {
-      const { data: sessionOrders } = await supabaseAdmin
-        .from('restaurant_orders')
-        .select('total, status')
-        .eq('session_id', existing.sessionId)
-        .eq('tenant_id', tenantId);
-
-      let newTotal = 0;
-      (sessionOrders || []).forEach((o: any) => {
-        if (o.status !== 'cancelled') {
-          newTotal += Number(o.total || 0);
-        }
-      });
-      newTotal = Math.round(newTotal * 100) / 100;
-
-      await supabaseAdmin
-        .from('restaurant_sessions')
-        .update({ total_amount: newTotal, updated_at: now })
-        .eq('id', existing.sessionId)
-        .eq('tenant_id', tenantId);
+    // If status changed to or from cancelled, recalculate session subtotal, fees, discount, net total, and payment status
+    if ((status === 'cancelled' || previousStatus === 'cancelled') && existing.sessionId) {
+      await this.syncSessionTotalsAndFinancials(tenantId, existing.sessionId);
     }
 
     await repo.logAudit({
@@ -2451,25 +3256,7 @@ export class RestaurantRepository {
     }
 
     if (existing.sessionId) {
-      const { data: sessionOrders } = await supabaseAdmin
-        .from('restaurant_orders')
-        .select('total, status')
-        .eq('session_id', existing.sessionId)
-        .eq('tenant_id', tenantId);
-
-      let sessionTotal = 0;
-      (sessionOrders || []).forEach((o: any) => {
-        if (o.status !== 'cancelled') {
-          sessionTotal += Number(o.total || 0);
-        }
-      });
-      sessionTotal = Math.round(sessionTotal * 100) / 100;
-
-      await supabaseAdmin
-        .from('restaurant_sessions')
-        .update({ total_amount: sessionTotal, updated_at: now })
-        .eq('id', existing.sessionId)
-        .eq('tenant_id', tenantId);
+      await this.syncSessionTotalsAndFinancials(tenantId, existing.sessionId);
     }
 
     await repo.logAudit({
@@ -2491,6 +3278,10 @@ export class RestaurantRepository {
       throw new Error('Pedido não encontrado.');
     }
 
+    if (existing.sessionStatus === 'closed') {
+      throw new Error('Não é permitido excluir um pedido cuja comanda já foi encerrada.');
+    }
+
     await supabaseAdmin.from('restaurant_order_items').delete().eq('order_id', orderId).eq('tenant_id', tenantId);
     await supabaseAdmin.from('restaurant_order_status_history').delete().eq('order_id', orderId).eq('tenant_id', tenantId);
 
@@ -2505,26 +3296,7 @@ export class RestaurantRepository {
     }
 
     if (existing.sessionId) {
-      const { data: sessionOrders } = await supabaseAdmin
-        .from('restaurant_orders')
-        .select('total, status')
-        .eq('session_id', existing.sessionId)
-        .eq('tenant_id', tenantId);
-
-      let sessionTotal = 0;
-      (sessionOrders || []).forEach((o: any) => {
-        if (o.status !== 'cancelled') {
-          sessionTotal += Number(o.total || 0);
-        }
-      });
-      sessionTotal = Math.round(sessionTotal * 100) / 100;
-
-      const now = new Date().toISOString();
-      await supabaseAdmin
-        .from('restaurant_sessions')
-        .update({ total_amount: sessionTotal, updated_at: now })
-        .eq('id', existing.sessionId)
-        .eq('tenant_id', tenantId);
+      await this.syncSessionTotalsAndFinancials(tenantId, existing.sessionId);
     }
 
     await repo.logAudit({

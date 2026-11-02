@@ -99,6 +99,9 @@ export interface RestaurantOrder {
   sessionPaymentStatus?: 'paid' | 'partial' | 'pending' | 'unpaid' | null;
   sessionPaymentMethod?: string | null;
   isCurrentTableSession?: boolean;
+  sessionOrderSequence?: number;
+  isAdditionalOrder?: boolean;
+  launchedBy?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -149,10 +152,13 @@ export interface RestaurantSession {
   closedAt?: string | null;
   closingRequestedAt?: string | null;
   paymentMethod?: string | null;
-  paymentStatus?: 'paid' | 'pending' | 'unpaid' | null;
+  paymentStatus?: 'paid' | 'partial' | 'pending' | 'unpaid' | null;
   closedByUserId?: string | null;
   ordersSubtotal?: number;
   feesTotal?: number;
+  discountAmount?: number;
+  paidAmount?: number;
+  pendingAmount?: number;
   totalAmount: number;
   notes?: string | null;
   tableNumber?: string;
@@ -189,6 +195,14 @@ export interface TableCartItemInput {
 export interface CreateTableOrderPayload {
   tenantSlug: string;
   tableToken: string;
+  customerName?: string;
+  notes?: string;
+  items: TableCartItemInput[];
+  idempotencyKey?: string;
+}
+
+export interface AddSessionOrderPayload {
+  sessionId?: string;
   customerName?: string;
   notes?: string;
   items: TableCartItemInput[];

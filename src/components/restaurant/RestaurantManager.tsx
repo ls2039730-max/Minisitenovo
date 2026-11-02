@@ -53,6 +53,7 @@ import { TableSessionModal } from './modals/TableSessionModal';
 import { PrintQrModal } from './modals/PrintQrModal';
 import { RestaurantFeeTemplatesTab } from './RestaurantFeeTemplatesTab';
 import { RestaurantOrderEditModal } from './modals/RestaurantOrderEditModal';
+import { AddTableOrderModal } from './modals/AddTableOrderModal';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { useBackHandler } from '../../services/navigationManager';
 
@@ -122,6 +123,16 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
   const [cancellingKdsLoading, setCancellingKdsLoading] = useState(false);
   const [advancingOrderId, setAdvancingOrderId] = useState<string | null>(null);
   const [kdsActionError, setKdsActionError] = useState<string | null>(null);
+  const [kdsSuccessMessage, setKdsSuccessMessage] = useState<string | null>(null);
+
+  // Add Items to Open Session Modal state
+  const [addOrderModalOpen, setAddOrderModalOpen] = useState(false);
+  const [addOrderTable, setAddOrderTable] = useState<RestaurantTable | null>(null);
+  const [addOrderSessionMeta, setAddOrderSessionMeta] = useState<{
+    sessionId?: string | null;
+    sessionCode?: string | null;
+    currentTotal?: number;
+  } | null>(null);
 
   const handleDeleteRestaurantOrder = async () => {
     if (!deletingRestaurantOrder) return;
@@ -164,6 +175,13 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
     onClose: () => setPrintQrModalOpen(false),
     priority: 20,
     name: 'RestaurantPrintQrModal',
+  });
+
+  useBackHandler({
+    isOpen: addOrderModalOpen,
+    onClose: () => setAddOrderModalOpen(false),
+    priority: 30,
+    name: 'RestaurantAddTableOrderModal',
   });
 
   const loadData = useCallback(async (isSilent = false) => {
@@ -261,6 +279,48 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
       setSessionTable({ ...targetTable, ...(et || {}) });
       setSessionModalInitialConfirmClose(startWithConfirmClose);
       setSessionModalOpen(true);
+    },
+    [tables, enrichedOverview]
+  );
+
+  // Open AddTableOrderModal helper (only for occupied tables with an active open session)
+  const openAddItemsModal = useCallback(
+    (
+      tableIdOrTable: string | RestaurantTable,
+      meta?: { sessionId?: string | null; sessionCode?: string | null; currentTotal?: number }
+    ) => {
+      const targetTable =
+        typeof tableIdOrTable === 'string'
+          ? tables.find((t) => t.id === tableIdOrTable) || null
+          : tableIdOrTable;
+
+      if (!targetTable) {
+        setKdsActionError('Mesa não encontrada.');
+        return;
+      }
+
+      const et = (enrichedOverview?.tables || []).find((item) => item.id === targetTable.id);
+      const activeSessionId =
+        meta?.sessionId || et?.currentSessionId || targetTable.currentSessionId || null;
+
+      if (!activeSessionId) {
+        setKdsActionError(
+          'Esta mesa não possui uma conta aberta no momento. Não é possível adicionar itens sem sessão ativa.'
+        );
+        return;
+      }
+
+      const currentTotal =
+        meta?.currentTotal ??
+        (et ? et.currentSessionTotal : targetTable.currentSessionTotal || 0);
+
+      setAddOrderTable({ ...targetTable, currentSessionId: activeSessionId });
+      setAddOrderSessionMeta({
+        sessionId: activeSessionId,
+        sessionCode: meta?.sessionCode || et?.currentSessionCode || null,
+        currentTotal,
+      });
+      setAddOrderModalOpen(true);
     },
     [tables, enrichedOverview]
   );
@@ -1113,27 +1173,63 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
                       </div>
 
                       {isClosing ? (
-                        <button
-                          onClick={() => {
-                            setSessionTable({ ...table, ...(et || {}) });
-                            setSessionModalOpen(true);
-                          }}
-                          className="px-3 py-1.5 bg-orange-500 hover:bg-orange-400 text-slate-950 font-black rounded-xl text-xs transition-all shadow-md flex items-center gap-1 cursor-pointer"
-                        >
-                          <Receipt className="w-3.5 h-3.5" />
-                          <span>FINALIZAR MESA</span>
-                        </button>
+                        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                          {Boolean(table.currentSessionId || et?.currentSessionId) && (
+                            <button
+                              onClick={() =>
+                                openAddItemsModal(table, {
+                                  sessionId: et?.currentSessionId || table.currentSessionId,
+                                  sessionCode: et?.currentSessionCode || null,
+                                  currentTotal: openTotal,
+                                })
+                              }
+                              className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                              title="Adicionar novos itens à conta aberta desta mesa"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Adicionar Itens</span>
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              setSessionTable({ ...table, ...(et || {}) });
+                              setSessionModalOpen(true);
+                            }}
+                            className="px-3 py-1.5 bg-orange-500 hover:bg-orange-400 text-slate-950 font-black rounded-xl text-xs transition-all shadow-md flex items-center gap-1 cursor-pointer"
+                          >
+                            <Receipt className="w-3.5 h-3.5" />
+                            <span>FINALIZAR MESA</span>
+                          </button>
+                        </div>
                       ) : !isFree ? (
-                        <button
-                          onClick={() => {
-                            setSessionTable({ ...table, ...(et || {}) });
-                            setSessionModalOpen(true);
-                          }}
-                          className="px-3 py-1.5 bg-slate-900 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 cursor-pointer"
-                        >
-                          <Receipt className="w-3.5 h-3.5" />
-                          <span>Ver Conta / Pagamentos</span>
-                        </button>
+                        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                          {Boolean(table.currentSessionId || et?.currentSessionId) && (
+                            <button
+                              onClick={() =>
+                                openAddItemsModal(table, {
+                                  sessionId: et?.currentSessionId || table.currentSessionId,
+                                  sessionCode: et?.currentSessionCode || null,
+                                  currentTotal: openTotal,
+                                })
+                              }
+                              className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                              title="Adicionar novos itens à conta aberta desta mesa"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Adicionar Itens</span>
+                            </button>
+                          )}
+                          <button
+                            onClick={() => {
+                              setSessionTable({ ...table, ...(et || {}) });
+                              setSessionModalOpen(true);
+                            }}
+                            className="px-3 py-1.5 bg-slate-900 hover:bg-indigo-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                          >
+                            <Receipt className="w-3.5 h-3.5" />
+                            <span>Conta</span>
+                          </button>
+                        </div>
                       ) : (
                         <button
                           onClick={() => {
@@ -1170,6 +1266,22 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
                 type="button"
                 onClick={() => setKdsActionError(null)}
                 className="text-rose-600 hover:text-rose-900 font-bold cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+          )}
+
+          {kdsSuccessMessage && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3 text-xs text-emerald-800">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="font-semibold">{kdsSuccessMessage}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setKdsSuccessMessage(null)}
+                className="text-emerald-700 hover:text-emerald-950 font-bold cursor-pointer"
               >
                 Fechar
               </button>
@@ -1542,7 +1654,22 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
                         </div>
 
                         {isSessionOpen && (
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                openAddItemsModal(group.tableId, {
+                                  sessionId: group.sessionId,
+                                  sessionCode: group.sessionCode,
+                                  currentTotal: group.sessionTotalAmount,
+                                })
+                              }
+                              className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Adicionar Itens</span>
+                            </button>
+
                             <button
                               type="button"
                               onClick={() => openTableSessionModal(group.tableId, false)}
@@ -1580,6 +1707,9 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
                           dot: 'bg-slate-400',
                         };
 
+                        const seqNum = order.sessionOrderSequence || 1;
+                        const isAdditional = order.isAdditionalOrder ?? seqNum > 1;
+
                         let nextButtonLabel = '';
                         if (order.status === 'received') nextButtonLabel = 'Confirmar Pedido';
                         else if (order.status === 'confirmed') nextButtonLabel = 'Iniciar Preparo';
@@ -1602,12 +1732,21 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
                             <div>
                               <div className="flex items-start justify-between border-b border-slate-100 pb-2.5 mb-3">
                                 <div>
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
                                     <span className="text-sm font-black text-slate-900">
                                       Pedido #{order.orderNumber}
                                     </span>
+                                    {isAdditional ? (
+                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300">
+                                        {seqNum - 1}º Adicional
+                                      </span>
+                                    ) : (
+                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                        Pedido inicial
+                                      </span>
+                                    )}
                                   </div>
-                                  <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5">
+                                  <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
                                     <Clock className="w-3 h-3 text-slate-400" />
                                     <span>
                                       {new Date(order.createdAt).toLocaleTimeString([], {
@@ -1773,6 +1912,15 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
                             <span className="text-xs font-bold px-2 py-0.5 rounded-lg bg-slate-900 text-white">
                               Mesa {order.tableNumber || '?'}
                             </span>
+                            {order.isAdditionalOrder || (order.sessionOrderSequence && order.sessionOrderSequence > 1) ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300">
+                                {(order.sessionOrderSequence || 2) - 1}º Adicional
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                Pedido inicial
+                              </span>
+                            )}
                             {isClosingReq && (
                               <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-orange-500 text-white animate-pulse">
                                 Pediu a Conta
@@ -1891,6 +2039,22 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
                                 <Ban className="w-4 h-4" />
                               </button>
                             )}
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                openAddItemsModal(order.tableId, {
+                                  sessionId: order.sessionId,
+                                  sessionCode: order.sessionCode,
+                                  currentTotal: order.sessionTotalAmount,
+                                })
+                              }
+                              className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[11px] font-bold transition-colors cursor-pointer flex items-center gap-1"
+                              title="Adicionar novos itens à conta aberta desta mesa"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>+ Itens</span>
+                            </button>
 
                             <button
                               type="button"
@@ -2174,6 +2338,53 @@ export const RestaurantManager: React.FC<RestaurantManagerProps> = ({ tenant }) 
               )
             );
           }
+          loadData(true);
+        }}
+        onOpenAddItems={(tbl, sess) => {
+          openAddItemsModal(tbl, {
+            sessionId: sess.id,
+            sessionCode: sess.sessionCode,
+            currentTotal: sess.totalAmount,
+          });
+        }}
+      />
+
+      <AddTableOrderModal
+        isOpen={addOrderModalOpen}
+        table={addOrderTable}
+        sessionId={addOrderSessionMeta?.sessionId}
+        sessionCode={addOrderSessionMeta?.sessionCode}
+        currentSessionTotal={addOrderSessionMeta?.currentTotal}
+        onClose={() => {
+          setAddOrderModalOpen(false);
+          setAddOrderTable(null);
+          setAddOrderSessionMeta(null);
+        }}
+        onOrderAdded={(newOrder, updatedSession) => {
+          setOrders((prev) => {
+            const exists = prev.some((o) => o.id === newOrder.id);
+            return exists ? prev.map((o) => (o.id === newOrder.id ? newOrder : o)) : [newOrder, ...prev];
+          });
+          setTables((prev) =>
+            prev.map((t) =>
+              t.id === updatedSession.tableId
+                ? {
+                    ...t,
+                    currentSessionId: updatedSession.id,
+                    currentSessionTotal: updatedSession.totalAmount,
+                    currentSessionOrdersCount:
+                      updatedSession.orders?.filter((o) => o.status !== 'cancelled').length ??
+                      (t.currentSessionOrdersCount || 0) + 1,
+                  }
+                : t
+            )
+          );
+          setKdsSuccessMessage(
+            `Pedido adicional #${newOrder.orderNumber} lançado com sucesso na Mesa ${
+              newOrder.tableNumber || addOrderTable?.tableNumber || ''
+            }!`
+          );
+          setTimeout(() => setKdsSuccessMessage(null), 6000);
           loadData(true);
         }}
       />

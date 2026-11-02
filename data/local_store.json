@@ -460,7 +460,2286 @@
       "updated_at": "2026-10-13T08:37:44.402Z"
     }
   ],
-  "audit_logs": [],
+  "audit_logs": [
+    {
+      "id": "acf14c08-dab1-4387-b96d-3eabc3e1cc99",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_CREATE",
+      "entity": "restaurant_tables",
+      "entity_id": "e98084d6-9685-4736-a09e-0bc15b801d56",
+      "metadata": {
+        "tableNumber": "T-ADD-599",
+        "name": "Mesa Teste Garçom 661599"
+      },
+      "created_at": "2026-11-02T20:01:01.604Z",
+      "updated_at": "2026-11-02T20:01:01.604Z"
+    },
+    {
+      "id": "d2161b26-bfd5-47c0-a4f9-2822bb49aed7",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_CREATE",
+      "entity": "restaurant_tables",
+      "entity_id": "0bc104e5-12fe-4d19-91f9-fc72e297a11d",
+      "metadata": {
+        "tableNumber": "T-ADD-457",
+        "name": "Mesa Teste Garçom 740457"
+      },
+      "created_at": "2026-11-02T20:02:20.465Z",
+      "updated_at": "2026-11-02T20:02:20.465Z"
+    },
+    {
+      "id": "506e2b4b-f17e-4e3a-8d9f-d72992dcf1c8",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "4d3bca2e-b54f-452f-a00c-714d8883a42f",
+      "metadata": {
+        "previousStatus": "received",
+        "newStatus": "preparing",
+        "notes": "Cozinha iniciou preparo do pedido inicial"
+      },
+      "created_at": "2026-11-02T20:02:20.512Z",
+      "updated_at": "2026-11-02T20:02:20.512Z"
+    },
+    {
+      "id": "f3cded57-d565-48c4-a270-14632e7043d5",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_CREATE",
+      "entity": "restaurant_tables",
+      "entity_id": "4b259c6b-40f4-4853-a4a5-d4a43bc15b06",
+      "metadata": {
+        "tableNumber": "T-ADD-245",
+        "name": "Mesa Teste Garçom 781245"
+      },
+      "created_at": "2026-11-02T20:03:01.249Z",
+      "updated_at": "2026-11-02T20:03:01.249Z"
+    },
+    {
+      "id": "f83773c0-4527-4169-bad7-f50349e001d1",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "32dd1ee0-aeb4-4cff-9b7c-f5c106895d9a",
+      "metadata": {
+        "previousStatus": "received",
+        "newStatus": "preparing",
+        "notes": "Cozinha iniciou preparo do pedido inicial"
+      },
+      "created_at": "2026-11-02T20:03:01.279Z",
+      "updated_at": "2026-11-02T20:03:01.279Z"
+    },
+    {
+      "id": "32a9d8b9-009f-458b-aec4-fe62e8dee1a5",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "32c92a1f-31f3-4171-8ab5-0e7d470c5f5a",
+      "metadata": {
+        "tableId": "4b259c6b-40f4-4853-a4a5-d4a43bc15b06",
+        "tableNumber": "T-ADD-245",
+        "sessionId": "260384d4-b493-4434-abee-62b5e88527dc",
+        "sessionCode": "CMD-781274",
+        "orderNumber": 1002,
+        "orderTotal": 12,
+        "updatedSessionTotal": 52,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:03:01.285Z",
+      "updated_at": "2026-11-02T20:03:01.285Z"
+    },
+    {
+      "id": "e447548f-1308-4c56-9d7d-4f714681cd49",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "1deac66d-0a3c-4ab5-8de6-4ed417e65589",
+      "metadata": {
+        "tableId": "4b259c6b-40f4-4853-a4a5-d4a43bc15b06",
+        "tableNumber": "T-ADD-245",
+        "sessionId": "260384d4-b493-4434-abee-62b5e88527dc",
+        "sessionCode": "CMD-781274",
+        "orderNumber": 1003,
+        "orderTotal": 102,
+        "updatedSessionTotal": 154,
+        "itemsCount": 3
+      },
+      "created_at": "2026-11-02T20:03:01.290Z",
+      "updated_at": "2026-11-02T20:03:01.290Z"
+    },
+    {
+      "id": "8b368c9c-4663-4c1b-9902-2c11ec1b9c34",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "b3cd3ce2-6ef7-4940-b3ea-2c028c05776d",
+      "metadata": {
+        "tableId": "4b259c6b-40f4-4853-a4a5-d4a43bc15b06",
+        "tableNumber": "T-ADD-245",
+        "sessionId": "260384d4-b493-4434-abee-62b5e88527dc",
+        "sessionCode": "CMD-781274",
+        "orderNumber": 1004,
+        "orderTotal": 12,
+        "updatedSessionTotal": 152,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:03:01.300Z",
+      "updated_at": "2026-11-02T20:03:01.300Z"
+    },
+    {
+      "id": "ae2d43d5-5a37-4a2f-bf01-abe559c1cf39",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_CREATE",
+      "entity": "restaurant_tables",
+      "entity_id": "51a824f7-f6ee-4ba3-96f3-a9b9ced6046d",
+      "metadata": {
+        "tableNumber": "T-ADD-969",
+        "name": "Mesa Teste Garçom 817969"
+      },
+      "created_at": "2026-11-02T20:03:37.977Z",
+      "updated_at": "2026-11-02T20:03:37.977Z"
+    },
+    {
+      "id": "49443af0-e01e-4bb4-8b52-be93812f47f3",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "07ef6bc8-79a6-40ae-9334-9d48815d999f",
+      "metadata": {
+        "previousStatus": "received",
+        "newStatus": "preparing",
+        "notes": "Cozinha iniciou preparo do pedido inicial"
+      },
+      "created_at": "2026-11-02T20:03:38.018Z",
+      "updated_at": "2026-11-02T20:03:38.018Z"
+    },
+    {
+      "id": "962ccb4c-2f1a-45ab-a860-84bfe196d8bc",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "9ae20017-6876-405d-b1a0-135d7b4be7fe",
+      "metadata": {
+        "tableId": "51a824f7-f6ee-4ba3-96f3-a9b9ced6046d",
+        "tableNumber": "T-ADD-969",
+        "sessionId": "7166329f-a3e0-4c7e-b789-9636533738c3",
+        "sessionCode": "CMD-818012",
+        "orderNumber": 1002,
+        "orderTotal": 12,
+        "updatedSessionTotal": 52,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:03:38.026Z",
+      "updated_at": "2026-11-02T20:03:38.026Z"
+    },
+    {
+      "id": "786e6626-60d9-446e-964a-950b352c441e",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "e0de0d6e-a152-4c2f-85e7-608879cc5fef",
+      "metadata": {
+        "tableId": "51a824f7-f6ee-4ba3-96f3-a9b9ced6046d",
+        "tableNumber": "T-ADD-969",
+        "sessionId": "7166329f-a3e0-4c7e-b789-9636533738c3",
+        "sessionCode": "CMD-818012",
+        "orderNumber": 1003,
+        "orderTotal": 102,
+        "updatedSessionTotal": 154,
+        "itemsCount": 3
+      },
+      "created_at": "2026-11-02T20:03:38.036Z",
+      "updated_at": "2026-11-02T20:03:38.036Z"
+    },
+    {
+      "id": "bc8df6df-4590-4b8a-a52d-d5f47446a05a",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "1a3581f0-fa13-49d3-9b18-8d7138e20cda",
+      "metadata": {
+        "tableId": "51a824f7-f6ee-4ba3-96f3-a9b9ced6046d",
+        "tableNumber": "T-ADD-969",
+        "sessionId": "7166329f-a3e0-4c7e-b789-9636533738c3",
+        "sessionCode": "CMD-818012",
+        "orderNumber": 1004,
+        "orderTotal": 12,
+        "updatedSessionTotal": 152,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:03:38.052Z",
+      "updated_at": "2026-11-02T20:03:38.052Z"
+    },
+    {
+      "id": "c4aa478c-6e45-4e4b-a3a6-3576b76e1fed",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "accd45d8-6644-4e13-9277-05e1cc5524fa",
+      "metadata": {
+        "tableId": "51a824f7-f6ee-4ba3-96f3-a9b9ced6046d",
+        "tableNumber": "T-ADD-969",
+        "sessionId": "7166329f-a3e0-4c7e-b789-9636533738c3",
+        "sessionCode": "CMD-818012",
+        "orderNumber": 1005,
+        "orderTotal": 2000,
+        "updatedSessionTotal": 2152,
+        "itemsCount": 50
+      },
+      "created_at": "2026-11-02T20:03:38.064Z",
+      "updated_at": "2026-11-02T20:03:38.064Z"
+    },
+    {
+      "id": "b7435a4f-ca7e-493f-9263-66652dd21985",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_CREATE",
+      "entity": "restaurant_tables",
+      "entity_id": "62352e9d-e471-4e53-9ba8-897bfac581fe",
+      "metadata": {
+        "tableNumber": "T-ADD-630",
+        "name": "Mesa Teste Garçom 860630"
+      },
+      "created_at": "2026-11-02T20:04:20.636Z",
+      "updated_at": "2026-11-02T20:04:20.636Z"
+    },
+    {
+      "id": "8da96c70-8a4f-40a1-b2d6-7286766eb0cf",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "fc9298a5-4fc5-4160-9c71-bddff4dc7662",
+      "metadata": {
+        "previousStatus": "received",
+        "newStatus": "preparing",
+        "notes": "Cozinha iniciou preparo do pedido inicial"
+      },
+      "created_at": "2026-11-02T20:04:20.669Z",
+      "updated_at": "2026-11-02T20:04:20.669Z"
+    },
+    {
+      "id": "6dfa3e8b-107c-43ca-97f1-470d23f298f7",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "95e68816-2480-4c6d-8fd0-b63efcadbb26",
+      "metadata": {
+        "tableId": "62352e9d-e471-4e53-9ba8-897bfac581fe",
+        "tableNumber": "T-ADD-630",
+        "sessionId": "644a1310-7c83-4033-a576-ad8f1e90a474",
+        "sessionCode": "CMD-860662",
+        "orderNumber": 1002,
+        "orderTotal": 12,
+        "updatedSessionTotal": 52,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:04:20.675Z",
+      "updated_at": "2026-11-02T20:04:20.675Z"
+    },
+    {
+      "id": "0702d98c-fff6-493f-b38f-9cf6ee438e0f",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "2fc92297-cdfa-4995-b2f1-1fd554b18a16",
+      "metadata": {
+        "tableId": "62352e9d-e471-4e53-9ba8-897bfac581fe",
+        "tableNumber": "T-ADD-630",
+        "sessionId": "644a1310-7c83-4033-a576-ad8f1e90a474",
+        "sessionCode": "CMD-860662",
+        "orderNumber": 1003,
+        "orderTotal": 102,
+        "updatedSessionTotal": 154,
+        "itemsCount": 3
+      },
+      "created_at": "2026-11-02T20:04:20.681Z",
+      "updated_at": "2026-11-02T20:04:20.681Z"
+    },
+    {
+      "id": "18ad709c-9156-49ad-80ca-b0770e4b988a",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "72f62169-13d3-44a0-bc29-a5d15076de0c",
+      "metadata": {
+        "tableId": "62352e9d-e471-4e53-9ba8-897bfac581fe",
+        "tableNumber": "T-ADD-630",
+        "sessionId": "644a1310-7c83-4033-a576-ad8f1e90a474",
+        "sessionCode": "CMD-860662",
+        "orderNumber": 1004,
+        "orderTotal": 12,
+        "updatedSessionTotal": 152,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:04:20.692Z",
+      "updated_at": "2026-11-02T20:04:20.692Z"
+    },
+    {
+      "id": "d6cef71d-08a3-474f-ba93-9d802fca49ac",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "9bf81101-db87-4f8a-a493-a1a59dc408cf",
+      "metadata": {
+        "tableId": "62352e9d-e471-4e53-9ba8-897bfac581fe",
+        "tableNumber": "T-ADD-630",
+        "sessionId": "644a1310-7c83-4033-a576-ad8f1e90a474",
+        "sessionCode": "CMD-860662",
+        "orderNumber": 1005,
+        "orderTotal": 40,
+        "updatedSessionTotal": 192,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:04:20.707Z",
+      "updated_at": "2026-11-02T20:04:20.707Z"
+    },
+    {
+      "id": "3fe47fff-4a48-4eb1-9c8f-654a6ffe8bf2",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_CREATE",
+      "entity": "restaurant_tables",
+      "entity_id": "9249bbc3-c0e0-4052-a374-9a8c2dc15e81",
+      "metadata": {
+        "tableNumber": "T-ADD-267",
+        "name": "Mesa Teste Garçom 924267"
+      },
+      "created_at": "2026-11-02T20:05:24.275Z",
+      "updated_at": "2026-11-02T20:05:24.275Z"
+    },
+    {
+      "id": "e2a4367c-169e-4c7a-aad6-4c5356ee771e",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "1de58810-7e10-4e78-ba70-72d1e871eccb",
+      "metadata": {
+        "previousStatus": "received",
+        "newStatus": "preparing",
+        "notes": "Cozinha iniciou preparo do pedido inicial"
+      },
+      "created_at": "2026-11-02T20:05:24.325Z",
+      "updated_at": "2026-11-02T20:05:24.325Z"
+    },
+    {
+      "id": "903f88e5-3103-4edd-93dc-61973e0cc6f1",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "838de272-5748-41de-a838-d9f1ea161c10",
+      "metadata": {
+        "tableId": "9249bbc3-c0e0-4052-a374-9a8c2dc15e81",
+        "tableNumber": "T-ADD-267",
+        "sessionId": "3145f3ff-5456-41e2-b2cc-609a56c7284e",
+        "sessionCode": "CMD-924304",
+        "orderNumber": 1002,
+        "orderTotal": 12,
+        "updatedSessionTotal": 52,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:05:24.331Z",
+      "updated_at": "2026-11-02T20:05:24.331Z"
+    },
+    {
+      "id": "73b0f65c-aba5-4d37-87e3-e228b31c9c66",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "0626ac16-f35c-4d2b-8a1e-a285fe4dd9cd",
+      "metadata": {
+        "tableId": "9249bbc3-c0e0-4052-a374-9a8c2dc15e81",
+        "tableNumber": "T-ADD-267",
+        "sessionId": "3145f3ff-5456-41e2-b2cc-609a56c7284e",
+        "sessionCode": "CMD-924304",
+        "orderNumber": 1003,
+        "orderTotal": 102,
+        "updatedSessionTotal": 154,
+        "itemsCount": 3
+      },
+      "created_at": "2026-11-02T20:05:24.339Z",
+      "updated_at": "2026-11-02T20:05:24.339Z"
+    },
+    {
+      "id": "f6bbf0eb-06af-4aad-9204-cec61418cca5",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "fd761187-b03e-4cda-a738-8a32a13fb5ba",
+      "metadata": {
+        "tableId": "9249bbc3-c0e0-4052-a374-9a8c2dc15e81",
+        "tableNumber": "T-ADD-267",
+        "sessionId": "3145f3ff-5456-41e2-b2cc-609a56c7284e",
+        "sessionCode": "CMD-924304",
+        "orderNumber": 1004,
+        "orderTotal": 12,
+        "updatedSessionTotal": 152,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:05:24.353Z",
+      "updated_at": "2026-11-02T20:05:24.353Z"
+    },
+    {
+      "id": "e3ce4087-29f2-40dc-bb34-283cbe12df99",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "f348496a-f59a-4aa4-9807-9a06710dfc0c",
+      "metadata": {
+        "tableId": "9249bbc3-c0e0-4052-a374-9a8c2dc15e81",
+        "tableNumber": "T-ADD-267",
+        "sessionId": "3145f3ff-5456-41e2-b2cc-609a56c7284e",
+        "sessionCode": "CMD-924304",
+        "orderNumber": 1005,
+        "orderTotal": 40,
+        "updatedSessionTotal": 192,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:05:24.368Z",
+      "updated_at": "2026-11-02T20:05:24.368Z"
+    },
+    {
+      "id": "a1dab37a-a4f5-4776-ac21-9d32cd4b1cb1",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_CREATE",
+      "entity": "restaurant_tables",
+      "entity_id": "03023b01-7c9a-41c0-9a1b-f29eaf4bda6c",
+      "metadata": {
+        "tableNumber": "T-ADD-707",
+        "name": "Mesa Teste Garçom 978707"
+      },
+      "created_at": "2026-11-02T20:06:18.724Z",
+      "updated_at": "2026-11-02T20:06:18.724Z"
+    },
+    {
+      "id": "5e1536f2-9d8e-4b65-b8f5-86b1ff3083a3",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "439bf224-864a-4025-8259-6f67ff9902d7",
+      "metadata": {
+        "previousStatus": "received",
+        "newStatus": "preparing",
+        "notes": "Cozinha iniciou preparo do pedido inicial"
+      },
+      "created_at": "2026-11-02T20:06:18.757Z",
+      "updated_at": "2026-11-02T20:06:18.757Z"
+    },
+    {
+      "id": "372714d9-33d8-4082-a2e6-53f9748d5319",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "4a5790ad-2d41-4dfc-81f5-bba5fb825481",
+      "metadata": {
+        "tableId": "03023b01-7c9a-41c0-9a1b-f29eaf4bda6c",
+        "tableNumber": "T-ADD-707",
+        "sessionId": "8939ec8f-ce97-4ab7-8ccd-5450b119e434",
+        "sessionCode": "CMD-978750",
+        "orderNumber": 1002,
+        "orderTotal": 12,
+        "updatedSessionTotal": 52,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:06:18.763Z",
+      "updated_at": "2026-11-02T20:06:18.763Z"
+    },
+    {
+      "id": "e76efadc-ff50-40a1-b958-865625672c6f",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "3183cfe4-e5fb-4db0-81d3-3a943afe1081",
+      "metadata": {
+        "tableId": "03023b01-7c9a-41c0-9a1b-f29eaf4bda6c",
+        "tableNumber": "T-ADD-707",
+        "sessionId": "8939ec8f-ce97-4ab7-8ccd-5450b119e434",
+        "sessionCode": "CMD-978750",
+        "orderNumber": 1003,
+        "orderTotal": 102,
+        "updatedSessionTotal": 154,
+        "itemsCount": 3
+      },
+      "created_at": "2026-11-02T20:06:18.770Z",
+      "updated_at": "2026-11-02T20:06:18.770Z"
+    },
+    {
+      "id": "c774faaa-5841-4e93-88f3-2cc327641cf6",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "25d6798e-4fad-4cb8-8ced-ce3afdadfea1",
+      "metadata": {
+        "tableId": "03023b01-7c9a-41c0-9a1b-f29eaf4bda6c",
+        "tableNumber": "T-ADD-707",
+        "sessionId": "8939ec8f-ce97-4ab7-8ccd-5450b119e434",
+        "sessionCode": "CMD-978750",
+        "orderNumber": 1004,
+        "orderTotal": 12,
+        "updatedSessionTotal": 152,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:06:18.783Z",
+      "updated_at": "2026-11-02T20:06:18.783Z"
+    },
+    {
+      "id": "efc11aec-ed28-4dc1-a102-16edb9700b5a",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "665faa27-ecbb-4a17-9ade-6700fcd0c803",
+      "metadata": {
+        "tableId": "03023b01-7c9a-41c0-9a1b-f29eaf4bda6c",
+        "tableNumber": "T-ADD-707",
+        "sessionId": "8939ec8f-ce97-4ab7-8ccd-5450b119e434",
+        "sessionCode": "CMD-978750",
+        "orderNumber": 1005,
+        "orderTotal": 40,
+        "updatedSessionTotal": 192,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:06:18.795Z",
+      "updated_at": "2026-11-02T20:06:18.795Z"
+    },
+    {
+      "id": "57e8a52a-6628-40b6-95c3-9b5beefa73d2",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_CLOSE",
+      "entity": "restaurant_sessions",
+      "entity_id": "8939ec8f-ce97-4ab7-8ccd-5450b119e434",
+      "metadata": {
+        "tableId": "03023b01-7c9a-41c0-9a1b-f29eaf4bda6c",
+        "totalAmount": 192,
+        "discount": 14,
+        "paidAmount": 192,
+        "pendingAmount": 0,
+        "paymentStatus": "paid",
+        "paymentMethod": "Cartão de Crédito"
+      },
+      "created_at": "2026-11-02T20:06:18.807Z",
+      "updated_at": "2026-11-02T20:06:18.807Z"
+    },
+    {
+      "id": "ee53ff3b-18d9-47c9-8d83-c8c617e24d0e",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_CREATE",
+      "entity": "restaurant_tables",
+      "entity_id": "9dd17e8e-5a42-41fd-958c-9a2c53f66f2b",
+      "metadata": {
+        "tableNumber": "T-ADD-977",
+        "name": "Mesa Teste Garçom 006977"
+      },
+      "created_at": "2026-11-02T20:06:46.987Z",
+      "updated_at": "2026-11-02T20:06:46.987Z"
+    },
+    {
+      "id": "d01e9716-386b-4640-9b90-8d94a5ca6ae6",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "47086097-4d06-4d91-bb36-35da5050a188",
+      "metadata": {
+        "previousStatus": "received",
+        "newStatus": "preparing",
+        "notes": "Cozinha iniciou preparo do pedido inicial"
+      },
+      "created_at": "2026-11-02T20:06:47.037Z",
+      "updated_at": "2026-11-02T20:06:47.037Z"
+    },
+    {
+      "id": "b272a7fd-17fd-4054-86ea-3e30de58fc0f",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "6dd942a0-04ef-48c9-931d-7217079519f8",
+      "metadata": {
+        "tableId": "9dd17e8e-5a42-41fd-958c-9a2c53f66f2b",
+        "tableNumber": "T-ADD-977",
+        "sessionId": "37b4696c-31b3-43ec-a098-34385d772a09",
+        "sessionCode": "CMD-007022",
+        "orderNumber": 1002,
+        "orderTotal": 12,
+        "updatedSessionTotal": 52,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:06:47.048Z",
+      "updated_at": "2026-11-02T20:06:47.048Z"
+    },
+    {
+      "id": "796b1ee9-82af-4f9b-8bed-2d2db2bc6e9a",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "2c4a82d8-7382-47e5-ad60-e59be61ec3f4",
+      "metadata": {
+        "tableId": "9dd17e8e-5a42-41fd-958c-9a2c53f66f2b",
+        "tableNumber": "T-ADD-977",
+        "sessionId": "37b4696c-31b3-43ec-a098-34385d772a09",
+        "sessionCode": "CMD-007022",
+        "orderNumber": 1003,
+        "orderTotal": 102,
+        "updatedSessionTotal": 154,
+        "itemsCount": 3
+      },
+      "created_at": "2026-11-02T20:06:47.063Z",
+      "updated_at": "2026-11-02T20:06:47.063Z"
+    },
+    {
+      "id": "4924a0d2-973b-4fe6-92d7-452a1b6d36d2",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "cc84f85a-d46f-4af1-92f6-62386ac96e9b",
+      "metadata": {
+        "tableId": "9dd17e8e-5a42-41fd-958c-9a2c53f66f2b",
+        "tableNumber": "T-ADD-977",
+        "sessionId": "37b4696c-31b3-43ec-a098-34385d772a09",
+        "sessionCode": "CMD-007022",
+        "orderNumber": 1004,
+        "orderTotal": 12,
+        "updatedSessionTotal": 152,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:06:47.082Z",
+      "updated_at": "2026-11-02T20:06:47.082Z"
+    },
+    {
+      "id": "318f42a0-ed41-4522-a562-cf7369a9f508",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "fefb0ccf-271f-461b-ba76-020dd796290b",
+      "metadata": {
+        "tableId": "9dd17e8e-5a42-41fd-958c-9a2c53f66f2b",
+        "tableNumber": "T-ADD-977",
+        "sessionId": "37b4696c-31b3-43ec-a098-34385d772a09",
+        "sessionCode": "CMD-007022",
+        "orderNumber": 1005,
+        "orderTotal": 40,
+        "updatedSessionTotal": 192,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:06:47.097Z",
+      "updated_at": "2026-11-02T20:06:47.097Z"
+    },
+    {
+      "id": "fb0fcf92-11f4-4515-b234-a5ed6ebe8e74",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_CLOSE",
+      "entity": "restaurant_sessions",
+      "entity_id": "37b4696c-31b3-43ec-a098-34385d772a09",
+      "metadata": {
+        "tableId": "9dd17e8e-5a42-41fd-958c-9a2c53f66f2b",
+        "totalAmount": 192,
+        "discount": 14,
+        "paidAmount": 192,
+        "pendingAmount": 0,
+        "paymentStatus": "paid",
+        "paymentMethod": "Cartão de Crédito"
+      },
+      "created_at": "2026-11-02T20:06:47.113Z",
+      "updated_at": "2026-11-02T20:06:47.113Z"
+    },
+    {
+      "id": "4e376945-fc16-4882-8453-dff9530273cb",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "d1cc67f8-89fd-4418-9919-fa49f4166c42",
+      "metadata": {
+        "tableId": "9dd17e8e-5a42-41fd-958c-9a2c53f66f2b",
+        "tableNumber": "T-ADD-977",
+        "sessionId": "9cd95457-d38e-44e1-bc63-46dd50b55a5f",
+        "sessionCode": "CMD-007116",
+        "orderNumber": 1007,
+        "orderTotal": 40,
+        "updatedSessionTotal": 64,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:06:47.134Z",
+      "updated_at": "2026-11-02T20:06:47.134Z"
+    },
+    {
+      "id": "25fc6438-d137-4eb6-ab3c-f3619f102bba",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_CREATE",
+      "entity": "restaurant_tables",
+      "entity_id": "544aa86f-627a-409c-88e6-1787a9746a74",
+      "metadata": {
+        "tableNumber": "T-ADD-037",
+        "name": "Mesa Teste Garçom 112037"
+      },
+      "created_at": "2026-11-02T20:08:32.059Z",
+      "updated_at": "2026-11-02T20:08:32.059Z"
+    },
+    {
+      "id": "49f116d2-5344-4c27-aa9a-585a967a8979",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "4d5593be-4626-4f67-83f6-da5358c189fb",
+      "metadata": {
+        "previousStatus": "received",
+        "newStatus": "preparing",
+        "notes": "Cozinha iniciou preparo do pedido inicial"
+      },
+      "created_at": "2026-11-02T20:08:32.144Z",
+      "updated_at": "2026-11-02T20:08:32.144Z"
+    },
+    {
+      "id": "3c38df61-11cb-4bf8-81c0-2aad4c50e240",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "6847eace-dd5f-4745-a0d2-761f9b505f4d",
+      "metadata": {
+        "tableId": "544aa86f-627a-409c-88e6-1787a9746a74",
+        "tableNumber": "T-ADD-037",
+        "sessionId": "5c1fe096-0aed-4d6d-975e-5a27df47bb26",
+        "sessionCode": "CMD-112130",
+        "orderNumber": 1002,
+        "orderTotal": 12,
+        "updatedSessionTotal": 52,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:08:32.156Z",
+      "updated_at": "2026-11-02T20:08:32.156Z"
+    },
+    {
+      "id": "e82058bc-c335-4fd5-94c5-dda2e3a01dbf",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "0836b419-fc47-443a-8dbc-827ef59fcf42",
+      "metadata": {
+        "tableId": "544aa86f-627a-409c-88e6-1787a9746a74",
+        "tableNumber": "T-ADD-037",
+        "sessionId": "5c1fe096-0aed-4d6d-975e-5a27df47bb26",
+        "sessionCode": "CMD-112130",
+        "orderNumber": 1003,
+        "orderTotal": 102,
+        "updatedSessionTotal": 154,
+        "itemsCount": 3
+      },
+      "created_at": "2026-11-02T20:08:32.168Z",
+      "updated_at": "2026-11-02T20:08:32.168Z"
+    },
+    {
+      "id": "06e53801-734c-4a63-9fa0-6c9f81c85f2e",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "b0b3e316-a863-4b59-959f-8f405bf00cc1",
+      "metadata": {
+        "tableId": "544aa86f-627a-409c-88e6-1787a9746a74",
+        "tableNumber": "T-ADD-037",
+        "sessionId": "5c1fe096-0aed-4d6d-975e-5a27df47bb26",
+        "sessionCode": "CMD-112130",
+        "orderNumber": 1004,
+        "orderTotal": 12,
+        "updatedSessionTotal": 152,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:08:32.227Z",
+      "updated_at": "2026-11-02T20:08:32.227Z"
+    },
+    {
+      "id": "6c25ea4c-1468-43f4-98b0-0dc3e25cd1c1",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "45dabd48-7bdf-416f-b609-e6aed1d97c46",
+      "metadata": {
+        "tableId": "544aa86f-627a-409c-88e6-1787a9746a74",
+        "tableNumber": "T-ADD-037",
+        "sessionId": "5c1fe096-0aed-4d6d-975e-5a27df47bb26",
+        "sessionCode": "CMD-112130",
+        "orderNumber": 1005,
+        "orderTotal": 40,
+        "updatedSessionTotal": 192,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:08:32.241Z",
+      "updated_at": "2026-11-02T20:08:32.241Z"
+    },
+    {
+      "id": "ac0bcdcf-204c-466b-9c8a-cbd3113986dd",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_CLOSE",
+      "entity": "restaurant_sessions",
+      "entity_id": "5c1fe096-0aed-4d6d-975e-5a27df47bb26",
+      "metadata": {
+        "tableId": "544aa86f-627a-409c-88e6-1787a9746a74",
+        "totalAmount": 192,
+        "discount": 14,
+        "paidAmount": 192,
+        "pendingAmount": 0,
+        "paymentStatus": "paid",
+        "paymentMethod": "Cartão de Crédito"
+      },
+      "created_at": "2026-11-02T20:08:32.255Z",
+      "updated_at": "2026-11-02T20:08:32.255Z"
+    },
+    {
+      "id": "a07074d2-844e-479d-a142-45dcee97ace7",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "a27ac206-47ca-423d-ad04-5ef63958bd17",
+      "metadata": {
+        "tableId": "544aa86f-627a-409c-88e6-1787a9746a74",
+        "tableNumber": "T-ADD-037",
+        "sessionId": "86fb4e2e-6630-44bd-a40b-ee60da247e41",
+        "sessionCode": "CMD-112258",
+        "orderNumber": 1007,
+        "orderTotal": 40,
+        "updatedSessionTotal": 64,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:08:32.281Z",
+      "updated_at": "2026-11-02T20:08:32.281Z"
+    },
+    {
+      "id": "b1a521fc-4ab3-4b97-bb4f-315eae7aef4e",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_CREATE",
+      "entity": "restaurant_tables",
+      "entity_id": "25ac7d9f-e3ab-4f1a-877f-30dcf4d3c0ef",
+      "metadata": {
+        "tableNumber": "T-ADD-668",
+        "name": "Mesa Teste Garçom 888668"
+      },
+      "created_at": "2026-11-02T20:21:28.679Z",
+      "updated_at": "2026-11-02T20:21:28.679Z"
+    },
+    {
+      "id": "ce88b61d-da72-4513-8f64-60f211b24f10",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "323b1d73-42a4-4c22-9c94-4cfdeb8ce21e",
+      "metadata": {
+        "previousStatus": "received",
+        "newStatus": "preparing",
+        "notes": "Cozinha iniciou preparo do pedido inicial"
+      },
+      "created_at": "2026-11-02T20:21:28.720Z",
+      "updated_at": "2026-11-02T20:21:28.720Z"
+    },
+    {
+      "id": "62d3b618-8dbc-4764-9aa9-9eceb8f82972",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "3607a575-9254-4faa-a570-a05182e7558a",
+      "metadata": {
+        "tableId": "25ac7d9f-e3ab-4f1a-877f-30dcf4d3c0ef",
+        "tableNumber": "T-ADD-668",
+        "sessionId": "a17f5946-b480-47d7-9194-df3cc55b3abf",
+        "sessionCode": "CMD-888705",
+        "orderNumber": 1002,
+        "orderTotal": 12,
+        "updatedSessionTotal": 52,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:21:28.732Z",
+      "updated_at": "2026-11-02T20:21:28.732Z"
+    },
+    {
+      "id": "6c139d52-1be4-471b-90e0-cda332440b42",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "fde239fc-e95e-4afc-931e-80a537e18e9a",
+      "metadata": {
+        "tableId": "25ac7d9f-e3ab-4f1a-877f-30dcf4d3c0ef",
+        "tableNumber": "T-ADD-668",
+        "sessionId": "a17f5946-b480-47d7-9194-df3cc55b3abf",
+        "sessionCode": "CMD-888705",
+        "orderNumber": 1003,
+        "orderTotal": 102,
+        "updatedSessionTotal": 154,
+        "itemsCount": 3
+      },
+      "created_at": "2026-11-02T20:21:28.745Z",
+      "updated_at": "2026-11-02T20:21:28.745Z"
+    },
+    {
+      "id": "541fc667-1573-4832-96b2-d9ad3916ce89",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "67efb3db-4b6b-42f2-8c56-bc1243c03097",
+      "metadata": {
+        "tableId": "25ac7d9f-e3ab-4f1a-877f-30dcf4d3c0ef",
+        "tableNumber": "T-ADD-668",
+        "sessionId": "a17f5946-b480-47d7-9194-df3cc55b3abf",
+        "sessionCode": "CMD-888705",
+        "orderNumber": 1004,
+        "orderTotal": 12,
+        "updatedSessionTotal": 152,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:21:28.765Z",
+      "updated_at": "2026-11-02T20:21:28.765Z"
+    },
+    {
+      "id": "b3ceef19-b6f7-495d-8f5a-2be49d9bfe26",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "f579eec7-fb0a-4b19-9217-af9def5b55a5",
+      "metadata": {
+        "tableId": "25ac7d9f-e3ab-4f1a-877f-30dcf4d3c0ef",
+        "tableNumber": "T-ADD-668",
+        "sessionId": "a17f5946-b480-47d7-9194-df3cc55b3abf",
+        "sessionCode": "CMD-888705",
+        "orderNumber": 1005,
+        "orderTotal": 40,
+        "updatedSessionTotal": 192,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:21:28.782Z",
+      "updated_at": "2026-11-02T20:21:28.782Z"
+    },
+    {
+      "id": "f9c42ec3-8090-4607-bdec-cc4b79fff640",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_CLOSE",
+      "entity": "restaurant_sessions",
+      "entity_id": "a17f5946-b480-47d7-9194-df3cc55b3abf",
+      "metadata": {
+        "tableId": "25ac7d9f-e3ab-4f1a-877f-30dcf4d3c0ef",
+        "totalAmount": 192,
+        "discount": 14,
+        "paidAmount": 192,
+        "pendingAmount": 0,
+        "paymentStatus": "paid",
+        "paymentMethod": "Cartão de Crédito"
+      },
+      "created_at": "2026-11-02T20:21:28.797Z",
+      "updated_at": "2026-11-02T20:21:28.797Z"
+    },
+    {
+      "id": "172936b9-9504-4d9e-9c0b-df4abe9b49a0",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "2b006346-0ee5-4e60-bf47-aa8118bb1b75",
+      "metadata": {
+        "tableId": "25ac7d9f-e3ab-4f1a-877f-30dcf4d3c0ef",
+        "tableNumber": "T-ADD-668",
+        "sessionId": "b151258c-5d41-4d1e-8707-61a2e05e03d9",
+        "sessionCode": "CMD-888800",
+        "orderNumber": 1007,
+        "orderTotal": 40,
+        "updatedSessionTotal": 64,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:21:28.823Z",
+      "updated_at": "2026-11-02T20:21:28.823Z"
+    },
+    {
+      "id": "8e2a8828-22b4-4377-a0fe-abab258206f4",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "SESSION_FEE_ADD",
+      "entity": "restaurant_session_fees",
+      "entity_id": "cfd8b53e-1f63-4758-a2f4-70580f3e942e",
+      "metadata": {
+        "sessionId": "b151258c-5d41-4d1e-8707-61a2e05e03d9",
+        "name": "Taxa de Serviço 10%",
+        "calculatedAmount": 6.4
+      },
+      "created_at": "2026-11-02T20:21:28.835Z",
+      "updated_at": "2026-11-02T20:21:28.835Z"
+    },
+    {
+      "id": "a8ab5ba8-6517-461e-b441-35389df9d86d",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "26bf4cfc-e344-4c82-99d1-17e589dc3371",
+      "metadata": {
+        "tableId": "25ac7d9f-e3ab-4f1a-877f-30dcf4d3c0ef",
+        "tableNumber": "T-ADD-668",
+        "sessionId": "b151258c-5d41-4d1e-8707-61a2e05e03d9",
+        "sessionCode": "CMD-888800",
+        "orderNumber": 1008,
+        "orderTotal": 64,
+        "updatedSessionTotal": 130.4,
+        "itemsCount": 3
+      },
+      "created_at": "2026-11-02T20:21:28.856Z",
+      "updated_at": "2026-11-02T20:21:28.856Z"
+    },
+    {
+      "id": "4f263c4a-0130-45dc-8b98-b37e0b4598c6",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "RESTAURANT_ORDER_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "26bf4cfc-e344-4c82-99d1-17e589dc3371",
+      "metadata": {
+        "diff": {
+          "before": {
+            "id": "26bf4cfc-e344-4c82-99d1-17e589dc3371",
+            "tenantId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "tableId": "25ac7d9f-e3ab-4f1a-877f-30dcf4d3c0ef",
+            "sessionId": "b151258c-5d41-4d1e-8707-61a2e05e03d9",
+            "orderNumber": 1008,
+            "customerName": null,
+            "subtotal": 64,
+            "total": 64,
+            "status": "received",
+            "notes": null,
+            "idempotencyKey": "idem-test-14-add-888668",
+            "items": [
+              {
+                "id": "809175a3-64d8-401c-97d5-9e0c4d7792d5",
+                "orderId": "26bf4cfc-e344-4c82-99d1-17e589dc3371",
+                "tenantId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "productId": "97e3edc8-5ca0-46a5-9cce-7e68587e2209",
+                "variantId": null,
+                "productName": "Suco Natural Teste 888668",
+                "variantName": null,
+                "unitPrice": 12,
+                "quantity": 2,
+                "subtotal": 24,
+                "notes": null,
+                "createdAt": "2026-11-02T20:21:28.845Z"
+              },
+              {
+                "id": "ca27d4d0-d7b1-4bdc-908d-ee0542994da0",
+                "orderId": "26bf4cfc-e344-4c82-99d1-17e589dc3371",
+                "tenantId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "productId": "91ba0bcb-dc52-4cea-b2fd-fd9be4f779ce",
+                "variantId": null,
+                "productName": "Filé Parmegiana Teste 888668",
+                "variantName": null,
+                "unitPrice": 40,
+                "quantity": 1,
+                "subtotal": 40,
+                "notes": null,
+                "createdAt": "2026-11-02T20:21:28.845Z"
+              }
+            ],
+            "history": [
+              {
+                "id": "11b881c7-92ae-4703-99ed-6829540fd133",
+                "orderId": "26bf4cfc-e344-4c82-99d1-17e589dc3371",
+                "tenantId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "status": "received",
+                "notes": "Pedido adicional lançado na comanda aberta por Garçom Teste A.",
+                "changedBy": "Garçom/Atendente (Garçom Teste A)",
+                "createdAt": "2026-11-02T20:21:28.845Z"
+              }
+            ],
+            "tableNumber": "T-ADD-668",
+            "tableName": "Mesa Teste Garçom 888668",
+            "tableStatus": "occupied",
+            "sessionCode": "CMD-888800",
+            "sessionStatus": "open",
+            "sessionOpenedAt": "2026-11-02T20:21:28.800Z",
+            "sessionClosedAt": null,
+            "sessionClosingRequestedAt": null,
+            "sessionTotalAmount": 130.4,
+            "sessionPaymentStatus": "pending",
+            "sessionPaymentMethod": null,
+            "isCurrentTableSession": true,
+            "sessionOrderSequence": 3,
+            "isAdditionalOrder": true,
+            "launchedBy": "Garçom/Atendente (Garçom Teste A)",
+            "createdAt": "2026-11-02T20:21:28.845Z",
+            "updatedAt": "2026-11-02T20:21:28.845Z"
+          },
+          "after": {
+            "id": "26bf4cfc-e344-4c82-99d1-17e589dc3371",
+            "tenantId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "tableId": "25ac7d9f-e3ab-4f1a-877f-30dcf4d3c0ef",
+            "sessionId": "b151258c-5d41-4d1e-8707-61a2e05e03d9",
+            "orderNumber": 1008,
+            "customerName": null,
+            "subtotal": 24,
+            "total": 24,
+            "status": "received",
+            "notes": null,
+            "idempotencyKey": "idem-test-14-add-888668",
+            "items": [
+              {
+                "id": "809175a3-64d8-401c-97d5-9e0c4d7792d5",
+                "orderId": "26bf4cfc-e344-4c82-99d1-17e589dc3371",
+                "tenantId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "productId": "97e3edc8-5ca0-46a5-9cce-7e68587e2209",
+                "variantId": null,
+                "productName": "Suco Natural Teste 888668",
+                "variantName": null,
+                "unitPrice": 12,
+                "quantity": 2,
+                "subtotal": 24,
+                "notes": null,
+                "createdAt": "2026-11-02T20:21:28.845Z"
+              },
+              {
+                "id": "ca27d4d0-d7b1-4bdc-908d-ee0542994da0",
+                "orderId": "26bf4cfc-e344-4c82-99d1-17e589dc3371",
+                "tenantId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "productId": "91ba0bcb-dc52-4cea-b2fd-fd9be4f779ce",
+                "variantId": null,
+                "productName": "Filé Parmegiana Teste 888668",
+                "variantName": null,
+                "unitPrice": 40,
+                "quantity": 1,
+                "subtotal": 40,
+                "notes": null,
+                "createdAt": "2026-11-02T20:21:28.845Z"
+              }
+            ],
+            "history": [
+              {
+                "id": "11b881c7-92ae-4703-99ed-6829540fd133",
+                "orderId": "26bf4cfc-e344-4c82-99d1-17e589dc3371",
+                "tenantId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "status": "received",
+                "notes": "Pedido adicional lançado na comanda aberta por Garçom Teste A.",
+                "changedBy": "Garçom/Atendente (Garçom Teste A)",
+                "createdAt": "2026-11-02T20:21:28.845Z"
+              }
+            ],
+            "tableNumber": "T-ADD-668",
+            "tableName": "Mesa Teste Garçom 888668",
+            "tableStatus": "occupied",
+            "sessionCode": "CMD-888800",
+            "sessionStatus": "open",
+            "sessionOpenedAt": "2026-11-02T20:21:28.800Z",
+            "sessionClosedAt": null,
+            "sessionClosingRequestedAt": null,
+            "sessionTotalAmount": 130.4,
+            "sessionPaymentStatus": "pending",
+            "sessionPaymentMethod": null,
+            "isCurrentTableSession": true,
+            "sessionOrderSequence": 3,
+            "isAdditionalOrder": true,
+            "launchedBy": "Garçom/Atendente (Garçom Teste A)",
+            "createdAt": "2026-11-02T20:21:28.845Z",
+            "updatedAt": "2026-11-02T20:21:28.845Z",
+            "updated_at": "2026-11-02T20:21:28.859Z"
+          }
+        }
+      },
+      "created_at": "2026-11-02T20:21:28.872Z",
+      "updated_at": "2026-11-02T20:21:28.872Z"
+    },
+    {
+      "id": "8e2c48e0-e6cc-409c-8815-f3d8a94ae92a",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "26bf4cfc-e344-4c82-99d1-17e589dc3371",
+      "metadata": {
+        "previousStatus": "received",
+        "newStatus": "cancelled",
+        "notes": "Cliente desistiu do 3º pedido adicional"
+      },
+      "created_at": "2026-11-02T20:21:28.883Z",
+      "updated_at": "2026-11-02T20:21:28.883Z"
+    },
+    {
+      "id": "1bdfcc9c-298c-40ae-9ed1-82c3ad199ffb",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "795d466d-b756-4d4f-8218-7930896b9f92",
+      "metadata": {
+        "tableId": "25ac7d9f-e3ab-4f1a-877f-30dcf4d3c0ef",
+        "tableNumber": "T-ADD-668",
+        "sessionId": "b151258c-5d41-4d1e-8707-61a2e05e03d9",
+        "sessionCode": "CMD-888800",
+        "orderNumber": 1009,
+        "orderTotal": 12,
+        "updatedSessionTotal": 73.2,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:21:28.897Z",
+      "updated_at": "2026-11-02T20:21:28.897Z"
+    },
+    {
+      "id": "f9908629-998a-44cd-b3dd-08598686a2fd",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_CREATE",
+      "entity": "restaurant_tables",
+      "entity_id": "7f086900-1878-452e-a8a2-8e9849f810b6",
+      "metadata": {
+        "tableNumber": "T-KDS-01",
+        "name": "Salão Teste 1"
+      },
+      "created_at": "2026-11-02T20:23:28.740Z",
+      "updated_at": "2026-11-02T20:23:28.740Z"
+    },
+    {
+      "id": "6d7d5322-3842-48c8-a52d-b167c1f22f09",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_CREATE",
+      "entity": "restaurant_tables",
+      "entity_id": "b90b3190-1ec8-4069-9985-0d335a472930",
+      "metadata": {
+        "tableNumber": "T-KDS-02",
+        "name": "Salão Teste 2"
+      },
+      "created_at": "2026-11-02T20:23:28.753Z",
+      "updated_at": "2026-11-02T20:23:28.753Z"
+    },
+    {
+      "id": "493906e8-a35b-4b8a-bbb8-d284a00a27d1",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "46b2fc9c-a381-46b0-aad5-00bf7e895d16",
+      "metadata": {
+        "previousStatus": "received",
+        "newStatus": "preparing"
+      },
+      "created_at": "2026-11-02T20:23:28.886Z",
+      "updated_at": "2026-11-02T20:23:28.886Z"
+    },
+    {
+      "id": "67116d70-acdc-4cb1-800e-205478d53660",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "ace7fd6a-6c5c-40a3-8c78-a0ad6f40ffaf",
+      "metadata": {
+        "previousStatus": "received",
+        "newStatus": "delivered"
+      },
+      "created_at": "2026-11-02T20:23:28.924Z",
+      "updated_at": "2026-11-02T20:23:28.924Z"
+    },
+    {
+      "id": "cd6d6939-1492-474d-b98b-1b3bf656fc4a",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_CLOSE",
+      "entity": "restaurant_sessions",
+      "entity_id": "6d472876-2d4a-4613-9e34-454733d3261f",
+      "metadata": {
+        "tableId": "7f086900-1878-452e-a8a2-8e9849f810b6",
+        "totalAmount": 135,
+        "discount": 0,
+        "paidAmount": 135,
+        "pendingAmount": 0,
+        "paymentStatus": "paid",
+        "paymentMethod": "PIX"
+      },
+      "created_at": "2026-11-02T20:23:28.933Z",
+      "updated_at": "2026-11-02T20:23:28.933Z"
+    },
+    {
+      "id": "bf2b0baa-003f-4917-b094-084f9ae2203a",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "5ae85de9-6863-4781-87b1-87748cdaeb90",
+      "metadata": {
+        "previousStatus": "received",
+        "newStatus": "confirmed"
+      },
+      "created_at": "2026-11-02T20:23:28.963Z",
+      "updated_at": "2026-11-02T20:23:28.963Z"
+    },
+    {
+      "id": "77ce4bdc-74ef-47c6-8015-002b2fa2617e",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "5ae85de9-6863-4781-87b1-87748cdaeb90",
+      "metadata": {
+        "previousStatus": "confirmed",
+        "newStatus": "preparing"
+      },
+      "created_at": "2026-11-02T20:23:28.968Z",
+      "updated_at": "2026-11-02T20:23:28.968Z"
+    },
+    {
+      "id": "58fea8a9-dafe-4dcc-8e5a-0be1f468558d",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "5ae85de9-6863-4781-87b1-87748cdaeb90",
+      "metadata": {
+        "previousStatus": "preparing",
+        "newStatus": "ready"
+      },
+      "created_at": "2026-11-02T20:23:28.974Z",
+      "updated_at": "2026-11-02T20:23:28.974Z"
+    },
+    {
+      "id": "478e7078-345b-4f87-b19b-083e605b3abf",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "5ae85de9-6863-4781-87b1-87748cdaeb90",
+      "metadata": {
+        "previousStatus": "ready",
+        "newStatus": "delivered"
+      },
+      "created_at": "2026-11-02T20:23:28.980Z",
+      "updated_at": "2026-11-02T20:23:28.980Z"
+    },
+    {
+      "id": "a5b7714d-6eea-4b98-858b-4f2d135bbbd0",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_CLOSE",
+      "entity": "restaurant_sessions",
+      "entity_id": "0172eae9-dd60-4cb8-9e6b-19ac7f2765d8",
+      "metadata": {
+        "tableId": "7f086900-1878-452e-a8a2-8e9849f810b6",
+        "totalAmount": 135,
+        "discount": 0,
+        "paidAmount": 135,
+        "pendingAmount": 0,
+        "paymentStatus": "paid",
+        "paymentMethod": "Cartão de Crédito"
+      },
+      "created_at": "2026-11-02T20:23:28.987Z",
+      "updated_at": "2026-11-02T20:23:28.987Z"
+    },
+    {
+      "id": "7d86fc5c-d770-4ceb-ab0f-8a7860461762",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_CLOSE",
+      "entity": "restaurant_sessions",
+      "entity_id": "5737c99f-8cca-48f0-8de7-5888f2608de7",
+      "metadata": {
+        "tableId": "7f086900-1878-452e-a8a2-8e9849f810b6",
+        "totalAmount": 90,
+        "discount": 0,
+        "paidAmount": 90,
+        "pendingAmount": 0,
+        "paymentStatus": "paid",
+        "paymentMethod": "PIX"
+      },
+      "created_at": "2026-11-02T20:23:29.049Z",
+      "updated_at": "2026-11-02T20:23:29.049Z"
+    },
+    {
+      "id": "7c7366e3-d5f0-433c-9400-cf02fa60f5b4",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_CLOSE",
+      "entity": "restaurant_sessions",
+      "entity_id": "681010e2-4f8c-45a7-a4b8-999797aa0588",
+      "metadata": {
+        "tableId": "b90b3190-1ec8-4069-9985-0d335a472930",
+        "totalAmount": 45,
+        "discount": 0,
+        "paidAmount": 45,
+        "pendingAmount": 0,
+        "paymentStatus": "paid",
+        "paymentMethod": "Dinheiro"
+      },
+      "created_at": "2026-11-02T20:23:29.056Z",
+      "updated_at": "2026-11-02T20:23:29.057Z"
+    },
+    {
+      "id": "c9260f35-db4a-4598-9662-48a28ea9a150",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_CLOSE",
+      "entity": "restaurant_sessions",
+      "entity_id": "605fdb1c-7215-4d1b-abb8-cc7a8c7e885c",
+      "metadata": {
+        "tableId": "7f086900-1878-452e-a8a2-8e9849f810b6",
+        "totalAmount": 45,
+        "discount": 0,
+        "paidAmount": 45,
+        "pendingAmount": 0,
+        "paymentStatus": "paid",
+        "paymentMethod": "PIX"
+      },
+      "created_at": "2026-11-02T20:23:29.085Z",
+      "updated_at": "2026-11-02T20:23:29.085Z"
+    },
+    {
+      "id": "7a2fbcbe-f21c-4b69-8c06-83b30db86dc5",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "1dcbdf89-7dcf-49a9-873a-396e0ac0cce3",
+      "metadata": {
+        "previousStatus": "received",
+        "newStatus": "preparing"
+      },
+      "created_at": "2026-11-02T20:23:29.142Z",
+      "updated_at": "2026-11-02T20:23:29.142Z"
+    },
+    {
+      "id": "56c92c13-8666-4316-86e2-551c86d84132",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_CLOSE",
+      "entity": "restaurant_sessions",
+      "entity_id": "6856a4b9-1046-474a-8cd7-24d7601bcfc9",
+      "metadata": {
+        "tableId": "b90b3190-1ec8-4069-9985-0d335a472930",
+        "totalAmount": 45,
+        "discount": 0,
+        "paidAmount": 45,
+        "pendingAmount": 0,
+        "paymentStatus": "paid",
+        "paymentMethod": "PIX"
+      },
+      "created_at": "2026-11-02T20:23:29.148Z",
+      "updated_at": "2026-11-02T20:23:29.148Z"
+    },
+    {
+      "id": "5a759428-f35b-4805-890f-391185b32906",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_CLOSE",
+      "entity": "restaurant_sessions",
+      "entity_id": "cab5b000-f788-47d2-b76c-b3ad1d6b853a",
+      "metadata": {
+        "tableId": "7f086900-1878-452e-a8a2-8e9849f810b6",
+        "totalAmount": 90,
+        "discount": 0,
+        "paidAmount": 36,
+        "pendingAmount": 54,
+        "paymentStatus": "partial",
+        "paymentMethod": "PIX"
+      },
+      "created_at": "2026-11-02T20:23:29.178Z",
+      "updated_at": "2026-11-02T20:23:29.178Z"
+    },
+    {
+      "id": "4cfc1c1a-3691-4084-8277-9f9482a1f46a",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_CREATE",
+      "entity": "restaurant_tables",
+      "entity_id": "290e7730-1dc6-450d-87cf-eb0948ec5eef",
+      "metadata": {
+        "tableNumber": "T-ADD-444",
+        "name": "Mesa Teste Garçom 144444"
+      },
+      "created_at": "2026-11-02T20:25:44.462Z",
+      "updated_at": "2026-11-02T20:25:44.462Z"
+    },
+    {
+      "id": "ec988027-3c11-4d41-a068-83af52fc549b",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "306ee001-8ec6-4600-a540-a74c2f32c80a",
+      "metadata": {
+        "previousStatus": "received",
+        "newStatus": "preparing",
+        "notes": "Cozinha iniciou preparo do pedido inicial"
+      },
+      "created_at": "2026-11-02T20:25:44.567Z",
+      "updated_at": "2026-11-02T20:25:44.567Z"
+    },
+    {
+      "id": "20162005-0d9c-4237-bd5a-a38a6860e328",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "44e88932-14e3-416b-95bd-d25ffb63ff47",
+      "metadata": {
+        "tableId": "290e7730-1dc6-450d-87cf-eb0948ec5eef",
+        "tableNumber": "T-ADD-444",
+        "sessionId": "4d4fa646-a6dd-44c5-a9c6-a886a9bc52c1",
+        "sessionCode": "CMD-144543",
+        "orderNumber": 1002,
+        "orderTotal": 12,
+        "updatedSessionTotal": 52,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:25:44.623Z",
+      "updated_at": "2026-11-02T20:25:44.623Z"
+    },
+    {
+      "id": "ef0f2e9c-299b-4faa-abfc-446c6a97011b",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "b2432c5e-9d4e-4776-8edc-442e7ec7521e",
+      "metadata": {
+        "tableId": "290e7730-1dc6-450d-87cf-eb0948ec5eef",
+        "tableNumber": "T-ADD-444",
+        "sessionId": "4d4fa646-a6dd-44c5-a9c6-a886a9bc52c1",
+        "sessionCode": "CMD-144543",
+        "orderNumber": 1003,
+        "orderTotal": 102,
+        "updatedSessionTotal": 154,
+        "itemsCount": 3
+      },
+      "created_at": "2026-11-02T20:25:44.647Z",
+      "updated_at": "2026-11-02T20:25:44.647Z"
+    },
+    {
+      "id": "72f883e8-b141-4f0c-9eae-2b8272d89a3c",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "cdff4bb5-43b4-4f1a-a4e6-d299728a40ca",
+      "metadata": {
+        "tableId": "290e7730-1dc6-450d-87cf-eb0948ec5eef",
+        "tableNumber": "T-ADD-444",
+        "sessionId": "4d4fa646-a6dd-44c5-a9c6-a886a9bc52c1",
+        "sessionCode": "CMD-144543",
+        "orderNumber": 1004,
+        "orderTotal": 12,
+        "updatedSessionTotal": 152,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:25:44.682Z",
+      "updated_at": "2026-11-02T20:25:44.682Z"
+    },
+    {
+      "id": "1d6fa35f-c89e-4ff4-bc5e-6e3bc2188313",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "c67edb45-76ce-418d-af36-d27c3854e8fb",
+      "metadata": {
+        "tableId": "290e7730-1dc6-450d-87cf-eb0948ec5eef",
+        "tableNumber": "T-ADD-444",
+        "sessionId": "4d4fa646-a6dd-44c5-a9c6-a886a9bc52c1",
+        "sessionCode": "CMD-144543",
+        "orderNumber": 1005,
+        "orderTotal": 40,
+        "updatedSessionTotal": 192,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:25:44.755Z",
+      "updated_at": "2026-11-02T20:25:44.755Z"
+    },
+    {
+      "id": "8a704136-fa95-4564-9772-a48ffef4bae5",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_CLOSE",
+      "entity": "restaurant_sessions",
+      "entity_id": "4d4fa646-a6dd-44c5-a9c6-a886a9bc52c1",
+      "metadata": {
+        "tableId": "290e7730-1dc6-450d-87cf-eb0948ec5eef",
+        "totalAmount": 192,
+        "discount": 14,
+        "paidAmount": 192,
+        "pendingAmount": 0,
+        "paymentStatus": "paid",
+        "paymentMethod": "Cartão de Crédito"
+      },
+      "created_at": "2026-11-02T20:25:44.775Z",
+      "updated_at": "2026-11-02T20:25:44.775Z"
+    },
+    {
+      "id": "69e9e4f1-ad02-4bf4-b2bd-b9cc8b4f0186",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "8c28a900-276f-415f-98b0-5c65bb5d2a0f",
+      "metadata": {
+        "tableId": "290e7730-1dc6-450d-87cf-eb0948ec5eef",
+        "tableNumber": "T-ADD-444",
+        "sessionId": "14e383e2-bf39-40e8-892a-3cedb62ef18f",
+        "sessionCode": "CMD-144780",
+        "orderNumber": 1007,
+        "orderTotal": 40,
+        "updatedSessionTotal": 64,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:25:44.852Z",
+      "updated_at": "2026-11-02T20:25:44.852Z"
+    },
+    {
+      "id": "1209b443-3b45-4737-9d15-362314a08c05",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "SESSION_FEE_ADD",
+      "entity": "restaurant_session_fees",
+      "entity_id": "38ee0559-d578-4129-9bbf-0e380b3b903c",
+      "metadata": {
+        "sessionId": "14e383e2-bf39-40e8-892a-3cedb62ef18f",
+        "name": "Taxa de Serviço 10%",
+        "calculatedAmount": 6.4
+      },
+      "created_at": "2026-11-02T20:25:44.874Z",
+      "updated_at": "2026-11-02T20:25:44.874Z"
+    },
+    {
+      "id": "9235864f-ae8f-4e13-9cbd-963f4cf512f5",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "76caee06-a773-404a-b7fd-75821008fef7",
+      "metadata": {
+        "tableId": "290e7730-1dc6-450d-87cf-eb0948ec5eef",
+        "tableNumber": "T-ADD-444",
+        "sessionId": "14e383e2-bf39-40e8-892a-3cedb62ef18f",
+        "sessionCode": "CMD-144780",
+        "orderNumber": 1008,
+        "orderTotal": 64,
+        "updatedSessionTotal": 130.4,
+        "itemsCount": 3
+      },
+      "created_at": "2026-11-02T20:25:44.950Z",
+      "updated_at": "2026-11-02T20:25:44.950Z"
+    },
+    {
+      "id": "2195f33f-eae4-46ed-86bd-54206b8f0cb4",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "RESTAURANT_ORDER_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "76caee06-a773-404a-b7fd-75821008fef7",
+      "metadata": {
+        "diff": {
+          "before": {
+            "id": "76caee06-a773-404a-b7fd-75821008fef7",
+            "tenantId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "tableId": "290e7730-1dc6-450d-87cf-eb0948ec5eef",
+            "sessionId": "14e383e2-bf39-40e8-892a-3cedb62ef18f",
+            "orderNumber": 1008,
+            "customerName": null,
+            "subtotal": 64,
+            "total": 64,
+            "status": "received",
+            "notes": null,
+            "idempotencyKey": "idem-test-14-add-144444",
+            "items": [
+              {
+                "id": "99d69b47-78af-46bb-9395-3f46bea623ae",
+                "orderId": "76caee06-a773-404a-b7fd-75821008fef7",
+                "tenantId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "productId": "df59a2e3-e5e5-4f78-b6d7-717d039f706b",
+                "variantId": null,
+                "productName": "Suco Natural Teste 144444",
+                "variantName": null,
+                "unitPrice": 12,
+                "quantity": 2,
+                "subtotal": 24,
+                "notes": null,
+                "createdAt": "2026-11-02T20:25:44.931Z"
+              },
+              {
+                "id": "776f26c7-f33f-42ff-80d0-e12b262dd44b",
+                "orderId": "76caee06-a773-404a-b7fd-75821008fef7",
+                "tenantId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "productId": "0b66c039-0cd6-4778-8e35-774335878b03",
+                "variantId": null,
+                "productName": "Filé Parmegiana Teste 144444",
+                "variantName": null,
+                "unitPrice": 40,
+                "quantity": 1,
+                "subtotal": 40,
+                "notes": null,
+                "createdAt": "2026-11-02T20:25:44.931Z"
+              }
+            ],
+            "history": [
+              {
+                "id": "04319d60-1514-462f-b3a1-fea7a401e935",
+                "orderId": "76caee06-a773-404a-b7fd-75821008fef7",
+                "tenantId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "status": "received",
+                "notes": "Pedido adicional lançado na comanda aberta por Garçom Teste A.",
+                "changedBy": "Garçom/Atendente (Garçom Teste A)",
+                "createdAt": "2026-11-02T20:25:44.931Z"
+              }
+            ],
+            "tableNumber": "T-ADD-444",
+            "tableName": "Mesa Teste Garçom 144444",
+            "tableStatus": "occupied",
+            "sessionCode": "CMD-144780",
+            "sessionStatus": "open",
+            "sessionOpenedAt": "2026-11-02T20:25:44.780Z",
+            "sessionClosedAt": null,
+            "sessionClosingRequestedAt": null,
+            "sessionTotalAmount": 130.4,
+            "sessionPaymentStatus": "pending",
+            "sessionPaymentMethod": null,
+            "isCurrentTableSession": true,
+            "sessionOrderSequence": 3,
+            "isAdditionalOrder": true,
+            "launchedBy": "Garçom/Atendente (Garçom Teste A)",
+            "createdAt": "2026-11-02T20:25:44.931Z",
+            "updatedAt": "2026-11-02T20:25:44.931Z"
+          },
+          "after": {
+            "id": "76caee06-a773-404a-b7fd-75821008fef7",
+            "tenantId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "tableId": "290e7730-1dc6-450d-87cf-eb0948ec5eef",
+            "sessionId": "14e383e2-bf39-40e8-892a-3cedb62ef18f",
+            "orderNumber": 1008,
+            "customerName": null,
+            "subtotal": 24,
+            "total": 24,
+            "status": "received",
+            "notes": null,
+            "idempotencyKey": "idem-test-14-add-144444",
+            "items": [
+              {
+                "id": "99d69b47-78af-46bb-9395-3f46bea623ae",
+                "orderId": "76caee06-a773-404a-b7fd-75821008fef7",
+                "tenantId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "productId": "df59a2e3-e5e5-4f78-b6d7-717d039f706b",
+                "variantId": null,
+                "productName": "Suco Natural Teste 144444",
+                "variantName": null,
+                "unitPrice": 12,
+                "quantity": 2,
+                "subtotal": 24,
+                "notes": null,
+                "createdAt": "2026-11-02T20:25:44.931Z"
+              },
+              {
+                "id": "776f26c7-f33f-42ff-80d0-e12b262dd44b",
+                "orderId": "76caee06-a773-404a-b7fd-75821008fef7",
+                "tenantId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "productId": "0b66c039-0cd6-4778-8e35-774335878b03",
+                "variantId": null,
+                "productName": "Filé Parmegiana Teste 144444",
+                "variantName": null,
+                "unitPrice": 40,
+                "quantity": 1,
+                "subtotal": 40,
+                "notes": null,
+                "createdAt": "2026-11-02T20:25:44.931Z"
+              }
+            ],
+            "history": [
+              {
+                "id": "04319d60-1514-462f-b3a1-fea7a401e935",
+                "orderId": "76caee06-a773-404a-b7fd-75821008fef7",
+                "tenantId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "status": "received",
+                "notes": "Pedido adicional lançado na comanda aberta por Garçom Teste A.",
+                "changedBy": "Garçom/Atendente (Garçom Teste A)",
+                "createdAt": "2026-11-02T20:25:44.931Z"
+              }
+            ],
+            "tableNumber": "T-ADD-444",
+            "tableName": "Mesa Teste Garçom 144444",
+            "tableStatus": "occupied",
+            "sessionCode": "CMD-144780",
+            "sessionStatus": "open",
+            "sessionOpenedAt": "2026-11-02T20:25:44.780Z",
+            "sessionClosedAt": null,
+            "sessionClosingRequestedAt": null,
+            "sessionTotalAmount": 130.4,
+            "sessionPaymentStatus": "pending",
+            "sessionPaymentMethod": null,
+            "isCurrentTableSession": true,
+            "sessionOrderSequence": 3,
+            "isAdditionalOrder": true,
+            "launchedBy": "Garçom/Atendente (Garçom Teste A)",
+            "createdAt": "2026-11-02T20:25:44.931Z",
+            "updatedAt": "2026-11-02T20:25:44.931Z",
+            "updated_at": "2026-11-02T20:25:44.954Z"
+          }
+        }
+      },
+      "created_at": "2026-11-02T20:25:44.974Z",
+      "updated_at": "2026-11-02T20:25:44.974Z"
+    },
+    {
+      "id": "e673f725-6490-4d88-bdab-5a733451f820",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "76caee06-a773-404a-b7fd-75821008fef7",
+      "metadata": {
+        "previousStatus": "received",
+        "newStatus": "cancelled",
+        "notes": "Cliente desistiu do 3º pedido adicional"
+      },
+      "created_at": "2026-11-02T20:25:44.995Z",
+      "updated_at": "2026-11-02T20:25:44.995Z"
+    },
+    {
+      "id": "c3c4a419-cec2-4f86-9f51-a3b5af0d9bbc",
+      "actor_user_id": "00000000-0000-4000-8000-0000000000a1",
+      "actor_user_name": "Garçom Teste A",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_ADD_ORDER",
+      "entity": "restaurant_orders",
+      "entity_id": "13ed88ae-96ad-45fb-8408-e8434b7f419d",
+      "metadata": {
+        "tableId": "290e7730-1dc6-450d-87cf-eb0948ec5eef",
+        "tableNumber": "T-ADD-444",
+        "sessionId": "14e383e2-bf39-40e8-892a-3cedb62ef18f",
+        "sessionCode": "CMD-144780",
+        "orderNumber": 1009,
+        "orderTotal": 12,
+        "updatedSessionTotal": 73.2,
+        "itemsCount": 1
+      },
+      "created_at": "2026-11-02T20:25:45.048Z",
+      "updated_at": "2026-11-02T20:25:45.048Z"
+    },
+    {
+      "id": "15782e99-6abc-49bb-bf3a-a5a449279b61",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_CREATE",
+      "entity": "restaurant_tables",
+      "entity_id": "f3ed23bd-e6c2-4a7d-a3ca-f3ebe93848c1",
+      "metadata": {
+        "tableNumber": "T-KDS-01",
+        "name": "Salão Teste 1"
+      },
+      "created_at": "2026-11-02T20:25:49.628Z",
+      "updated_at": "2026-11-02T20:25:49.628Z"
+    },
+    {
+      "id": "e6ca92e3-9ccf-44cd-a5c4-ce5f76631e16",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_CREATE",
+      "entity": "restaurant_tables",
+      "entity_id": "9a129817-45c2-45c3-8ff2-797f4490e8b6",
+      "metadata": {
+        "tableNumber": "T-KDS-02",
+        "name": "Salão Teste 2"
+      },
+      "created_at": "2026-11-02T20:25:49.636Z",
+      "updated_at": "2026-11-02T20:25:49.636Z"
+    },
+    {
+      "id": "6abbce2c-1082-40f8-9784-876b740e65cd",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "62e7b77a-bdc6-4a8d-8273-cfb44ee914e3",
+      "metadata": {
+        "previousStatus": "received",
+        "newStatus": "preparing"
+      },
+      "created_at": "2026-11-02T20:25:49.787Z",
+      "updated_at": "2026-11-02T20:25:49.787Z"
+    },
+    {
+      "id": "455936f1-65f0-4669-8d45-2203be4ea009",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "96fa8de7-cbb8-41b8-b310-142fbbcf56f0",
+      "metadata": {
+        "previousStatus": "received",
+        "newStatus": "delivered"
+      },
+      "created_at": "2026-11-02T20:25:49.831Z",
+      "updated_at": "2026-11-02T20:25:49.831Z"
+    },
+    {
+      "id": "255ce450-838c-49df-b845-49042d3ad2b7",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_CLOSE",
+      "entity": "restaurant_sessions",
+      "entity_id": "74076819-7cfa-44b6-a903-6637dcf04430",
+      "metadata": {
+        "tableId": "f3ed23bd-e6c2-4a7d-a3ca-f3ebe93848c1",
+        "totalAmount": 135,
+        "discount": 0,
+        "paidAmount": 135,
+        "pendingAmount": 0,
+        "paymentStatus": "paid",
+        "paymentMethod": "PIX"
+      },
+      "created_at": "2026-11-02T20:25:49.850Z",
+      "updated_at": "2026-11-02T20:25:49.850Z"
+    },
+    {
+      "id": "1cb03df2-6585-48cc-9a05-491b6bcfde86",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "b371b284-9c5d-4948-8f74-e5e2500340ae",
+      "metadata": {
+        "previousStatus": "received",
+        "newStatus": "confirmed"
+      },
+      "created_at": "2026-11-02T20:25:49.941Z",
+      "updated_at": "2026-11-02T20:25:49.941Z"
+    },
+    {
+      "id": "d9433c91-956d-4e5f-8b92-2874be3dae2d",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "b371b284-9c5d-4948-8f74-e5e2500340ae",
+      "metadata": {
+        "previousStatus": "confirmed",
+        "newStatus": "preparing"
+      },
+      "created_at": "2026-11-02T20:25:49.953Z",
+      "updated_at": "2026-11-02T20:25:49.953Z"
+    },
+    {
+      "id": "8166753a-18b8-470a-a152-382e71078829",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "b371b284-9c5d-4948-8f74-e5e2500340ae",
+      "metadata": {
+        "previousStatus": "preparing",
+        "newStatus": "ready"
+      },
+      "created_at": "2026-11-02T20:25:49.963Z",
+      "updated_at": "2026-11-02T20:25:49.963Z"
+    },
+    {
+      "id": "459be0d6-a24c-4503-8856-3ff9857d6a40",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "b371b284-9c5d-4948-8f74-e5e2500340ae",
+      "metadata": {
+        "previousStatus": "ready",
+        "newStatus": "delivered"
+      },
+      "created_at": "2026-11-02T20:25:49.972Z",
+      "updated_at": "2026-11-02T20:25:49.972Z"
+    },
+    {
+      "id": "6971fc4b-56ed-4996-b1f9-7873967affa2",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_CLOSE",
+      "entity": "restaurant_sessions",
+      "entity_id": "81d915ee-aa21-4f09-aa1c-0c56e702f44d",
+      "metadata": {
+        "tableId": "f3ed23bd-e6c2-4a7d-a3ca-f3ebe93848c1",
+        "totalAmount": 135,
+        "discount": 0,
+        "paidAmount": 135,
+        "pendingAmount": 0,
+        "paymentStatus": "paid",
+        "paymentMethod": "Cartão de Crédito"
+      },
+      "created_at": "2026-11-02T20:25:49.981Z",
+      "updated_at": "2026-11-02T20:25:49.981Z"
+    },
+    {
+      "id": "e003f24e-c740-446f-b2b1-cd51cfdd9414",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_CLOSE",
+      "entity": "restaurant_sessions",
+      "entity_id": "4f4e831e-65eb-44c0-9769-e1c22f6f3d01",
+      "metadata": {
+        "tableId": "f3ed23bd-e6c2-4a7d-a3ca-f3ebe93848c1",
+        "totalAmount": 90,
+        "discount": 0,
+        "paidAmount": 90,
+        "pendingAmount": 0,
+        "paymentStatus": "paid",
+        "paymentMethod": "PIX"
+      },
+      "created_at": "2026-11-02T20:25:50.050Z",
+      "updated_at": "2026-11-02T20:25:50.050Z"
+    },
+    {
+      "id": "b92b8fbe-b6f3-4fa6-b3f1-e3c9b5c9ef8e",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_CLOSE",
+      "entity": "restaurant_sessions",
+      "entity_id": "f80639cd-8db9-401c-89ae-0809f53356bf",
+      "metadata": {
+        "tableId": "9a129817-45c2-45c3-8ff2-797f4490e8b6",
+        "totalAmount": 45,
+        "discount": 0,
+        "paidAmount": 45,
+        "pendingAmount": 0,
+        "paymentStatus": "paid",
+        "paymentMethod": "Dinheiro"
+      },
+      "created_at": "2026-11-02T20:25:50.061Z",
+      "updated_at": "2026-11-02T20:25:50.061Z"
+    },
+    {
+      "id": "766b971e-61d1-4832-943e-36324a8e15bf",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_CLOSE",
+      "entity": "restaurant_sessions",
+      "entity_id": "9a9f712d-ac0d-4602-8489-841307d4ee35",
+      "metadata": {
+        "tableId": "f3ed23bd-e6c2-4a7d-a3ca-f3ebe93848c1",
+        "totalAmount": 45,
+        "discount": 0,
+        "paidAmount": 45,
+        "pendingAmount": 0,
+        "paymentStatus": "paid",
+        "paymentMethod": "PIX"
+      },
+      "created_at": "2026-11-02T20:25:50.135Z",
+      "updated_at": "2026-11-02T20:25:50.135Z"
+    },
+    {
+      "id": "1a9a2c7d-2a77-46c7-9056-91abd75696cb",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "ORDER_STATUS_UPDATE",
+      "entity": "restaurant_orders",
+      "entity_id": "d8b45fde-d702-4fa7-9de5-9f1397f13e41",
+      "metadata": {
+        "previousStatus": "received",
+        "newStatus": "preparing"
+      },
+      "created_at": "2026-11-02T20:25:50.167Z",
+      "updated_at": "2026-11-02T20:25:50.167Z"
+    },
+    {
+      "id": "d801ae69-e369-452d-9dd8-b99a280960c3",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_CLOSE",
+      "entity": "restaurant_sessions",
+      "entity_id": "8f82622d-38c3-4bca-b1c9-b2f0daa4a82f",
+      "metadata": {
+        "tableId": "9a129817-45c2-45c3-8ff2-797f4490e8b6",
+        "totalAmount": 45,
+        "discount": 0,
+        "paidAmount": 45,
+        "pendingAmount": 0,
+        "paymentStatus": "paid",
+        "paymentMethod": "PIX"
+      },
+      "created_at": "2026-11-02T20:25:50.178Z",
+      "updated_at": "2026-11-02T20:25:50.178Z"
+    },
+    {
+      "id": "8014927e-73f6-41b0-a42a-8310146455b6",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_CLOSE",
+      "entity": "restaurant_sessions",
+      "entity_id": "0801e874-01bb-478c-ad51-06cc1902a555",
+      "metadata": {
+        "tableId": "f3ed23bd-e6c2-4a7d-a3ca-f3ebe93848c1",
+        "totalAmount": 90,
+        "discount": 0,
+        "paidAmount": 36,
+        "pendingAmount": 54,
+        "paymentStatus": "partial",
+        "paymentMethod": "PIX"
+      },
+      "created_at": "2026-11-02T20:25:50.265Z",
+      "updated_at": "2026-11-02T20:25:50.265Z"
+    },
+    {
+      "id": "25080353-1aa8-45b7-a55d-4a5c527e699d",
+      "actor_user_id": "00000000-0000-4000-8000-000000000001",
+      "actor_user_name": "Gerente Teste KDS",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "action": "TABLE_SESSION_CLOSE",
+      "entity": "restaurant_sessions",
+      "entity_id": "074c7257-1082-4faf-916d-b112e2726267",
+      "metadata": {
+        "tableId": "f3ed23bd-e6c2-4a7d-a3ca-f3ebe93848c1",
+        "totalAmount": 85,
+        "discount": 5,
+        "paidAmount": 85,
+        "pendingAmount": 0,
+        "paymentStatus": "paid",
+        "paymentMethod": "Cartão de Crédito"
+      },
+      "created_at": "2026-11-02T20:25:50.350Z",
+      "updated_at": "2026-11-02T20:25:50.350Z"
+    }
+  ],
   "auth_users": [
     {
       "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
@@ -521,7 +2800,1498 @@
       "status": "published",
       "published_at": "2026-10-13T08:37:44.402Z",
       "created_at": "2026-10-13T08:37:44.402Z",
-      "updated_at": "2026-10-13T08:37:44.402Z"
+      "updated_at": "2026-11-02T20:25:50.355Z",
+      "draft_data": {
+        "financialLedger": {
+          "orders": {
+            "32c92a1f-31f3-4171-8ab5-0e7d470c5f5a": {
+              "originChannel": "waiter",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "be9314e6-ac10-4d5a-a9f9-5ca1354c1d5d",
+                  "timestamp": "2026-11-02T20:03:01.282Z",
+                  "type": "created",
+                  "description": "Pedido adicional #1002 lançado na Mesa T-ADD-245 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "1deac66d-0a3c-4ab5-8de6-4ed417e65589": {
+              "originChannel": "waiter",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "11a6e637-633e-40cf-b268-6926ac3be2e6",
+                  "timestamp": "2026-11-02T20:03:01.287Z",
+                  "type": "created",
+                  "description": "Pedido adicional #1003 lançado na Mesa T-ADD-245 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "b3cd3ce2-6ef7-4940-b3ea-2c028c05776d": {
+              "originChannel": "waiter",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "f42c9f02-4789-4b6b-8204-442858eb21ca",
+                  "timestamp": "2026-11-02T20:03:01.296Z",
+                  "type": "created",
+                  "description": "Pedido adicional #1004 lançado na Mesa T-ADD-245 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "9ae20017-6876-405d-b1a0-135d7b4be7fe": {
+              "originChannel": "waiter",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "dfe4ae2d-6b16-4d75-972d-217ad5b2c847",
+                  "timestamp": "2026-11-02T20:03:38.022Z",
+                  "type": "created",
+                  "description": "Pedido adicional #1002 lançado na Mesa T-ADD-969 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "e0de0d6e-a152-4c2f-85e7-608879cc5fef": {
+              "originChannel": "waiter",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "8f325a49-9812-47d3-a501-e31f34030dfe",
+                  "timestamp": "2026-11-02T20:03:38.032Z",
+                  "type": "created",
+                  "description": "Pedido adicional #1003 lançado na Mesa T-ADD-969 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "1a3581f0-fa13-49d3-9b18-8d7138e20cda": {
+              "originChannel": "waiter",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "04dce7a7-ae07-4396-9eee-6695d1c8360c",
+                  "timestamp": "2026-11-02T20:03:38.047Z",
+                  "type": "created",
+                  "description": "Pedido adicional #1004 lançado na Mesa T-ADD-969 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "accd45d8-6644-4e13-9277-05e1cc5524fa": {
+              "originChannel": "waiter",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "97544785-cd9f-47bb-b437-5f0efa521314",
+                  "timestamp": "2026-11-02T20:03:38.059Z",
+                  "type": "created",
+                  "description": "Pedido adicional #1005 lançado na Mesa T-ADD-969 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "95e68816-2480-4c6d-8fd0-b63efcadbb26": {
+              "originChannel": "waiter",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "3448dc21-ac2b-4ec0-95d7-54c50d4ce95b",
+                  "timestamp": "2026-11-02T20:04:20.671Z",
+                  "type": "created",
+                  "description": "Pedido adicional #1002 lançado na Mesa T-ADD-630 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "2fc92297-cdfa-4995-b2f1-1fd554b18a16": {
+              "originChannel": "waiter",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "3b3b9689-7b24-4c9c-aa45-574850a8cfc2",
+                  "timestamp": "2026-11-02T20:04:20.678Z",
+                  "type": "created",
+                  "description": "Pedido adicional #1003 lançado na Mesa T-ADD-630 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "72f62169-13d3-44a0-bc29-a5d15076de0c": {
+              "originChannel": "waiter",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "292ddcef-12fe-4fbb-87c8-faa0e12470e3",
+                  "timestamp": "2026-11-02T20:04:20.688Z",
+                  "type": "created",
+                  "description": "Pedido adicional #1004 lançado na Mesa T-ADD-630 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "9bf81101-db87-4f8a-a493-a1a59dc408cf": {
+              "originChannel": "waiter",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "e67867c5-8a10-4096-9c03-c9afdaa4e69a",
+                  "timestamp": "2026-11-02T20:04:20.700Z",
+                  "type": "created",
+                  "description": "Pedido adicional #1005 lançado na Mesa T-ADD-630 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "838de272-5748-41de-a838-d9f1ea161c10": {
+              "originChannel": "waiter",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "cb34577e-4b00-4a69-83c1-823b2d933579",
+                  "timestamp": "2026-11-02T20:05:24.327Z",
+                  "type": "created",
+                  "description": "Pedido adicional #1002 lançado na Mesa T-ADD-267 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "0626ac16-f35c-4d2b-8a1e-a285fe4dd9cd": {
+              "originChannel": "waiter",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "d181dd9c-83e6-40a9-aceb-3e7b74a092f6",
+                  "timestamp": "2026-11-02T20:05:24.335Z",
+                  "type": "created",
+                  "description": "Pedido adicional #1003 lançado na Mesa T-ADD-267 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "fd761187-b03e-4cda-a738-8a32a13fb5ba": {
+              "originChannel": "waiter",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "95176549-0237-4328-a6d2-2562c56a7b9e",
+                  "timestamp": "2026-11-02T20:05:24.349Z",
+                  "type": "created",
+                  "description": "Pedido adicional #1004 lançado na Mesa T-ADD-267 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "f348496a-f59a-4aa4-9807-9a06710dfc0c": {
+              "originChannel": "waiter",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "06ae61e8-f96a-4329-b579-b37e2022f8d7",
+                  "timestamp": "2026-11-02T20:05:24.362Z",
+                  "type": "created",
+                  "description": "Pedido adicional #1005 lançado na Mesa T-ADD-267 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "4a5790ad-2d41-4dfc-81f5-bba5fb825481": {
+              "originChannel": "waiter",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "8fee45c2-e3c8-44f8-a53b-e18d97a706fc",
+                  "timestamp": "2026-11-02T20:06:18.759Z",
+                  "type": "created",
+                  "description": "Pedido adicional #1002 lançado na Mesa T-ADD-707 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "3183cfe4-e5fb-4db0-81d3-3a943afe1081": {
+              "originChannel": "waiter",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "19e724f9-6a38-409c-91fa-5a7487cf8439",
+                  "timestamp": "2026-11-02T20:06:18.765Z",
+                  "type": "created",
+                  "description": "Pedido adicional #1003 lançado na Mesa T-ADD-707 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "25d6798e-4fad-4cb8-8ced-ce3afdadfea1": {
+              "originChannel": "waiter",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "7fa3f108-8f40-43e4-9997-ef0ca0e0b7ff",
+                  "timestamp": "2026-11-02T20:06:18.778Z",
+                  "type": "created",
+                  "description": "Pedido adicional #1004 lançado na Mesa T-ADD-707 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "665faa27-ecbb-4a17-9ade-6700fcd0c803": {
+              "originChannel": "waiter",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "3dcb4724-039e-44de-8fc2-c49735c13c6a",
+                  "timestamp": "2026-11-02T20:06:18.790Z",
+                  "type": "created",
+                  "description": "Pedido adicional #1005 lançado na Mesa T-ADD-707 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "6dd942a0-04ef-48c9-931d-7217079519f8": {
+              "originChannel": "waiter",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "387a03cf-47b9-451c-8378-386e3d17b2fe",
+                  "timestamp": "2026-11-02T20:06:47.040Z",
+                  "type": "created",
+                  "description": "Pedido adicional #1002 lançado na Mesa T-ADD-977 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "2c4a82d8-7382-47e5-ad60-e59be61ec3f4": {
+              "originChannel": "waiter",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "34b0f84c-49c7-4403-8767-418c7c02cc40",
+                  "timestamp": "2026-11-02T20:06:47.052Z",
+                  "type": "created",
+                  "description": "Pedido adicional #1003 lançado na Mesa T-ADD-977 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "cc84f85a-d46f-4af1-92f6-62386ac96e9b": {
+              "originChannel": "waiter",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "c40b46fd-5821-476d-80cd-c34edceaa4c5",
+                  "timestamp": "2026-11-02T20:06:47.073Z",
+                  "type": "created",
+                  "description": "Pedido adicional #1004 lançado na Mesa T-ADD-977 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "fefb0ccf-271f-461b-ba76-020dd796290b": {
+              "originChannel": "waiter",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "03315fb8-e410-4413-a841-78d951c60e4b",
+                  "timestamp": "2026-11-02T20:06:47.088Z",
+                  "type": "created",
+                  "description": "Pedido adicional #1005 lançado na Mesa T-ADD-977 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "d1cc67f8-89fd-4418-9919-fa49f4166c42": {
+              "originChannel": "waiter",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "f9f69c31-d9de-467e-8d4d-9593078d2309",
+                  "timestamp": "2026-11-02T20:06:47.126Z",
+                  "type": "created",
+                  "description": "Pedido adicional #1007 lançado na Mesa T-ADD-977 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "6847eace-dd5f-4745-a0d2-761f9b505f4d": {
+              "originChannel": "table",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "ef0ffb4e-ce5e-4ce4-aa1b-14db50b6ada4",
+                  "timestamp": "2026-11-02T20:08:32.147Z",
+                  "type": "creation",
+                  "description": "Pedido adicional #1002 lançado na Mesa T-ADD-037 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "0836b419-fc47-443a-8dbc-827ef59fcf42": {
+              "originChannel": "table",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "14679445-6236-4037-9be3-16b09c42a490",
+                  "timestamp": "2026-11-02T20:08:32.161Z",
+                  "type": "creation",
+                  "description": "Pedido adicional #1003 lançado na Mesa T-ADD-037 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "b0b3e316-a863-4b59-959f-8f405bf00cc1": {
+              "originChannel": "table",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "73969510-4e42-4fd3-ad3d-716a983747b2",
+                  "timestamp": "2026-11-02T20:08:32.180Z",
+                  "type": "creation",
+                  "description": "Pedido adicional #1004 lançado na Mesa T-ADD-037 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "45dabd48-7bdf-416f-b609-e6aed1d97c46": {
+              "originChannel": "table",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "c5331d57-58c6-4343-ab32-4b61274aae69",
+                  "timestamp": "2026-11-02T20:08:32.234Z",
+                  "type": "creation",
+                  "description": "Pedido adicional #1005 lançado na Mesa T-ADD-037 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "a27ac206-47ca-423d-ad04-5ef63958bd17": {
+              "originChannel": "table",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "ebcb09f7-e89e-4a95-b8f9-35c153bbe974",
+                  "timestamp": "2026-11-02T20:08:32.269Z",
+                  "type": "creation",
+                  "description": "Pedido adicional #1007 lançado na Mesa T-ADD-037 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "3607a575-9254-4faa-a570-a05182e7558a": {
+              "originChannel": "table",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "cdb943c3-1991-4713-90b3-8cebe859ad7d",
+                  "timestamp": "2026-11-02T20:21:28.724Z",
+                  "type": "creation",
+                  "description": "Pedido adicional #1002 lançado na Mesa T-ADD-668 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "fde239fc-e95e-4afc-931e-80a537e18e9a": {
+              "originChannel": "table",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "2be8ba4b-128c-4be4-a59f-12e94a08f81e",
+                  "timestamp": "2026-11-02T20:21:28.736Z",
+                  "type": "creation",
+                  "description": "Pedido adicional #1003 lançado na Mesa T-ADD-668 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "67efb3db-4b6b-42f2-8c56-bc1243c03097": {
+              "originChannel": "table",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "7c1d47de-a99a-4712-bd88-c65939ff0f3f",
+                  "timestamp": "2026-11-02T20:21:28.757Z",
+                  "type": "creation",
+                  "description": "Pedido adicional #1004 lançado na Mesa T-ADD-668 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "f579eec7-fb0a-4b19-9217-af9def5b55a5": {
+              "originChannel": "table",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "0fa3127c-e8fe-40b3-81e2-95abd164060b",
+                  "timestamp": "2026-11-02T20:21:28.773Z",
+                  "type": "creation",
+                  "description": "Pedido adicional #1005 lançado na Mesa T-ADD-668 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "2b006346-0ee5-4e60-bf47-aa8118bb1b75": {
+              "originChannel": "table",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "a1bd2b46-d383-469f-9fc7-716898fe1009",
+                  "timestamp": "2026-11-02T20:21:28.814Z",
+                  "type": "creation",
+                  "description": "Pedido adicional #1007 lançado na Mesa T-ADD-668 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "26bf4cfc-e344-4c82-99d1-17e589dc3371": {
+              "originChannel": "table",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "68230821-99ea-4a9b-bcb9-907ee3efc83c",
+                  "timestamp": "2026-11-02T20:21:28.845Z",
+                  "type": "creation",
+                  "description": "Pedido adicional #1008 lançado na Mesa T-ADD-668 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "795d466d-b756-4d4f-8218-7930896b9f92": {
+              "originChannel": "table",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "99a24f4f-c010-45d2-9458-432b5d26aff9",
+                  "timestamp": "2026-11-02T20:21:28.886Z",
+                  "type": "creation",
+                  "description": "Pedido adicional #1009 lançado na Mesa T-ADD-668 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "44e88932-14e3-416b-95bd-d25ffb63ff47": {
+              "originChannel": "table",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "d39acade-05f6-40f3-ab91-f88b83cfee39",
+                  "timestamp": "2026-11-02T20:25:44.572Z",
+                  "type": "creation",
+                  "description": "Pedido adicional #1002 lançado na Mesa T-ADD-444 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "b2432c5e-9d4e-4776-8edc-442e7ec7521e": {
+              "originChannel": "table",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "77c5edb7-e779-40e0-b3a8-1a7f772f86d3",
+                  "timestamp": "2026-11-02T20:25:44.631Z",
+                  "type": "creation",
+                  "description": "Pedido adicional #1003 lançado na Mesa T-ADD-444 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "cdff4bb5-43b4-4f1a-a4e6-d299728a40ca": {
+              "originChannel": "table",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "33489d86-e903-4b1d-8ef7-88d9afc4172b",
+                  "timestamp": "2026-11-02T20:25:44.666Z",
+                  "type": "creation",
+                  "description": "Pedido adicional #1004 lançado na Mesa T-ADD-444 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "c67edb45-76ce-418d-af36-d27c3854e8fb": {
+              "originChannel": "table",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "1247822c-8372-4995-bf33-d4dcdc1b4224",
+                  "timestamp": "2026-11-02T20:25:44.728Z",
+                  "type": "creation",
+                  "description": "Pedido adicional #1005 lançado na Mesa T-ADD-444 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "8c28a900-276f-415f-98b0-5c65bb5d2a0f": {
+              "originChannel": "table",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "c570fed7-d45a-4a38-ac67-cf6eb174c398",
+                  "timestamp": "2026-11-02T20:25:44.834Z",
+                  "type": "creation",
+                  "description": "Pedido adicional #1007 lançado na Mesa T-ADD-444 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "76caee06-a773-404a-b7fd-75821008fef7": {
+              "originChannel": "table",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "437b541e-287c-4bbf-9c71-edcc11676a45",
+                  "timestamp": "2026-11-02T20:25:44.931Z",
+                  "type": "creation",
+                  "description": "Pedido adicional #1008 lançado na Mesa T-ADD-444 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            },
+            "13ed88ae-96ad-45fb-8408-e8434b7f419d": {
+              "originChannel": "table",
+              "discount": 0,
+              "paymentStatus": "pending",
+              "payments": [],
+              "history": [
+                {
+                  "id": "06fe7be7-710f-47c2-86d4-e2fd18536b49",
+                  "timestamp": "2026-11-02T20:25:45.026Z",
+                  "type": "creation",
+                  "description": "Pedido adicional #1009 lançado na Mesa T-ADD-444 por Garçom Teste A",
+                  "actorName": "Garçom Teste A"
+                }
+              ]
+            }
+          },
+          "sessions": {
+            "260384d4-b493-4434-abee-62b5e88527dc": {
+              "discount": 14,
+              "paymentStatus": "partial",
+              "paymentMethod": "PIX",
+              "payments": [
+                {
+                  "id": "bf3b770a-7d7c-407b-9076-bfa633cd53dc",
+                  "amount": 50,
+                  "paymentMethod": "PIX",
+                  "paidAt": "2026-11-02T20:03:01.293Z",
+                  "notes": "Adiantamento parcial cliente 1",
+                  "recordedBy": "Garçom Teste A"
+                }
+              ],
+              "history": [
+                {
+                  "id": "dfb1530a-60f7-4a15-9d2c-7a54a0ea6f77",
+                  "timestamp": "2026-11-02T20:03:01.292Z",
+                  "type": "discount",
+                  "description": "Desconto de R$ 14,00 aplicado na comanda",
+                  "actorName": "Garçom Teste A"
+                },
+                {
+                  "id": "8efbbcf7-9714-4f11-89e4-593e9423a76c",
+                  "timestamp": "2026-11-02T20:03:01.293Z",
+                  "type": "payment",
+                  "description": "Pagamento parcial/dividido recebido: R$ 50,00 (PIX)",
+                  "actorName": "Garçom Teste A"
+                }
+              ],
+              "paidAt": "2026-11-02T20:03:01.293Z"
+            },
+            "7166329f-a3e0-4c7e-b789-9636533738c3": {
+              "discount": 14,
+              "paymentStatus": "partial",
+              "paymentMethod": "PIX",
+              "payments": [
+                {
+                  "id": "661e96c8-f0eb-4929-b85b-9ae3dabc9ee0",
+                  "amount": 50,
+                  "paymentMethod": "PIX",
+                  "paidAt": "2026-11-02T20:03:38.043Z",
+                  "notes": "Adiantamento parcial cliente 1",
+                  "recordedBy": "Garçom Teste A"
+                }
+              ],
+              "history": [
+                {
+                  "id": "d3ee6906-be06-434e-85f0-5cc538fc38a5",
+                  "timestamp": "2026-11-02T20:03:38.041Z",
+                  "type": "discount",
+                  "description": "Desconto de R$ 14,00 aplicado na comanda",
+                  "actorName": "Garçom Teste A"
+                },
+                {
+                  "id": "48d831a2-1718-4011-b28c-c778ac8c093e",
+                  "timestamp": "2026-11-02T20:03:38.043Z",
+                  "type": "payment",
+                  "description": "Pagamento parcial/dividido recebido: R$ 50,00 (PIX)",
+                  "actorName": "Garçom Teste A"
+                }
+              ],
+              "paidAt": "2026-11-02T20:03:38.043Z"
+            },
+            "644a1310-7c83-4033-a576-ad8f1e90a474": {
+              "discount": 14,
+              "paymentStatus": "partial",
+              "paymentMethod": "PIX",
+              "payments": [
+                {
+                  "id": "29fb4940-448f-4337-8a34-0a0c2f5bdb45",
+                  "amount": 50,
+                  "paymentMethod": "PIX",
+                  "paidAt": "2026-11-02T20:04:20.685Z",
+                  "notes": "Adiantamento parcial cliente 1",
+                  "recordedBy": "Garçom Teste A"
+                }
+              ],
+              "history": [
+                {
+                  "id": "fa5f436c-f836-42f0-bc69-1d7692b1a0f0",
+                  "timestamp": "2026-11-02T20:04:20.683Z",
+                  "type": "discount",
+                  "description": "Desconto de R$ 14,00 aplicado na comanda",
+                  "actorName": "Garçom Teste A"
+                },
+                {
+                  "id": "ff93cdc4-3cea-404c-b29a-1d0c3635cd9a",
+                  "timestamp": "2026-11-02T20:04:20.685Z",
+                  "type": "payment",
+                  "description": "Pagamento parcial/dividido recebido: R$ 50,00 (PIX)",
+                  "actorName": "Garçom Teste A"
+                }
+              ],
+              "paidAt": "2026-11-02T20:04:20.685Z"
+            },
+            "3145f3ff-5456-41e2-b2cc-609a56c7284e": {
+              "discount": 14,
+              "paymentStatus": "partial",
+              "paymentMethod": "PIX",
+              "payments": [
+                {
+                  "id": "1dc3fc75-236e-45df-b60f-1fe9d1485ea1",
+                  "amount": 50,
+                  "paymentMethod": "PIX",
+                  "paidAt": "2026-11-02T20:05:24.345Z",
+                  "notes": "Adiantamento parcial cliente 1",
+                  "recordedBy": "Garçom Teste A"
+                }
+              ],
+              "history": [
+                {
+                  "id": "88baf642-972c-49f1-9e11-20976e4acb67",
+                  "timestamp": "2026-11-02T20:05:24.342Z",
+                  "type": "discount",
+                  "description": "Desconto de R$ 14,00 aplicado na comanda",
+                  "actorName": "Garçom Teste A"
+                },
+                {
+                  "id": "e014bc50-1654-44b7-8d99-e2af7ceabe77",
+                  "timestamp": "2026-11-02T20:05:24.345Z",
+                  "type": "payment",
+                  "description": "Pagamento parcial/dividido recebido: R$ 50,00 (PIX)",
+                  "actorName": "Garçom Teste A"
+                }
+              ],
+              "paidAt": "2026-11-02T20:05:24.345Z"
+            },
+            "8939ec8f-ce97-4ab7-8ccd-5450b119e434": {
+              "discount": 14,
+              "paymentStatus": "paid",
+              "paymentMethod": "Cartão de Crédito",
+              "payments": [
+                {
+                  "id": "f0030696-63aa-4e58-a26d-660e27a885c5",
+                  "amount": 50,
+                  "paymentMethod": "PIX",
+                  "paidAt": "2026-11-02T20:06:18.775Z",
+                  "notes": "Adiantamento parcial cliente 1",
+                  "recordedBy": "Garçom Teste A"
+                },
+                {
+                  "id": "close_pay_8939ec8f-ce97-4ab7-8ccd-5450b119e434",
+                  "amount": 142,
+                  "paymentMethod": "Cartão de Crédito",
+                  "paidAt": "2026-11-02T20:06:18.804Z",
+                  "notes": "Quitação final no encerramento da comanda",
+                  "recordedBy": "Garçom Teste A"
+                }
+              ],
+              "history": [
+                {
+                  "id": "6ab5f154-2e5d-457b-9e3a-5f7208f46ce5",
+                  "timestamp": "2026-11-02T20:06:18.773Z",
+                  "type": "discount",
+                  "description": "Desconto de R$ 14,00 aplicado na comanda",
+                  "actorName": "Garçom Teste A"
+                },
+                {
+                  "id": "aeb8fc27-7e42-45d9-89a5-d0ed5d8baab8",
+                  "timestamp": "2026-11-02T20:06:18.775Z",
+                  "type": "payment",
+                  "description": "Pagamento parcial/dividido recebido: R$ 50,00 (PIX)",
+                  "actorName": "Garçom Teste A"
+                },
+                {
+                  "id": "close_hist_8939ec8f-ce97-4ab7-8ccd-5450b119e434",
+                  "timestamp": "2026-11-02T20:06:18.804Z",
+                  "type": "status_change",
+                  "description": "Comanda encerrada e quitada (Cartão de Crédito) — Total R$ 192,00",
+                  "actorName": "Garçom Teste A"
+                }
+              ],
+              "paidAt": "2026-11-02T20:06:18.775Z"
+            },
+            "37b4696c-31b3-43ec-a098-34385d772a09": {
+              "discount": 14,
+              "paymentStatus": "paid",
+              "paymentMethod": "Cartão de Crédito",
+              "payments": [
+                {
+                  "id": "6b3126be-c631-4395-96f4-9cc1e465e34a",
+                  "amount": 50,
+                  "paymentMethod": "PIX",
+                  "paidAt": "2026-11-02T20:06:47.069Z",
+                  "notes": "Adiantamento parcial cliente 1",
+                  "recordedBy": "Garçom Teste A"
+                },
+                {
+                  "id": "close_pay_37b4696c-31b3-43ec-a098-34385d772a09",
+                  "amount": 142,
+                  "paymentMethod": "Cartão de Crédito",
+                  "paidAt": "2026-11-02T20:06:47.109Z",
+                  "notes": "Quitação final no encerramento da comanda",
+                  "recordedBy": "Garçom Teste A"
+                }
+              ],
+              "history": [
+                {
+                  "id": "1b522352-8a7f-4e15-b94d-3ab05fea6919",
+                  "timestamp": "2026-11-02T20:06:47.066Z",
+                  "type": "discount",
+                  "description": "Desconto de R$ 14,00 aplicado na comanda",
+                  "actorName": "Garçom Teste A"
+                },
+                {
+                  "id": "54f51b92-da31-45ad-8a7c-f688a48f3db2",
+                  "timestamp": "2026-11-02T20:06:47.069Z",
+                  "type": "payment",
+                  "description": "Pagamento parcial/dividido recebido: R$ 50,00 (PIX)",
+                  "actorName": "Garçom Teste A"
+                },
+                {
+                  "id": "close_hist_37b4696c-31b3-43ec-a098-34385d772a09",
+                  "timestamp": "2026-11-02T20:06:47.109Z",
+                  "type": "status_change",
+                  "description": "Comanda encerrada e quitada (Cartão de Crédito) — Total R$ 192,00",
+                  "actorName": "Garçom Teste A"
+                }
+              ],
+              "paidAt": "2026-11-02T20:06:47.069Z"
+            },
+            "5c1fe096-0aed-4d6d-975e-5a27df47bb26": {
+              "discount": 14,
+              "paymentStatus": "paid",
+              "paymentMethod": "Cartão de Crédito",
+              "payments": [
+                {
+                  "id": "e2801dd3-e55b-49ea-9b41-5a88127d2054",
+                  "amount": 50,
+                  "paymentMethod": "PIX",
+                  "paidAt": "2026-11-02T20:08:32.176Z",
+                  "notes": "Adiantamento parcial cliente 1",
+                  "recordedBy": "Garçom Teste A"
+                },
+                {
+                  "id": "close_pay_5c1fe096-0aed-4d6d-975e-5a27df47bb26",
+                  "amount": 142,
+                  "paymentMethod": "Cartão de Crédito",
+                  "paidAt": "2026-11-02T20:08:32.251Z",
+                  "notes": "Quitação final no encerramento da comanda",
+                  "recordedBy": "Garçom Teste A"
+                }
+              ],
+              "history": [
+                {
+                  "id": "903027b8-f2cc-45b9-b47b-89a18e311c69",
+                  "timestamp": "2026-11-02T20:08:32.171Z",
+                  "type": "discount",
+                  "description": "Desconto de R$ 14,00 aplicado na comanda",
+                  "actorName": "Garçom Teste A"
+                },
+                {
+                  "id": "0552585d-908a-4c74-a5ec-751c521daa89",
+                  "timestamp": "2026-11-02T20:08:32.176Z",
+                  "type": "payment",
+                  "description": "Pagamento parcial/dividido recebido: R$ 50,00 (PIX)",
+                  "actorName": "Garçom Teste A"
+                },
+                {
+                  "id": "close_hist_5c1fe096-0aed-4d6d-975e-5a27df47bb26",
+                  "timestamp": "2026-11-02T20:08:32.251Z",
+                  "type": "status_change",
+                  "description": "Comanda encerrada e quitada (Cartão de Crédito) — Total R$ 192,00",
+                  "actorName": "Garçom Teste A"
+                }
+              ],
+              "paidAt": "2026-11-02T20:08:32.176Z"
+            },
+            "a17f5946-b480-47d7-9194-df3cc55b3abf": {
+              "discount": 14,
+              "paymentStatus": "paid",
+              "paymentMethod": "Cartão de Crédito",
+              "payments": [
+                {
+                  "id": "4cc1fead-9612-455a-8670-dafe09e66737",
+                  "amount": 50,
+                  "paymentMethod": "PIX",
+                  "paidAt": "2026-11-02T20:21:28.752Z",
+                  "notes": "Adiantamento parcial cliente 1",
+                  "recordedBy": "Garçom Teste A"
+                },
+                {
+                  "id": "close_pay_a17f5946-b480-47d7-9194-df3cc55b3abf",
+                  "amount": 142,
+                  "paymentMethod": "Cartão de Crédito",
+                  "paidAt": "2026-11-02T20:21:28.793Z",
+                  "notes": "Quitação final no encerramento da comanda",
+                  "recordedBy": "Garçom Teste A"
+                }
+              ],
+              "history": [
+                {
+                  "id": "28e92942-ed7a-4736-825f-26e63f971f4a",
+                  "timestamp": "2026-11-02T20:21:28.749Z",
+                  "type": "discount",
+                  "description": "Desconto de R$ 14,00 aplicado na comanda",
+                  "actorName": "Garçom Teste A"
+                },
+                {
+                  "id": "1927a3b1-1bd4-4e92-9239-40ac212db4f3",
+                  "timestamp": "2026-11-02T20:21:28.752Z",
+                  "type": "payment",
+                  "description": "Pagamento parcial/dividido recebido: R$ 50,00 (PIX)",
+                  "actorName": "Garçom Teste A"
+                },
+                {
+                  "id": "close_hist_a17f5946-b480-47d7-9194-df3cc55b3abf",
+                  "timestamp": "2026-11-02T20:21:28.793Z",
+                  "type": "status_change",
+                  "description": "Comanda encerrada e quitada (Cartão de Crédito) — Total R$ 192,00",
+                  "actorName": "Garçom Teste A"
+                }
+              ],
+              "paidAt": "2026-11-02T20:21:28.752Z"
+            },
+            "b151258c-5d41-4d1e-8707-61a2e05e03d9": {
+              "discount": 10.4,
+              "paymentStatus": "partial",
+              "paymentMethod": "PIX",
+              "payments": [
+                {
+                  "id": "030109db-f83d-4fb7-bb57-9b3a9a82d687",
+                  "amount": 45,
+                  "paymentMethod": "PIX",
+                  "paidAt": "2026-11-02T20:21:28.841Z",
+                  "notes": null,
+                  "recordedBy": "Garçom Teste A"
+                }
+              ],
+              "history": [
+                {
+                  "id": "34e81a5f-8b1f-46cf-bd17-e03dd1eb19b0",
+                  "timestamp": "2026-11-02T20:21:28.837Z",
+                  "type": "discount",
+                  "description": "Desconto de R$ 10,40 aplicado na comanda",
+                  "actorName": "Garçom Teste A"
+                },
+                {
+                  "id": "d5c32f25-b415-4bf9-8011-d05ebd1c220b",
+                  "timestamp": "2026-11-02T20:21:28.841Z",
+                  "type": "payment",
+                  "description": "Pagamento parcial/dividido recebido: R$ 45,00 (PIX)",
+                  "actorName": "Garçom Teste A"
+                }
+              ],
+              "paidAt": "2026-11-02T20:21:28.841Z"
+            },
+            "6d472876-2d4a-4613-9e34-454733d3261f": {
+              "discount": 0,
+              "paymentStatus": "paid",
+              "paymentMethod": "PIX",
+              "payments": [
+                {
+                  "id": "close_pay_6d472876-2d4a-4613-9e34-454733d3261f",
+                  "amount": 135,
+                  "paymentMethod": "PIX",
+                  "paidAt": "2026-11-02T20:23:28.930Z",
+                  "notes": "Quitação final no encerramento da comanda",
+                  "recordedBy": "Gerente Teste KDS"
+                }
+              ],
+              "history": [
+                {
+                  "id": "close_hist_6d472876-2d4a-4613-9e34-454733d3261f",
+                  "timestamp": "2026-11-02T20:23:28.930Z",
+                  "type": "status_change",
+                  "description": "Comanda encerrada e quitada (PIX) — Total R$ 135,00",
+                  "actorName": "Gerente Teste KDS"
+                }
+              ],
+              "paidAt": "2026-11-02T20:23:28.930Z"
+            },
+            "0172eae9-dd60-4cb8-9e6b-19ac7f2765d8": {
+              "discount": 0,
+              "paymentStatus": "paid",
+              "paymentMethod": "Cartão de Crédito",
+              "payments": [
+                {
+                  "id": "close_pay_0172eae9-dd60-4cb8-9e6b-19ac7f2765d8",
+                  "amount": 135,
+                  "paymentMethod": "Cartão de Crédito",
+                  "paidAt": "2026-11-02T20:23:28.985Z",
+                  "notes": "Quitação final no encerramento da comanda",
+                  "recordedBy": "Gerente Teste KDS"
+                }
+              ],
+              "history": [
+                {
+                  "id": "close_hist_0172eae9-dd60-4cb8-9e6b-19ac7f2765d8",
+                  "timestamp": "2026-11-02T20:23:28.985Z",
+                  "type": "status_change",
+                  "description": "Comanda encerrada e quitada (Cartão de Crédito) — Total R$ 135,00",
+                  "actorName": "Gerente Teste KDS"
+                }
+              ],
+              "paidAt": "2026-11-02T20:23:28.985Z"
+            },
+            "5737c99f-8cca-48f0-8de7-5888f2608de7": {
+              "discount": 0,
+              "paymentStatus": "paid",
+              "paymentMethod": "PIX",
+              "payments": [
+                {
+                  "id": "close_pay_5737c99f-8cca-48f0-8de7-5888f2608de7",
+                  "amount": 90,
+                  "paymentMethod": "PIX",
+                  "paidAt": "2026-11-02T20:23:29.047Z",
+                  "notes": "Quitação final no encerramento da comanda",
+                  "recordedBy": "Gerente Teste KDS"
+                }
+              ],
+              "history": [
+                {
+                  "id": "close_hist_5737c99f-8cca-48f0-8de7-5888f2608de7",
+                  "timestamp": "2026-11-02T20:23:29.047Z",
+                  "type": "status_change",
+                  "description": "Comanda encerrada e quitada (PIX) — Total R$ 90,00",
+                  "actorName": "Gerente Teste KDS"
+                }
+              ],
+              "paidAt": "2026-11-02T20:23:29.047Z"
+            },
+            "681010e2-4f8c-45a7-a4b8-999797aa0588": {
+              "discount": 0,
+              "paymentStatus": "paid",
+              "paymentMethod": "Dinheiro",
+              "payments": [
+                {
+                  "id": "close_pay_681010e2-4f8c-45a7-a4b8-999797aa0588",
+                  "amount": 45,
+                  "paymentMethod": "Dinheiro",
+                  "paidAt": "2026-11-02T20:23:29.054Z",
+                  "notes": "Quitação final no encerramento da comanda",
+                  "recordedBy": "Gerente Teste KDS"
+                }
+              ],
+              "history": [
+                {
+                  "id": "close_hist_681010e2-4f8c-45a7-a4b8-999797aa0588",
+                  "timestamp": "2026-11-02T20:23:29.054Z",
+                  "type": "status_change",
+                  "description": "Comanda encerrada e quitada (Dinheiro) — Total R$ 45,00",
+                  "actorName": "Gerente Teste KDS"
+                }
+              ],
+              "paidAt": "2026-11-02T20:23:29.054Z"
+            },
+            "605fdb1c-7215-4d1b-abb8-cc7a8c7e885c": {
+              "discount": 0,
+              "paymentStatus": "paid",
+              "paymentMethod": "PIX",
+              "payments": [
+                {
+                  "id": "close_pay_605fdb1c-7215-4d1b-abb8-cc7a8c7e885c",
+                  "amount": 45,
+                  "paymentMethod": "PIX",
+                  "paidAt": "2026-11-02T20:23:29.083Z",
+                  "notes": "Quitação final no encerramento da comanda",
+                  "recordedBy": "Gerente Teste KDS"
+                }
+              ],
+              "history": [
+                {
+                  "id": "close_hist_605fdb1c-7215-4d1b-abb8-cc7a8c7e885c",
+                  "timestamp": "2026-11-02T20:23:29.083Z",
+                  "type": "status_change",
+                  "description": "Comanda encerrada e quitada (PIX) — Total R$ 45,00",
+                  "actorName": "Gerente Teste KDS"
+                }
+              ],
+              "paidAt": "2026-11-02T20:23:29.083Z"
+            },
+            "6856a4b9-1046-474a-8cd7-24d7601bcfc9": {
+              "discount": 0,
+              "paymentStatus": "paid",
+              "paymentMethod": "PIX",
+              "payments": [
+                {
+                  "id": "close_pay_6856a4b9-1046-474a-8cd7-24d7601bcfc9",
+                  "amount": 45,
+                  "paymentMethod": "PIX",
+                  "paidAt": "2026-11-02T20:23:29.146Z",
+                  "notes": "Quitação final no encerramento da comanda",
+                  "recordedBy": "Gerente Teste KDS"
+                }
+              ],
+              "history": [
+                {
+                  "id": "close_hist_6856a4b9-1046-474a-8cd7-24d7601bcfc9",
+                  "timestamp": "2026-11-02T20:23:29.146Z",
+                  "type": "status_change",
+                  "description": "Comanda encerrada e quitada (PIX) — Total R$ 45,00",
+                  "actorName": "Gerente Teste KDS"
+                }
+              ],
+              "paidAt": "2026-11-02T20:23:29.146Z"
+            },
+            "cab5b000-f788-47d2-b76c-b3ad1d6b853a": {
+              "discount": 0,
+              "paymentStatus": "partial",
+              "paymentMethod": "PIX",
+              "payments": [
+                {
+                  "id": "daabafb3-4d1a-4ca1-97f7-74751db009dd",
+                  "amount": 36,
+                  "paymentMethod": "PIX",
+                  "paidAt": "2026-11-02T20:23:29.164Z",
+                  "notes": "Entrada parcial de 40%",
+                  "recordedBy": "Gerente Teste KDS"
+                }
+              ],
+              "history": [
+                {
+                  "id": "6af53d4e-40c7-4b84-89c4-a2d252496e12",
+                  "timestamp": "2026-11-02T20:23:29.164Z",
+                  "type": "payment",
+                  "description": "Pagamento parcial/dividido recebido: R$ 36,00 (PIX)",
+                  "actorName": "Gerente Teste KDS"
+                },
+                {
+                  "id": "close_hist_cab5b000-f788-47d2-b76c-b3ad1d6b853a",
+                  "timestamp": "2026-11-02T20:23:29.174Z",
+                  "type": "status_change",
+                  "description": "Comanda encerrada com pagamento parcial — Recebido R$ 36,00 / Pendente R$ 54,00",
+                  "actorName": "Gerente Teste KDS"
+                }
+              ],
+              "paidAt": "2026-11-02T20:23:29.164Z"
+            },
+            "4d4fa646-a6dd-44c5-a9c6-a886a9bc52c1": {
+              "discount": 14,
+              "paymentStatus": "paid",
+              "paymentMethod": "Cartão de Crédito",
+              "payments": [
+                {
+                  "id": "1610219d-2c22-40e8-bd60-60a09849b473",
+                  "amount": 50,
+                  "paymentMethod": "PIX",
+                  "paidAt": "2026-11-02T20:25:44.657Z",
+                  "notes": "Adiantamento parcial cliente 1",
+                  "recordedBy": "Garçom Teste A"
+                },
+                {
+                  "id": "close_pay_4d4fa646-a6dd-44c5-a9c6-a886a9bc52c1",
+                  "amount": 142,
+                  "paymentMethod": "Cartão de Crédito",
+                  "paidAt": "2026-11-02T20:25:44.769Z",
+                  "notes": "Quitação final no encerramento da comanda",
+                  "recordedBy": "Garçom Teste A"
+                }
+              ],
+              "history": [
+                {
+                  "id": "b2d24b2d-dd9f-4cfd-830a-b7c08ca97e3a",
+                  "timestamp": "2026-11-02T20:25:44.652Z",
+                  "type": "discount",
+                  "description": "Desconto de R$ 14,00 aplicado na comanda",
+                  "actorName": "Garçom Teste A"
+                },
+                {
+                  "id": "44654f0d-4a13-478e-896b-5b4a1f4e4aad",
+                  "timestamp": "2026-11-02T20:25:44.657Z",
+                  "type": "payment",
+                  "description": "Pagamento parcial/dividido recebido: R$ 50,00 (PIX)",
+                  "actorName": "Garçom Teste A"
+                },
+                {
+                  "id": "close_hist_4d4fa646-a6dd-44c5-a9c6-a886a9bc52c1",
+                  "timestamp": "2026-11-02T20:25:44.769Z",
+                  "type": "status_change",
+                  "description": "Comanda encerrada e quitada (Cartão de Crédito) — Total R$ 192,00",
+                  "actorName": "Garçom Teste A"
+                }
+              ],
+              "paidAt": "2026-11-02T20:25:44.657Z"
+            },
+            "14e383e2-bf39-40e8-892a-3cedb62ef18f": {
+              "discount": 10.4,
+              "paymentStatus": "partial",
+              "paymentMethod": "PIX",
+              "payments": [
+                {
+                  "id": "6730a241-be1e-48c6-8e8e-7459a99c10d1",
+                  "amount": 45,
+                  "paymentMethod": "PIX",
+                  "paidAt": "2026-11-02T20:25:44.923Z",
+                  "notes": null,
+                  "recordedBy": "Garçom Teste A"
+                }
+              ],
+              "history": [
+                {
+                  "id": "555cee61-e057-47e6-bbd6-0a18e13de160",
+                  "timestamp": "2026-11-02T20:25:44.878Z",
+                  "type": "discount",
+                  "description": "Desconto de R$ 10,40 aplicado na comanda",
+                  "actorName": "Garçom Teste A"
+                },
+                {
+                  "id": "cf3fdf4e-7703-448f-9746-ec90573d5164",
+                  "timestamp": "2026-11-02T20:25:44.923Z",
+                  "type": "payment",
+                  "description": "Pagamento parcial/dividido recebido: R$ 45,00 (PIX)",
+                  "actorName": "Garçom Teste A"
+                }
+              ],
+              "paidAt": "2026-11-02T20:25:44.923Z"
+            },
+            "74076819-7cfa-44b6-a903-6637dcf04430": {
+              "discount": 0,
+              "paymentStatus": "paid",
+              "paymentMethod": "PIX",
+              "payments": [
+                {
+                  "id": "close_pay_74076819-7cfa-44b6-a903-6637dcf04430",
+                  "amount": 135,
+                  "paymentMethod": "PIX",
+                  "paidAt": "2026-11-02T20:25:49.845Z",
+                  "notes": "Quitação final no encerramento da comanda",
+                  "recordedBy": "Gerente Teste KDS"
+                }
+              ],
+              "history": [
+                {
+                  "id": "close_hist_74076819-7cfa-44b6-a903-6637dcf04430",
+                  "timestamp": "2026-11-02T20:25:49.845Z",
+                  "type": "status_change",
+                  "description": "Comanda encerrada e quitada (PIX) — Total R$ 135,00",
+                  "actorName": "Gerente Teste KDS"
+                }
+              ],
+              "paidAt": "2026-11-02T20:25:49.845Z"
+            },
+            "81d915ee-aa21-4f09-aa1c-0c56e702f44d": {
+              "discount": 0,
+              "paymentStatus": "paid",
+              "paymentMethod": "Cartão de Crédito",
+              "payments": [
+                {
+                  "id": "close_pay_81d915ee-aa21-4f09-aa1c-0c56e702f44d",
+                  "amount": 135,
+                  "paymentMethod": "Cartão de Crédito",
+                  "paidAt": "2026-11-02T20:25:49.977Z",
+                  "notes": "Quitação final no encerramento da comanda",
+                  "recordedBy": "Gerente Teste KDS"
+                }
+              ],
+              "history": [
+                {
+                  "id": "close_hist_81d915ee-aa21-4f09-aa1c-0c56e702f44d",
+                  "timestamp": "2026-11-02T20:25:49.977Z",
+                  "type": "status_change",
+                  "description": "Comanda encerrada e quitada (Cartão de Crédito) — Total R$ 135,00",
+                  "actorName": "Gerente Teste KDS"
+                }
+              ],
+              "paidAt": "2026-11-02T20:25:49.977Z"
+            },
+            "4f4e831e-65eb-44c0-9769-e1c22f6f3d01": {
+              "discount": 0,
+              "paymentStatus": "paid",
+              "paymentMethod": "PIX",
+              "payments": [
+                {
+                  "id": "close_pay_4f4e831e-65eb-44c0-9769-e1c22f6f3d01",
+                  "amount": 90,
+                  "paymentMethod": "PIX",
+                  "paidAt": "2026-11-02T20:25:50.046Z",
+                  "notes": "Quitação final no encerramento da comanda",
+                  "recordedBy": "Gerente Teste KDS"
+                }
+              ],
+              "history": [
+                {
+                  "id": "close_hist_4f4e831e-65eb-44c0-9769-e1c22f6f3d01",
+                  "timestamp": "2026-11-02T20:25:50.046Z",
+                  "type": "status_change",
+                  "description": "Comanda encerrada e quitada (PIX) — Total R$ 90,00",
+                  "actorName": "Gerente Teste KDS"
+                }
+              ],
+              "paidAt": "2026-11-02T20:25:50.046Z"
+            },
+            "f80639cd-8db9-401c-89ae-0809f53356bf": {
+              "discount": 0,
+              "paymentStatus": "paid",
+              "paymentMethod": "Dinheiro",
+              "payments": [
+                {
+                  "id": "close_pay_f80639cd-8db9-401c-89ae-0809f53356bf",
+                  "amount": 45,
+                  "paymentMethod": "Dinheiro",
+                  "paidAt": "2026-11-02T20:25:50.058Z",
+                  "notes": "Quitação final no encerramento da comanda",
+                  "recordedBy": "Gerente Teste KDS"
+                }
+              ],
+              "history": [
+                {
+                  "id": "close_hist_f80639cd-8db9-401c-89ae-0809f53356bf",
+                  "timestamp": "2026-11-02T20:25:50.058Z",
+                  "type": "status_change",
+                  "description": "Comanda encerrada e quitada (Dinheiro) — Total R$ 45,00",
+                  "actorName": "Gerente Teste KDS"
+                }
+              ],
+              "paidAt": "2026-11-02T20:25:50.058Z"
+            },
+            "9a9f712d-ac0d-4602-8489-841307d4ee35": {
+              "discount": 0,
+              "paymentStatus": "paid",
+              "paymentMethod": "PIX",
+              "payments": [
+                {
+                  "id": "close_pay_9a9f712d-ac0d-4602-8489-841307d4ee35",
+                  "amount": 45,
+                  "paymentMethod": "PIX",
+                  "paidAt": "2026-11-02T20:25:50.132Z",
+                  "notes": "Quitação final no encerramento da comanda",
+                  "recordedBy": "Gerente Teste KDS"
+                }
+              ],
+              "history": [
+                {
+                  "id": "close_hist_9a9f712d-ac0d-4602-8489-841307d4ee35",
+                  "timestamp": "2026-11-02T20:25:50.132Z",
+                  "type": "status_change",
+                  "description": "Comanda encerrada e quitada (PIX) — Total R$ 45,00",
+                  "actorName": "Gerente Teste KDS"
+                }
+              ],
+              "paidAt": "2026-11-02T20:25:50.132Z"
+            },
+            "8f82622d-38c3-4bca-b1c9-b2f0daa4a82f": {
+              "discount": 0,
+              "paymentStatus": "paid",
+              "paymentMethod": "PIX",
+              "payments": [
+                {
+                  "id": "close_pay_8f82622d-38c3-4bca-b1c9-b2f0daa4a82f",
+                  "amount": 45,
+                  "paymentMethod": "PIX",
+                  "paidAt": "2026-11-02T20:25:50.175Z",
+                  "notes": "Quitação final no encerramento da comanda",
+                  "recordedBy": "Gerente Teste KDS"
+                }
+              ],
+              "history": [
+                {
+                  "id": "close_hist_8f82622d-38c3-4bca-b1c9-b2f0daa4a82f",
+                  "timestamp": "2026-11-02T20:25:50.175Z",
+                  "type": "status_change",
+                  "description": "Comanda encerrada e quitada (PIX) — Total R$ 45,00",
+                  "actorName": "Gerente Teste KDS"
+                }
+              ],
+              "paidAt": "2026-11-02T20:25:50.175Z"
+            },
+            "0801e874-01bb-478c-ad51-06cc1902a555": {
+              "discount": 0,
+              "paymentStatus": "partial",
+              "paymentMethod": "PIX",
+              "payments": [
+                {
+                  "id": "a824d51a-22d8-4571-abe1-4cd0b1d78380",
+                  "amount": 36,
+                  "paymentMethod": "PIX",
+                  "paidAt": "2026-11-02T20:25:50.244Z",
+                  "notes": "Entrada parcial de 40%",
+                  "recordedBy": "Gerente Teste KDS"
+                }
+              ],
+              "history": [
+                {
+                  "id": "c87ae029-9420-47ae-84df-7e6f84a978f7",
+                  "timestamp": "2026-11-02T20:25:50.244Z",
+                  "type": "payment",
+                  "description": "Pagamento parcial/dividido recebido: R$ 36,00 (PIX)",
+                  "actorName": "Gerente Teste KDS"
+                },
+                {
+                  "id": "close_hist_0801e874-01bb-478c-ad51-06cc1902a555",
+                  "timestamp": "2026-11-02T20:25:50.256Z",
+                  "type": "status_change",
+                  "description": "Comanda encerrada com pagamento parcial — Recebido R$ 36,00 / Pendente R$ 54,00",
+                  "actorName": "Gerente Teste KDS"
+                }
+              ],
+              "paidAt": "2026-11-02T20:25:50.244Z"
+            },
+            "074c7257-1082-4faf-916d-b112e2726267": {
+              "discount": 5,
+              "paymentStatus": "paid",
+              "paymentMethod": "Cartão de Crédito",
+              "payments": [
+                {
+                  "id": "d12070cb-faf1-40d0-8104-38c58ef92eb6",
+                  "amount": 42.5,
+                  "paymentMethod": "PIX",
+                  "paidAt": "2026-11-02T20:25:50.334Z",
+                  "notes": null,
+                  "recordedBy": "Gerente Teste KDS"
+                },
+                {
+                  "id": "close_pay_074c7257-1082-4faf-916d-b112e2726267",
+                  "amount": 42.5,
+                  "paymentMethod": "Cartão de Crédito",
+                  "paidAt": "2026-11-02T20:25:50.344Z",
+                  "notes": "Quitação final no encerramento da comanda",
+                  "recordedBy": "Gerente Teste KDS"
+                }
+              ],
+              "history": [
+                {
+                  "id": "86b7489c-855c-4e8e-94c8-063f14cb2f26",
+                  "timestamp": "2026-11-02T20:25:50.328Z",
+                  "type": "discount",
+                  "description": "Desconto de R$ 5,00 aplicado na comanda",
+                  "actorName": "Gerente Teste KDS"
+                },
+                {
+                  "id": "59319771-b92c-4539-9813-ca0294e4561e",
+                  "timestamp": "2026-11-02T20:25:50.334Z",
+                  "type": "payment",
+                  "description": "Pagamento parcial/dividido recebido: R$ 42,50 (PIX)",
+                  "actorName": "Gerente Teste KDS"
+                },
+                {
+                  "id": "close_hist_074c7257-1082-4faf-916d-b112e2726267",
+                  "timestamp": "2026-11-02T20:25:50.344Z",
+                  "type": "status_change",
+                  "description": "Comanda encerrada e quitada (Cartão de Crédito) — Total R$ 85,00",
+                  "actorName": "Gerente Teste KDS"
+                }
+              ],
+              "paidAt": "2026-11-02T20:25:50.334Z"
+            }
+          }
+        }
+      }
     }
   ],
   "site_sections": [
@@ -861,28 +4631,6 @@
   ],
   "products": [
     {
-      "id": "66666666-1111-4666-8111-111111111111",
-      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-      "category_id": "55555555-1111-4555-8111-111111111111",
-      "name": "Pomada Modeladora Efeito Matte 100g",
-      "slug": "pomada-modeladora-efeito-matte-100g",
-      "short_description": "Fixação forte e acabamento natural sem brilho para o dia todo.",
-      "description": "Desenvolvida exclusivamente para a Barbearia Prime, esta pomada proporciona fixação extrema com visual mate limpo. À base de água, não engordura os fios e sai com facilidade no banho.",
-      "sku": "POM-MATTE-100",
-      "barcode": "7891000100011",
-      "price": 59.9,
-      "promotional_price": 49.9,
-      "price_on_request": false,
-      "is_active": true,
-      "is_featured": true,
-      "track_stock": true,
-      "stock_quantity": 25,
-      "allow_out_of_stock": true,
-      "position": 0,
-      "created_at": "2026-10-13T08:37:44.402Z",
-      "updated_at": "2026-10-13T08:37:44.402Z"
-    },
-    {
       "id": "66666666-2222-4666-8222-222222222222",
       "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
       "category_id": "55555555-2222-4555-8222-222222222222",
@@ -1007,21 +4755,6 @@
     }
   ],
   "product_variants": [
-    {
-      "id": "88888888-1111-4888-8111-111111111111",
-      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-      "product_id": "66666666-1111-4666-8111-111111111111",
-      "name": "100g Tradicional",
-      "sku": "POM-100",
-      "price": 49.9,
-      "promotional_price": null,
-      "track_stock": true,
-      "stock_quantity": 15,
-      "is_active": true,
-      "position": 0,
-      "created_at": "2026-10-13T08:37:44.402Z",
-      "updated_at": "2026-10-13T08:37:44.402Z"
-    },
     {
       "id": "88888888-1112-4888-8112-111111111112",
       "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
@@ -2224,5 +5957,32 @@
       "created_at": "2026-10-13T08:39:10.172Z",
       "updated_at": "2026-10-13T08:39:10.173Z"
     }
-  ]
+  ],
+  "restaurant_fee_templates": [
+    {
+      "id": "7f19cb69-5e30-4d6d-8ca9-91cbede4b2b3",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "name": "Taxa de Serviço (Garçom)",
+      "description": "Taxa opcional de 10% sobre o consumo da mesa.",
+      "type": "percentage",
+      "value": 10,
+      "is_active": true,
+      "is_default": true,
+      "created_at": "2026-11-02T20:01:01.593Z",
+      "updated_at": "2026-11-02T20:01:01.593Z"
+    },
+    {
+      "id": "33cafb64-050d-4ac2-b73b-95c6b227534a",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "name": "Couvert Artístico",
+      "description": "Apresentação musical ao vivo no salão.",
+      "type": "fixed",
+      "value": 15,
+      "is_active": true,
+      "is_default": false,
+      "created_at": "2026-11-02T20:01:01.593Z",
+      "updated_at": "2026-11-02T20:01:01.593Z"
+    }
+  ],
+  "restaurant_session_fees": []
 }

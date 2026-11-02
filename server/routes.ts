@@ -2793,7 +2793,12 @@ apiRouter.post('/restaurant/tables/:id/close-session', authenticate, requireNonP
       req.user!,
       req.body?.notes,
       req.body?.paymentMethod,
-      req.body?.sessionId
+      req.body?.sessionId,
+      {
+        settleRemainingBalance: req.body?.settleRemainingBalance,
+        paymentStatus: req.body?.paymentStatus,
+        requireFullPayment: req.body?.requireFullPayment,
+      }
     );
     return res.json({ success: true, ...result });
   } catch (err: any) {
@@ -2806,6 +2811,26 @@ apiRouter.post('/restaurant/tables/:id/cancel-closing', authenticate, requireNon
     const tenantId = getEffectiveTenantId(req);
     const session = await restaurantRepo.cancelSessionClosing(tenantId, req.params.id, req.user!);
     return res.json({ success: true, session, message: 'Solicitação de fechamento cancelada. Mesa retornada para ocupada.' });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+apiRouter.post('/restaurant/tables/:id/orders', authenticate, requireNonProfessional, requireFeature('restaurant_tables'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const result = await restaurantRepo.addOrderToActiveSession(
+      tenantId,
+      req.params.id,
+      req.body,
+      req.user!
+    );
+    return res.status(201).json({
+      success: true,
+      order: result.order,
+      session: result.session,
+      message: `Pedido #${result.order.orderNumber} adicionado à conta com sucesso!`,
+    });
   } catch (err: any) {
     return res.status(400).json({ success: false, error: err.message });
   }

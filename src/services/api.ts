@@ -56,6 +56,7 @@ import {
   RestaurantFeeTemplate,
   RestaurantSessionFee,
   AddSessionFeePayload,
+  AddSessionOrderPayload,
 } from '../types/restaurant';
 import {
   AdvancedOrderFilterParams,
@@ -1318,6 +1319,26 @@ class ApiService {
 
   async removeSessionFee(sessionId: string, feeId: string): Promise<void> {
     await this.request(`/api/restaurant/sessions/${sessionId}/fees/${feeId}`, { method: 'DELETE' });
+  }
+
+  async addOrderToTableSession(
+    tableId: string,
+    payload: AddSessionOrderPayload
+  ): Promise<{ order: RestaurantOrder; session: RestaurantSession; message?: string }> {
+    const res = await this.request<{
+      success: boolean;
+      order: RestaurantOrder;
+      session: RestaurantSession;
+      message?: string;
+    }>(`/api/restaurant/tables/${encodeURIComponent(tableId)}/orders`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    return {
+      order: res.order,
+      session: res.session,
+      message: res.message,
+    };
   }
 
   async getRestaurantOrders(filters?: {

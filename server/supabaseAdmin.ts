@@ -1576,9 +1576,34 @@ class PostgrestQueryBuilder {
     if (this.op === 'insert' || this.op === 'upsert') {
       const inserted: any[] = [];
       for (const rec of this.insertRecords) {
-        const matchKey = this.tableName === 'tenant_settings' && rec.tenant_id
-          ? 'tenant_id'
-          : (rec.id ? 'id' : (rec.tenant_id ? 'tenant_id' : null));
+        if (this.op === 'insert' && this.tableName === 'restaurant_orders' && rec.idempotency_key && rec.tenant_id) {
+          const duplicateIdem = table.find(
+            (item: any) =>
+              item.tenant_id === rec.tenant_id && item.idempotency_key === rec.idempotency_key
+          );
+          if (duplicateIdem) {
+            return Promise.resolve({
+              data: null,
+              error: {
+                code: '23505',
+                message: 'duplicate key value violates unique constraint "uq_restaurant_orders_tenant_idempotency"',
+              },
+            }).then(resolve, reject);
+          }
+        }
+
+        const onePerTenantTables = new Set([
+          'tenant_settings',
+          'delivery_settings',
+          'appointment_settings',
+          'sites',
+        ]);
+        const matchKey =
+          onePerTenantTables.has(this.tableName) && rec.tenant_id
+            ? 'tenant_id'
+            : rec.id
+            ? 'id'
+            : null;
         const existingIndex = matchKey
           ? table.findIndex((item: any) => item[matchKey] === rec[matchKey])
           : -1;
