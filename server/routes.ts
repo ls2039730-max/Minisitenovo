@@ -8,10 +8,12 @@ import { orderRepo } from './db/orderRepository.js';
 import { serviceRepo } from './db/serviceRepository.js';
 import { appointmentRepo } from './db/appointmentRepository.js';
 import { restaurantRepo } from './db/restaurantRepository.js';
+import { deliveryHubRepo } from './db/deliveryHubRepository.js';
 import { generateSessionToken, verifySessionToken, JwtSessionPayload } from './auth/tokenService.js';
 import { SYSTEM_FEATURES } from '../src/utils/features.js';
 import { User, Tenant, TenantStatus, FeatureKey } from '../src/types/saas.js';
 import { Professional, ProfessionalPayload } from '../src/types/service.js';
+import { DeliveryDriver } from '../src/types/deliveryHub.js';
 import { canTenantOperate, resolveSlugFromHost, validateSlug, getServerBaseDomain } from './tenantResolver.js';
 import { storageService } from './storage/storageService.js';
 import { handlePublicSiteHtml } from './seoRenderer.js';
@@ -119,7 +121,7 @@ export function getEffectiveTenantId(req: AuthenticatedRequest): string {
   throw new Error('Tenant não especificado ou usuário sem tenant vinculado.');
 }
 
-// Middleware: Blocks users with PROFESSIONAL role from administrative operations
+// Middleware: Blocks users with PROFESSIONAL or DELIVERY_DRIVER role from administrative operations
 export function requireNonProfessional(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   if (!req.user) {
     return res.status(401).json({ success: false, error: 'Não autenticado.' });
@@ -129,6 +131,13 @@ export function requireNonProfessional(req: AuthenticatedRequest, res: Response,
       success: false,
       code: 'FORBIDDEN_PROFESSIONAL_ROLE',
       error: 'Acesso negado: usuários com perfil Profissional possuem acesso restrito exclusivamente à própria Agenda.',
+    });
+  }
+  if (req.user.role === 'DELIVERY_DRIVER') {
+    return res.status(403).json({
+      success: false,
+      code: 'FORBIDDEN_DRIVER_ROLE',
+      error: 'Acesso negado: usuários com perfil Entregador possuem acesso restrito exclusivamente à Área do Motoboy e às próprias entregas.',
     });
   }
   next();
@@ -216,6 +225,17 @@ export function requireFeature(featureKey: FeatureKey) {
           success: false,
           code: 'FORBIDDEN_PROFESSIONAL_ROLE',
           error: `Acesso negado: usuários com perfil Profissional têm acesso exclusivo à Agenda e não podem acessar o módulo "${featureKey}".`,
+        });
+      }
+    }
+
+    // Role DELIVERY_DRIVER is restricted strictly to the delivery module
+    if (req.user.role === 'DELIVERY_DRIVER') {
+      if (featureKey !== 'delivery') {
+        return res.status(403).json({
+          success: false,
+          code: 'FORBIDDEN_DRIVER_ROLE',
+          error: `Acesso negado: usuários com perfil Entregador têm acesso exclusivo às suas rotas de entrega e não podem acessar o módulo "${featureKey}".`,
         });
       }
     }
@@ -329,6 +349,12 @@ apiRouter.post('/auth/login', async (req: Request, res: Response) => {
       linkedProfessional = await serviceRepo.getProfessionalByUserId(user.id, user.tenantId);
     }
 
+    // If role is DELIVERY_DRIVER, lookup linked driver
+    let linkedDriver: DeliveryDriver | null = null;
+    if (user.role === 'DELIVERY_DRIVER' && user.tenantId) {
+      linkedDriver = await deliveryHubRepo.getDriverByUserId(user.tenantId, user.id, user.email);
+    }
+
     // Set secure cookie compatible with both standalone domains and embedded iframes
     res.cookie('saas_auth_token', token, getAuthCookieOptions(req, 8 * 60 * 60 * 1000));
 
@@ -339,6 +365,7 @@ apiRouter.post('/auth/login', async (req: Request, res: Response) => {
       tenant,
       resolvedFeatures,
       linkedProfessional,
+      linkedDriver,
     });
   } catch (err: any) {
     console.error('[API] Login error:', err);
@@ -377,6 +404,11 @@ apiRouter.get('/auth/me', authenticate, async (req: AuthenticatedRequest, res: R
     linkedProfessional = await serviceRepo.getProfessionalByUserId(user.id, targetTenantId);
   }
 
+  let linkedDriver: DeliveryDriver | null = null;
+  if (user.role === 'DELIVERY_DRIVER' && targetTenantId) {
+    linkedDriver = await deliveryHubRepo.getDriverByUserId(targetTenantId, user.id, user.email);
+  }
+
   return res.json({
     success: true,
     user,
@@ -385,6 +417,7 @@ apiRouter.get('/auth/me', authenticate, async (req: AuthenticatedRequest, res: R
     originalAdminUserName: req.sessionPayload?.originalAdminUserName,
     resolvedFeatures,
     linkedProfessional,
+    linkedDriver,
   });
 });
 
@@ -394,9 +427,15 @@ apiRouter.post('/auth/logout', (req: Request, res: Response) => {
   return res.json({ success: true, message: 'Sessão encerrada com sucesso.' });
 });
 
-apiRouter.post('/auth/self-assign-tenant', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/auth/self-assign-tenant', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const user = req.user!;
+    if (user.tenantId && user.role !== 'SUPER_ADMIN') {
+      return res.status(403).json({
+        success: false,
+        error: 'Usuário já possui um estabelecimento vinculado.',
+      });
+    }
     const emailLower = user.email.toLowerCase().trim();
     const isSuperAdminEmail =
       emailLower === 'admin@localhub.com' ||
@@ -570,7 +609,7 @@ apiRouter.get('/audit-logs', authenticate, requireSuperAdmin, async (req: Authen
 // 4. TENANTS MANAGEMENT
 // ==========================================
 
-apiRouter.get('/tenants/check-slug/:slug', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/tenants/check-slug/:slug', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
   const { slug } = req.params;
   const excludeId = req.query.exclude as string | undefined;
   const check = await repo.isSlugAvailable(slug, excludeId);
@@ -821,7 +860,7 @@ apiRouter.get('/users', authenticate, requireSuperAdmin, async (req: Authenticat
 // 7. PLANS & FEATURES CATALOG
 // ==========================================
 
-apiRouter.get('/plans', authenticate, async (_req: Request, res: Response) => {
+apiRouter.get('/plans', authenticate, requireNonProfessional, async (_req: Request, res: Response) => {
   const plans = await repo.getPlans();
   return res.json({ success: true, data: plans });
 });
@@ -843,9 +882,9 @@ apiRouter.get('/features', (_req: Request, res: Response) => {
 // 8. STORAGE & MEDIA UPLOADS
 // ==========================================
 
-apiRouter.post('/upload', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/upload', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { fileBase64, fileName, mimeType, tenantId } = req.body;
+    const { fileBase64, fileName, mimeType } = req.body;
     if (!fileBase64 || !fileName) {
       return res.status(400).json({ success: false, error: 'Arquivo base64 e nome são obrigatórios.' });
     }
@@ -854,7 +893,7 @@ apiRouter.post('/upload', authenticate, async (req: AuthenticatedRequest, res: R
     const base64Data = fileBase64.replace(/^data:[^;]+;base64,/, '');
     const buffer = Buffer.from(base64Data, 'base64');
 
-    const effectiveTenantId = tenantId || req.user?.tenantId || 'global';
+    const effectiveTenantId = getEffectiveTenantId(req);
     const fileUrl = await storageService.uploadFile(buffer, fileName, mimeType || 'image/png', effectiveTenantId);
     return res.json({ success: true, url: fileUrl });
   } catch (err: any) {
@@ -3156,6 +3195,477 @@ apiRouter.get('/admin/financial/dashboard', authenticate, requireNonProfessional
     return res.json({ success: true, data: dashboard });
   } catch (err: any) {
     return res.status(400).json({ success: false, error: err.message || 'Erro ao carregar dashboard financeiro.' });
+  }
+});
+
+// ==========================================
+// 11. CENTRAL DE ENTREGAS, MOTOBOYS, ROTAS, QR CODE, WHATSAPP & RASTREAMENTO
+// ==========================================
+
+// 11.1 Overview da Central de Entregas (Mapa + Pedidos + Sugestões de Agrupamento + Rotas + Motoboys)
+apiRouter.get('/delivery-hub/overview', authenticate, requireNonProfessional, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const q = req.query;
+    const overview = await deliveryHubRepo.getDeliveryHubOverview(tenantId, {
+      dispatchFilter: q.dispatchFilter ? (String(q.dispatchFilter) as any) : undefined,
+      neighborhood: q.neighborhood ? String(q.neighborhood) : undefined,
+      driverId: q.driverId ? String(q.driverId) : undefined,
+      search: q.search ? String(q.search) : undefined,
+    });
+    return res.json({ success: true, data: overview });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao carregar Central de Entregas.' });
+  }
+});
+
+// 11.2 Tentar Geocodificar Novamente um Pedido com Localização Pendente
+apiRouter.post('/delivery-hub/orders/:orderId/geocode', authenticate, requireNonProfessional, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const result = await deliveryHubRepo.retryOrderGeocode(tenantId, req.params.orderId, req.user!);
+    return res.json({
+      success: true,
+      data: result,
+      message: result.geocoded
+        ? 'Coordenadas localizadas com sucesso!'
+        : 'Não foi possível localizar coordenadas exatas automaticamente. O pedido permanece como Localização pendente.',
+    });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao geocodificar endereço.' });
+  }
+});
+
+// 11.3 Ajuste Manual de Localização / Coordenadas de um Pedido
+apiRouter.patch('/delivery-hub/orders/:orderId/location', authenticate, requireNonProfessional, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const updated = await deliveryHubRepo.updateOrderManualLocation(
+      tenantId,
+      req.params.orderId,
+      req.body || {},
+      req.user!
+    );
+    return res.json({
+      success: true,
+      data: updated,
+      message: 'Localização do pedido atualizada manualmente com sucesso!',
+    });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao atualizar localização do pedido.' });
+  }
+});
+
+// 11.4 Equipe de Entregas (Motoboys) — Listar, Criar, Editar e Excluir
+apiRouter.get('/delivery-hub/drivers', authenticate, requireNonProfessional, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const drivers = await deliveryHubRepo.listDrivers(tenantId);
+    return res.json({ success: true, data: drivers });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao listar entregadores.' });
+  }
+});
+
+apiRouter.post('/delivery-hub/drivers', authenticate, requireNonProfessional, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const driver = await deliveryHubRepo.createDriver(tenantId, req.body || {}, req.user!);
+    return res.status(201).json({
+      success: true,
+      data: driver,
+      message: 'Entregador cadastrado com sucesso!',
+    });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao cadastrar entregador.' });
+  }
+});
+
+apiRouter.patch('/delivery-hub/drivers/:driverId', authenticate, requireNonProfessional, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const driver = await deliveryHubRepo.updateDriver(
+      tenantId,
+      req.params.driverId,
+      req.body || {},
+      req.user!
+    );
+    return res.json({
+      success: true,
+      data: driver,
+      message: 'Cadastro do entregador atualizado com sucesso!',
+    });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao atualizar entregador.' });
+  }
+});
+
+apiRouter.delete('/delivery-hub/drivers/:driverId', authenticate, requireNonProfessional, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    await deliveryHubRepo.deleteDriver(tenantId, req.params.driverId, req.user!);
+    return res.json({
+      success: true,
+      message: 'Entregador removido com sucesso!',
+    });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao excluir entregador.' });
+  }
+});
+
+// 11.5 Rotas de Entrega — Preview, Criação, Listagem, Reordenação, Remoção de Parada, Atribuição e QR Code
+apiRouter.post('/delivery-hub/routes/preview', authenticate, requireNonProfessional, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const { orderIds, optimizeOrder } = req.body || {};
+    const preview = await deliveryHubRepo.previewRoute(
+      tenantId,
+      Array.isArray(orderIds) ? orderIds : [],
+      optimizeOrder !== false
+    );
+    return res.json({ success: true, data: preview });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao calcular prévia da rota.' });
+  }
+});
+
+apiRouter.post('/delivery-hub/routes', authenticate, requireNonProfessional, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const route = await deliveryHubRepo.createRoute(tenantId, req.body || {}, req.user!);
+    return res.status(201).json({
+      success: true,
+      data: route,
+      message: `Rota ${route.routeCode} criada com sucesso!`,
+    });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao criar rota de entrega.' });
+  }
+});
+
+apiRouter.get('/delivery-hub/routes', authenticate, requireNonProfessional, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const q = req.query;
+    const routes = await deliveryHubRepo.listRoutes(tenantId, {
+      driverId: q.driverId ? String(q.driverId) : undefined,
+      status: q.status ? (String(q.status) as any) : undefined,
+    });
+    return res.json({ success: true, data: routes });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao listar rotas.' });
+  }
+});
+
+apiRouter.get('/delivery-hub/routes/:routeId', authenticate, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const route = await deliveryHubRepo.getRouteById(tenantId, req.params.routeId);
+    if (!route) {
+      return res.status(404).json({ success: false, error: 'Rota não encontrada.' });
+    }
+    if (req.user!.role === 'DELIVERY_DRIVER') {
+      const driver = await deliveryHubRepo.getDriverByUserId(tenantId, req.user!.id, req.user!.email);
+      if (!driver || route.driverId !== driver.id) {
+        return res.status(403).json({ success: false, error: 'Acesso negado: esta rota não está atribuída ao seu perfil de entregador.' });
+      }
+    }
+    return res.json({ success: true, data: route });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao buscar rota.' });
+  }
+});
+
+apiRouter.patch('/delivery-hub/routes/:routeId/reorder', authenticate, requireNonProfessional, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const { orderedStopIds } = req.body || {};
+    const route = await deliveryHubRepo.reorderRouteStops(
+      tenantId,
+      req.params.routeId,
+      Array.isArray(orderedStopIds) ? orderedStopIds : [],
+      req.user!
+    );
+    return res.json({
+      success: true,
+      data: route,
+      message: 'Sequência de paradas atualizada com sucesso!',
+    });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao reordenar paradas da rota.' });
+  }
+});
+
+apiRouter.delete('/delivery-hub/routes/:routeId/stops/:stopId', authenticate, requireNonProfessional, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const route = await deliveryHubRepo.removeStopFromRoute(
+      tenantId,
+      req.params.routeId,
+      req.params.stopId,
+      req.user!
+    );
+    return res.json({
+      success: true,
+      data: route,
+      message: 'Pedido removido da rota com sucesso!',
+    });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao remover parada da rota.' });
+  }
+});
+
+apiRouter.patch('/delivery-hub/routes/:routeId/driver', authenticate, requireNonProfessional, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const { driverId } = req.body || {};
+    const route = await deliveryHubRepo.assignDriverToRoute(
+      tenantId,
+      req.params.routeId,
+      driverId || null,
+      req.user!
+    );
+    return res.json({
+      success: true,
+      data: route,
+      message: driverId ? 'Entregador atribuído à rota com sucesso!' : 'Entregador desvinculado da rota.',
+    });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao atribuir entregador.' });
+  }
+});
+
+apiRouter.post('/delivery-hub/routes/:routeId/qr', authenticate, requireNonProfessional, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const action = req.body?.action === 'revoke' ? 'revoke' : 'regenerate';
+    const route = await deliveryHubRepo.revokeOrRegenerateRouteQr(
+      tenantId,
+      req.params.routeId,
+      action,
+      req.user!
+    );
+    return res.json({
+      success: true,
+      data: route,
+      message: action === 'revoke' ? 'QR Code revogado com sucesso!' : 'Novo QR Code gerado com sucesso!',
+    });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao gerenciar QR Code da rota.' });
+  }
+});
+
+apiRouter.post('/delivery-hub/routes/:routeId/cancel', authenticate, requireNonProfessional, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const route = await deliveryHubRepo.cancelRoute(tenantId, req.params.routeId, req.user!);
+    return res.json({
+      success: true,
+      data: route,
+      message: 'Rota cancelada com sucesso! Os pedidos pendentes voltaram para a fila de despacho.',
+    });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao cancelar rota.' });
+  }
+});
+
+// 11.6 Área do Motoboy (Driver Portal) & Execução da Rota (Leitura QR, Iniciar, Confirmar, Falha, Localização)
+apiRouter.get('/delivery-hub/driver-portal', authenticate, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const selectedDriverId = req.query.driverId ? String(req.query.driverId) : undefined;
+    const data = await deliveryHubRepo.getDriverPortalData(tenantId, req.user!, selectedDriverId);
+    return res.json({ success: true, data });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao carregar Área do Motoboy.' });
+  }
+});
+
+apiRouter.patch('/delivery-hub/driver-portal/status', authenticate, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const driver = await deliveryHubRepo.updateDriverStatusAndLocation(
+      tenantId,
+      req.user!,
+      req.body || {}
+    );
+    return res.json({ success: true, data: driver });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao atualizar status do entregador.' });
+  }
+});
+
+apiRouter.post('/delivery-hub/driver-portal/scan-qr', authenticate, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const { qrToken } = req.body || {};
+    const route = await deliveryHubRepo.scanRouteQrCode(tenantId, String(qrToken || ''), req.user!);
+    return res.json({
+      success: true,
+      data: route,
+      message: `Rota ${route.routeCode} vinculada com sucesso!`,
+    });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao validar QR Code da rota.' });
+  }
+});
+
+apiRouter.post('/delivery-hub/routes/:routeId/start', authenticate, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const route = await deliveryHubRepo.startRoute(tenantId, req.params.routeId, req.user!);
+    return res.json({
+      success: true,
+      data: route,
+      message: `Rota ${route.routeCode} iniciada! Boa viagem.`,
+    });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao iniciar rota.' });
+  }
+});
+
+apiRouter.post('/delivery-hub/routes/:routeId/stops/:stopId/start', authenticate, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const proto = (req.headers['x-forwarded-proto'] as string) || (req.secure ? 'https' : 'http');
+    const host = (req.headers['x-forwarded-host'] as string) || req.headers.host || 'minihub.tech';
+    const baseUrl = `${proto}://${host}`;
+    const result = await deliveryHubRepo.startRouteStop(
+      tenantId,
+      req.params.routeId,
+      req.params.stopId,
+      req.user!,
+      baseUrl
+    );
+    return res.json({
+      success: true,
+      data: result,
+      message: `Entrega do pedido ${result.stop.formattedOrderNumber} iniciada!`,
+    });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao iniciar entrega da parada.' });
+  }
+});
+
+apiRouter.post('/delivery-hub/routes/:routeId/stops/:stopId/complete', authenticate, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const route = await deliveryHubRepo.completeRouteStop(
+      tenantId,
+      req.params.routeId,
+      req.params.stopId,
+      req.user!
+    );
+    return res.json({
+      success: true,
+      data: route,
+      message: 'Entrega confirmada com sucesso!',
+    });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao confirmar entrega.' });
+  }
+});
+
+apiRouter.post('/delivery-hub/routes/:routeId/stops/:stopId/fail', authenticate, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const route = await deliveryHubRepo.failRouteStop(
+      tenantId,
+      req.params.routeId,
+      req.params.stopId,
+      req.body || {},
+      req.user!
+    );
+    return res.json({
+      success: true,
+      data: route,
+      message: 'Tentativa sem sucesso registrada.',
+    });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao registrar ocorrência na entrega.' });
+  }
+});
+
+// 11.7 Eventos & Notificações WhatsApp
+apiRouter.get('/delivery-hub/events', authenticate, requireNonProfessional, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const events = await deliveryHubRepo.listEvents(tenantId, {
+      routeId: req.query.routeId ? String(req.query.routeId) : undefined,
+      orderId: req.query.orderId ? String(req.query.orderId) : undefined,
+    });
+    return res.json({ success: true, data: events });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao consultar histórico de eventos.' });
+  }
+});
+
+apiRouter.get('/delivery-hub/notifications', authenticate, requireNonProfessional, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const orderId = req.query.orderId ? String(req.query.orderId) : undefined;
+    const notifications = await deliveryHubRepo.listNotifications(tenantId, orderId);
+    return res.json({ success: true, data: notifications });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao consultar notificações.' });
+  }
+});
+
+apiRouter.post('/delivery-hub/routes/:routeId/stops/:stopId/notify', authenticate, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const route = await deliveryHubRepo.getRouteById(tenantId, req.params.routeId);
+    if (!route) {
+      return res.status(404).json({ success: false, error: 'Rota não encontrada.' });
+    }
+    if (req.user!.role === 'DELIVERY_DRIVER') {
+      const driver = await deliveryHubRepo.getDriverByUserId(tenantId, req.user!.id, req.user!.email);
+      if (!driver || route.driverId !== driver.id) {
+        return res.status(403).json({ success: false, error: 'Acesso negado: esta rota não está atribuída ao seu perfil de entregador.' });
+      }
+    }
+    const stop = route.stops.find((s) => s.id === req.params.stopId);
+    if (!stop) {
+      return res.status(404).json({ success: false, error: 'Parada não encontrada.' });
+    }
+    const proto = (req.headers['x-forwarded-proto'] as string) || (req.secure ? 'https' : 'http');
+    const host = (req.headers['x-forwarded-host'] as string) || req.headers.host || 'minihub.tech';
+    const baseUrl = `${proto}://${host}`;
+    const notif = await deliveryHubRepo.dispatchWhatsAppNotification({
+      tenantId,
+      routeId: route.id,
+      stopId: stop.id,
+      orderId: stop.orderId,
+      eventType: 'out_for_delivery',
+      actor: req.user!,
+      baseUrl,
+      forceRetry: Boolean(req.body?.forceRetry),
+    });
+    return res.json({
+      success: true,
+      data: notif,
+      message: notif.providerConfirmed
+        ? 'Notificação enviada automaticamente pelo gateway WhatsApp!'
+        : 'Mensagem de entrega preparada com link de acompanhamento!',
+    });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao processar notificação WhatsApp.' });
+  }
+});
+
+// 11.8 Rastreamento Público pelo Cliente (Sem necessidade de login, via token exclusivo)
+apiRouter.get('/public/delivery-tracking/:token', async (req: Request, res: Response) => {
+  try {
+    const info = await deliveryHubRepo.getPublicTrackingByToken(req.params.token);
+    if (!info) {
+      return res.status(404).json({
+        success: false,
+        error: 'Link de rastreamento inválido ou expirado.',
+      });
+    }
+    return res.json({ success: true, data: info });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao carregar rastreamento da entrega.' });
   }
 });
 

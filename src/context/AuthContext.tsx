@@ -1,19 +1,30 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, Tenant, FeatureKey } from '../types/saas';
 import { Professional } from '../types/service';
+import { DeliveryDriver } from '../types/deliveryHub';
 import { api } from '../services/api';
 
 interface AuthContextType {
   user: User | null;
   tenant: Tenant | null;
   linkedProfessional: Professional | null;
+  linkedDriver: DeliveryDriver | null;
   isProfessional: boolean;
+  isDeliveryDriver: boolean;
   loading: boolean;
   isImpersonating: boolean;
   isDevelopment: boolean;
   originalAdminUserName?: string;
   resolvedFeatures: Record<FeatureKey, boolean>;
-  login: (email: string, pass: string) => Promise<{ user: User; tenant?: Tenant | null; linkedProfessional?: Professional | null }>;
+  login: (
+    email: string,
+    pass: string
+  ) => Promise<{
+    user: User;
+    tenant?: Tenant | null;
+    linkedProfessional?: Professional | null;
+    linkedDriver?: DeliveryDriver | null;
+  }>;
   logout: () => Promise<void>;
   impersonate: (tenantId: string) => Promise<void>;
   exitImpersonation: () => Promise<void>;
@@ -27,6 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [linkedProfessional, setLinkedProfessional] = useState<Professional | null>(null);
+  const [linkedDriver, setLinkedDriver] = useState<DeliveryDriver | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [isImpersonating, setIsImpersonating] = useState<boolean>(false);
   const [isDevelopment, setIsDevelopment] = useState<boolean>(true);
@@ -35,6 +47,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const manualAuthActionRef = React.useRef<boolean>(false);
 
   const isProfessional = user?.role === 'PROFESSIONAL';
+  const isDeliveryDriver = user?.role === 'DELIVERY_DRIVER';
 
   const initSession = async () => {
     try {
@@ -61,6 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(session.user);
       setTenant(session.tenant || null);
       setLinkedProfessional(session.linkedProfessional || null);
+      setLinkedDriver(session.linkedDriver || null);
       setIsImpersonating(!!session.isImpersonating);
       setOriginalAdminUserName(session.originalAdminUserName);
       if (session.resolvedFeatures) {
@@ -73,6 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
       setTenant(null);
       setLinkedProfessional(null);
+      setLinkedDriver(null);
       setIsImpersonating(false);
     } finally {
       if (!manualAuthActionRef.current) {
@@ -87,13 +102,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, pass: string) => {
     manualAuthActionRef.current = true;
-    // Note: Do NOT set global `loading = true` before api.login completes,
-    // because setting `loading = true` when `user === null` unmounts <LoginView />,
-    // which would destroy the login form state and error display if login fails.
     const data = await api.login(email, pass);
     setUser(data.user);
     setTenant(data.tenant || null);
     setLinkedProfessional(data.linkedProfessional || null);
+    setLinkedDriver(data.linkedDriver || null);
     setIsImpersonating(false);
     setOriginalAdminUserName(undefined);
     if (data.resolvedFeatures) {
@@ -113,6 +126,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
       setTenant(null);
       setLinkedProfessional(null);
+      setLinkedDriver(null);
       setIsImpersonating(false);
       setOriginalAdminUserName(undefined);
     } finally {
@@ -157,6 +171,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(session.user);
         setTenant(session.tenant || null);
         setLinkedProfessional(session.linkedProfessional || null);
+        setLinkedDriver(session.linkedDriver || null);
         setIsImpersonating(!!session.isImpersonating);
         setOriginalAdminUserName(session.originalAdminUserName);
         if (session.resolvedFeatures) {
@@ -189,7 +204,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('localhub:refresh-session', handleAutoRefresh);
 
-    // Periodic lightweight sync every 30s while tab is visible so live Super Admin overrides propagate automatically
     const intervalId = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
         refreshSession();
@@ -210,7 +224,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         tenant,
         linkedProfessional,
+        linkedDriver,
         isProfessional,
+        isDeliveryDriver,
         loading,
         isImpersonating,
         isDevelopment,

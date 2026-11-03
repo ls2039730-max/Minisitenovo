@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   X,
   Search,
@@ -10,10 +10,13 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Tag,
   MessageSquare,
   User as UserIcon,
   Layers,
+  ChevronUp,
+  ChevronDown,
+  RefreshCw,
+  Lock,
 } from 'lucide-react';
 import {
   Product,
@@ -21,6 +24,12 @@ import {
   ProductVariant,
   DayOfWeek,
 } from '../../../types/product';
+import {
+  RestaurantOrder,
+  RestaurantSession,
+  RestaurantTable,
+} from '../../../types/restaurant';
+import { api } from '../../../services/api';
 
 function getCurrentDayOfWeek(): DayOfWeek {
   return new Date().getDay() as DayOfWeek;
@@ -40,12 +49,6 @@ function isProductAvailableOnDay(
   if (!Array.isArray(days) || days.length === 0) return true;
   return days.includes(day);
 }
-import {
-  RestaurantOrder,
-  RestaurantSession,
-  RestaurantTable,
-} from '../../../types/restaurant';
-import { api } from '../../../services/api';
 
 interface AddTableOrderModalProps {
   isOpen: boolean;
@@ -81,7 +84,10 @@ export const AddTableOrderModal: React.FC<AddTableOrderModalProps> = ({
 }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
+  const [liveSession, setLiveSession] = useState<RestaurantSession | null>(null);
   const [isLoadingCatalog, setIsLoadingCatalog] = useState(false);
+  const [catalogLoadError, setCatalogLoadError] = useState<string | null>(null);
+  const [isSessionUnavailable, setIsSessionUnavailable] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
@@ -89,16 +95,71 @@ export const AddTableOrderModal: React.FC<AddTableOrderModalProps> = ({
   const [draftQuantityByProduct, setDraftQuantityByProduct] = useState<Record<string, number>>({});
   const [draftNotesByProduct, setDraftNotesByProduct] = useState<Record<string, string>>({});
   const [expandedNotesProductId, setExpandedNotesProductId] = useState<string | null>(null);
+  const [expandedNameProductIds, setExpandedNameProductIds] = useState<Record<string, boolean>>({});
+  const [failedImageIds, setFailedImageIds] = useState<Record<string, boolean>>({});
 
   const [cart, setCart] = useState<CartItemDraft[]>([]);
   const [customerName, setCustomerName] = useState('');
   const [orderNotes, setOrderNotes] = useState('');
+  const [isSummaryExpandedMobile, setIsSummaryExpandedMobile] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [addedToast, setAddedToast] = useState<string | null>(null);
+  const [confirmedOrderInfo, setConfirmedOrderInfo] = useState<{ orderNumber: number } | null>(null);
   const [idempotencySeed, setIdempotencySeed] = useState<string>('');
 
+  const toastTimeoutRef = useRef<number | null>(null);
   const currentDay = useMemo(() => getCurrentDayOfWeek(), []);
+
+  const loadCatalogAndSession = useCallback(async () => {
+    if (!table) return;
+    setIsLoadingCatalog(true);
+    setCatalogLoadError(null);
+    setError(null);
+
+    try {
+      const [prods, cats, sessionData] = await Promise.all([
+        api.getProducts({ isActive: true }),
+        api.getCategories(),
+        api.getTableSession(table.id).catch(() => null),
+      ]);
+
+      const activeProducts = (prods || []).filter((p) => p.isActive);
+      setProducts(activeProducts);
+      setCategories((cats || []).filter((c) => c.isActive));
+
+      if (sessionData) {
+        setLiveSession(sessionData);
+        if (sessionData.status === 'closed' || Boolean(sessionData.closedAt)) {
+          setIsSessionUnavailable(true);
+        } else {
+          setIsSessionUnavailable(false);
+        }
+      } else if (!sessionId && !table.currentSessionId) {
+        setIsSessionUnavailable(true);
+      }
+
+      setSelectedVariantsByProduct((prev) => {
+        const next = { ...prev };
+        for (const p of activeProducts) {
+          if (!next[p.id]) {
+            const activeVars = (p.variants || []).filter((v) => v.isActive);
+            if (activeVars.length > 0) {
+              next[p.id] = activeVars[0].id;
+            }
+          }
+        }
+        return next;
+      });
+    } catch (err: any) {
+      setCatalogLoadError(
+        err.message || 'Falha de conexão ao carregar o catálogo de produtos.'
+      );
+    } finally {
+      setIsLoadingCatalog(false);
+    }
+  }, [table, sessionId]);
 
   useEffect(() => {
     if (!isOpen || !table) return;
@@ -109,43 +170,34 @@ export const AddTableOrderModal: React.FC<AddTableOrderModalProps> = ({
     setCustomerName('');
     setOrderNotes('');
     setError(null);
+    setCatalogLoadError(null);
+    setAddedToast(null);
+    setConfirmedOrderInfo(null);
+    setIsSessionUnavailable(false);
+    setLiveSession(null);
     setExpandedNotesProductId(null);
+    setExpandedNameProductIds({});
+    setIsSummaryExpandedMobile(false);
     setIdempotencySeed(`${table.id}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
 
-    let mounted = true;
-    const loadCatalog = async () => {
-      setIsLoadingCatalog(true);
-      try {
-        const [prods, cats] = await Promise.all([
-          api.getProducts({ isActive: true }),
-          api.getCategories(),
-        ]);
-        if (!mounted) return;
-        const activeProducts = (prods || []).filter((p) => p.isActive);
-        setProducts(activeProducts);
-        setCategories((cats || []).filter((c) => c.isActive));
+    loadCatalogAndSession();
 
-        const defaultVariants: Record<string, string> = {};
-        for (const p of activeProducts) {
-          const activeVars = (p.variants || []).filter((v) => v.isActive);
-          if (activeVars.length > 0) {
-            defaultVariants[p.id] = activeVars[0].id;
-          }
-        }
-        setSelectedVariantsByProduct(defaultVariants);
-      } catch (err: any) {
-        if (!mounted) return;
-        setError(err.message || 'Erro ao carregar o catálogo de produtos.');
-      } finally {
-        if (mounted) setIsLoadingCatalog(false);
+    return () => {
+      if (toastTimeoutRef.current) {
+        window.clearTimeout(toastTimeoutRef.current);
       }
     };
+  }, [isOpen, table, loadCatalogAndSession]);
 
-    loadCatalog();
-    return () => {
-      mounted = false;
-    };
-  }, [isOpen, table]);
+  const triggerAddedToast = (message: string) => {
+    setAddedToast(message);
+    if (toastTimeoutRef.current) {
+      window.clearTimeout(toastTimeoutRef.current);
+    }
+    toastTimeoutRef.current = window.setTimeout(() => {
+      setAddedToast(null);
+    }, 2400);
+  };
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
@@ -189,14 +241,17 @@ export const AddTableOrderModal: React.FC<AddTableOrderModalProps> = ({
         return { available: false, reason: 'Variação inativa' };
       }
       if (variant.stockQuantity !== null && variant.stockQuantity !== undefined) {
-        if (Number(variant.stockQuantity) <= 0) {
+        if (Number(variant.stockQuantity) <= 0 && !product.allowOutOfStock) {
           return { available: false, reason: 'Variação esgotada', maxStock: 0 };
         }
-        return { available: true, maxStock: Number(variant.stockQuantity) };
+        return {
+          available: true,
+          maxStock: product.allowOutOfStock ? null : Number(variant.stockQuantity),
+        };
       }
       return { available: true, maxStock: null };
     }
-    if (product.trackStock) {
+    if (product.trackStock && !product.allowOutOfStock) {
       const stock = Number(product.stockQuantity ?? 0);
       if (stock <= 0) {
         return { available: false, reason: 'Esgotado', maxStock: 0 };
@@ -225,12 +280,22 @@ export const AddTableOrderModal: React.FC<AddTableOrderModalProps> = ({
 
   const handleAddProductToCart = (product: Product) => {
     setError(null);
+    if (isSessionUnavailable) {
+      setError('A sessão desta mesa está encerrada ou indisponível.');
+      return;
+    }
+
     const activeVariants = (product.variants || []).filter((v) => v.isActive);
     const chosenVariantId = selectedVariantsByProduct[product.id];
     const chosenVariant =
       activeVariants.length > 0
-        ? activeVariants.find((v) => v.id === chosenVariantId) || activeVariants[0]
+        ? activeVariants.find((v) => v.id === chosenVariantId) || null
         : null;
+
+    if (activeVariants.length > 0 && !chosenVariant) {
+      setError(`Selecione uma opção/variação válida para "${product.name}".`);
+      return;
+    }
 
     const availability = evaluateProductAvailability(product, chosenVariant);
     if (!availability.available) {
@@ -248,13 +313,14 @@ export const AddTableOrderModal: React.FC<AddTableOrderModalProps> = ({
     const itemNotes = (draftNotesByProduct[product.id] || '').trim();
     const itemKey = `${product.id}::${chosenVariant?.id || 'base'}::${itemNotes.toLowerCase()}`;
 
+    let stockExceeded = false;
     setCart((prev) => {
       const existingIdx = prev.findIndex((c) => c.key === itemKey);
       if (existingIdx >= 0) {
         const existing = prev[existingIdx];
         const nextQty = existing.quantity + qtyToAdd;
         if (availability.maxStock !== null && availability.maxStock !== undefined && nextQty > availability.maxStock) {
-          setError(`Estoque máximo atingido para "${product.name}" (${availability.maxStock} un.).`);
+          stockExceeded = true;
           return prev;
         }
         const updated = [...prev];
@@ -266,7 +332,7 @@ export const AddTableOrderModal: React.FC<AddTableOrderModalProps> = ({
       }
 
       if (availability.maxStock !== null && availability.maxStock !== undefined && qtyToAdd > availability.maxStock) {
-        setError(`Estoque insuficiente para "${product.name}" (disponível: ${availability.maxStock} un.).`);
+        stockExceeded = true;
         return prev;
       }
 
@@ -293,13 +359,20 @@ export const AddTableOrderModal: React.FC<AddTableOrderModalProps> = ({
       ];
     });
 
-    // Reset draft quantity & notes for this product card
+    if (stockExceeded) {
+      setError(`Estoque máximo atingido para "${product.name}" (${availability.maxStock} un.).`);
+      return;
+    }
+
+    triggerAddedToast(
+      `${qtyToAdd}x ${product.name}${chosenVariant ? ` (${chosenVariant.name})` : ''} adicionado ao pedido`
+    );
+
     setDraftQuantityByProduct((prev) => ({ ...prev, [product.id]: 1 }));
     setDraftNotesByProduct((prev) => ({ ...prev, [product.id]: '' }));
     if (expandedNotesProductId === product.id) {
       setExpandedNotesProductId(null);
     }
-    // Rotate idempotency seed whenever cart content changes intentionally
     setIdempotencySeed(`${table?.id || 'tbl'}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   };
 
@@ -347,18 +420,68 @@ export const AddTableOrderModal: React.FC<AddTableOrderModalProps> = ({
     [cart]
   );
 
-  const projectedSessionTotal = useMemo(
-    () => Math.round((Number(currentSessionTotal || 0) + newOrderSubtotal) * 100) / 100,
-    [currentSessionTotal, newOrderSubtotal]
-  );
+  // Financial breakdown calculations
+  const financialBreakdown = useMemo(() => {
+    const baseConsumption =
+      liveSession !== null
+        ? Number(liveSession.totalAmount || 0)
+        : Number(currentSessionTotal || 0);
+
+    const existingOrdersSub =
+      liveSession?.ordersSubtotal !== undefined
+        ? Number(liveSession.ordersSubtotal || 0)
+        : baseConsumption;
+
+    const combinedOrdersSubtotal = Math.round((existingOrdersSub + newOrderSubtotal) * 100) / 100;
+
+    let projectedFees = 0;
+    if (liveSession?.fees && liveSession.fees.length > 0) {
+      for (const f of liveSession.fees) {
+        if (f.type === 'percentage') {
+          projectedFees += Math.round(combinedOrdersSubtotal * (Number(f.rateOrAmount || 0) / 100) * 100) / 100;
+        } else {
+          projectedFees += Number(f.rateOrAmount || 0);
+        }
+      }
+      projectedFees = Math.round(projectedFees * 100) / 100;
+    } else if (liveSession?.feesTotal) {
+      projectedFees = Number(liveSession.feesTotal || 0);
+    }
+
+    const discountAmount = Number(liveSession?.discountAmount || 0);
+    const paidAmount = Number(liveSession?.paidAmount || 0);
+
+    const estimatedAccountTotal = liveSession
+      ? Math.max(0, Math.round((combinedOrdersSubtotal + projectedFees - discountAmount) * 100) / 100)
+      : Math.max(0, Math.round((baseConsumption + newOrderSubtotal) * 100) / 100);
+
+    const estimatedPendingBalance = Math.max(
+      0,
+      Math.round((estimatedAccountTotal - paidAmount) * 100) / 100
+    );
+
+    return {
+      currentTableConsumption: baseConsumption,
+      existingOrdersSub,
+      projectedFees,
+      discountAmount,
+      paidAmount,
+      estimatedAccountTotal,
+      estimatedPendingBalance,
+    };
+  }, [liveSession, currentSessionTotal, newOrderSubtotal]);
+
+  const effectiveSessionCode = liveSession?.sessionCode || sessionCode || null;
+  const nextOrderSequence =
+    liveSession?.ordersCount !== undefined ? Number(liveSession.ordersCount) + 1 : null;
 
   const handleSubmitOrder = async () => {
-    if (!table || cart.length === 0 || isSubmitting) return;
+    if (!table || cart.length === 0 || isSubmitting || isSessionUnavailable) return;
     setError(null);
     setIsSubmitting(true);
 
     try {
-      const targetSessionId = sessionId || table.currentSessionId || undefined;
+      const targetSessionId = liveSession?.id || sessionId || table.currentSessionId || undefined;
       const result = await api.addOrderToTableSession(table.id, {
         sessionId: targetSessionId,
         customerName: customerName.trim() || undefined,
@@ -372,7 +495,8 @@ export const AddTableOrderModal: React.FC<AddTableOrderModalProps> = ({
         })),
       });
 
-      // Broadcast synchronization event across tabs and views
+      setConfirmedOrderInfo({ orderNumber: result.order.orderNumber });
+
       try {
         window.dispatchEvent(
           new CustomEvent('localhub:restaurant-updated', {
@@ -403,7 +527,15 @@ export const AddTableOrderModal: React.FC<AddTableOrderModalProps> = ({
       onOrderAdded(result.order, result.session);
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Não foi possível adicionar o pedido à mesa.');
+      const msg = err.message || 'Não foi possível enviar o pedido para a cozinha. Verifique sua conexão e tente novamente.';
+      if (
+        msg.toLowerCase().includes('encerrada') ||
+        msg.toLowerCase().includes('não há nenhuma conta aberta')
+      ) {
+        setIsSessionUnavailable(true);
+      }
+      // Keep cart intact on error so waiter never loses selected items
+      setError(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -411,88 +543,360 @@ export const AddTableOrderModal: React.FC<AddTableOrderModalProps> = ({
 
   if (!isOpen || !table) return null;
 
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[92vh] flex flex-col overflow-hidden border border-slate-100">
-        {/* Header */}
-        <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-900 text-white">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-amber-500 text-white flex items-center justify-center font-black text-lg shadow-sm">
-              {table.tableNumber}
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-lg font-bold text-white">
-                  Adicionar Itens — Mesa {table.tableNumber}
-                  {table.name ? ` (${table.name})` : ''}
-                </h2>
-                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                  Sessão Aberta {sessionCode ? `• #${sessionCode}` : ''}
+  const renderSummaryContent = () => (
+    <div className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-4">
+      {cart.length === 0 ? (
+        <div className="py-10 px-4 flex flex-col items-center justify-center text-center border border-dashed border-slate-200 rounded-2xl bg-slate-50/60">
+          <ShoppingBag className="w-10 h-10 text-slate-300 mb-2.5" />
+          <p className="text-[15px] font-bold text-slate-700">
+            Nenhum item selecionado
+          </p>
+          <p className="text-[13px] text-slate-500 mt-1 max-w-xs leading-relaxed">
+            Toque em &ldquo;Adicionar&rdquo; nos produtos do catálogo para montar o pedido adicional desta mesa.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {cart.map((item) => (
+            <div
+              key={item.key}
+              className="p-3.5 rounded-2xl border border-slate-200 bg-white shadow-2xs space-y-2.5"
+            >
+              <div className="flex items-start justify-between gap-2.5">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[15px] font-bold text-slate-900 leading-snug break-words">
+                    {item.productName}
+                  </p>
+                  <div className="flex items-center gap-1.5 flex-wrap mt-0.5 text-[13px] text-slate-500">
+                    {item.variantName && (
+                      <>
+                        <span className="font-semibold text-amber-800">
+                          {item.variantName}
+                        </span>
+                        <span aria-hidden="true">·</span>
+                      </>
+                    )}
+                    <span className="tabular-nums">
+                      {formatCurrency(item.unitPrice)} un.
+                    </span>
+                  </div>
+                </div>
+                <span className="text-[16px] font-extrabold text-slate-900 tabular-nums shrink-0">
+                  {formatCurrency(item.unitPrice * item.quantity)}
                 </span>
               </div>
-              <p className="text-xs text-slate-300 mt-0.5">
-                Os novos itens serão lançados como pedido adicional na conta aberta desta mesa e enviados ao KDS.
-              </p>
+
+              {/* Item Notes Input */}
+              <input
+                type="text"
+                value={item.notes}
+                onChange={(e) => handleUpdateCartItemNotes(item.key, e.target.value)}
+                placeholder="Observação deste item (ex: sem cebola, gelo e limão)..."
+                className="w-full min-h-[42px] px-3 py-2 text-[14px] bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-amber-500 outline-none"
+              />
+
+              {/* Quantity & Remove Controls with >=44px touch targets */}
+              <div className="flex items-center justify-between pt-1 gap-2">
+                <div className="inline-flex items-center bg-slate-100 border border-slate-200 rounded-xl p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateCartQuantity(item.key, -1)}
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-slate-700 hover:bg-white active:scale-95 transition-all cursor-pointer"
+                    title="Diminuir quantidade"
+                    aria-label={`Diminuir quantidade de ${item.productName}`}
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="w-9 text-center text-[15px] font-extrabold text-slate-900 tabular-nums">
+                    {item.quantity}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateCartQuantity(item.key, 1)}
+                    disabled={
+                      item.maxStock !== null &&
+                      item.maxStock !== undefined &&
+                      item.quantity >= item.maxStock
+                    }
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-slate-700 hover:bg-white disabled:opacity-40 active:scale-95 transition-all cursor-pointer"
+                    title="Aumentar quantidade"
+                    aria-label={`Aumentar quantidade de ${item.productName}`}
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleRemoveCartItem(item.key)}
+                  className="min-h-[44px] px-3 inline-flex items-center gap-1.5 text-[13px] font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Remover</span>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Optional Order Identification & General Notes */}
+      {cart.length > 0 && (
+        <div className="pt-3 border-t border-slate-200 space-y-3">
+          <div>
+            <label className="block text-[13px] font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+              <UserIcon className="w-3.5 h-3.5 text-slate-400" />
+              Identificação do cliente na mesa (opcional)
+            </label>
+            <input
+              type="text"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              placeholder="Ex: João / Cadeira 2"
+              className="w-full min-h-[44px] px-3.5 py-2 text-[14px] bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:border-amber-500 outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-[13px] font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+              <MessageSquare className="w-3.5 h-3.5 text-slate-400" />
+              Observação geral do pedido (opcional)
+            </label>
+            <input
+              type="text"
+              value={orderNotes}
+              onChange={(e) => setOrderNotes(e.target.value)}
+              placeholder="Ex: Trazer junto com as bebidas..."
+              className="w-full min-h-[44px] px-3.5 py-2 text-[14px] bg-slate-50 border border-slate-200 rounded-xl text-slate-900 focus:bg-white focus:border-amber-500 outline-none"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Complete Financial Breakdown of the Session */}
+      <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 text-[14px]">
+        <div className="flex items-center justify-between text-slate-600">
+          <span>Consumo atual da mesa:</span>
+          <span className="font-semibold text-slate-800 tabular-nums">
+            {formatCurrency(financialBreakdown.currentTableConsumption)}
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between text-amber-800 font-bold pt-1.5 border-t border-slate-200/80">
+          <span>Subtotal do novo pedido ({totalItemsCount} {totalItemsCount === 1 ? 'item' : 'itens'}):</span>
+          <span className="tabular-nums">+ {formatCurrency(newOrderSubtotal)}</span>
+        </div>
+
+        {financialBreakdown.projectedFees > 0 && (
+          <div className="flex items-center justify-between text-slate-600 text-[13px]">
+            <span>Taxas de serviço estimadas:</span>
+            <span className="font-semibold tabular-nums">
+              + {formatCurrency(financialBreakdown.projectedFees)}
+            </span>
+          </div>
+        )}
+
+        {financialBreakdown.discountAmount > 0 && (
+          <div className="flex items-center justify-between text-emerald-700 text-[13px]">
+            <span>Descontos aplicados na conta:</span>
+            <span className="font-semibold tabular-nums">
+              - {formatCurrency(financialBreakdown.discountAmount)}
+            </span>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between text-slate-900 font-extrabold text-[15px] pt-2 border-t border-slate-200">
+          <span>Novo total estimado da conta:</span>
+          <span className="text-emerald-700 tabular-nums">
+            {formatCurrency(financialBreakdown.estimatedAccountTotal)}
+          </span>
+        </div>
+
+        {financialBreakdown.paidAmount > 0 && (
+          <div className="pt-1.5 border-t border-slate-200/70 space-y-1 text-[13px]">
+            <div className="flex items-center justify-between text-emerald-700">
+              <span>Já recebido (pagamento parcial):</span>
+              <span className="font-semibold tabular-nums">
+                - {formatCurrency(financialBreakdown.paidAmount)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-slate-800 font-bold">
+              <span>Saldo pendente estimado:</span>
+              <span className="tabular-nums">
+                {formatCurrency(financialBreakdown.estimatedPendingBalance)}
+              </span>
             </div>
           </div>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex flex-col sm:items-center sm:justify-center sm:p-3 lg:p-5 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-150"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="add-table-order-title"
+    >
+      <div className="bg-white w-full h-[100dvh] max-h-[100dvh] sm:h-[92dvh] sm:max-h-[92dvh] sm:max-w-6xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden sm:border sm:border-slate-200 pt-safe">
+        {/* 1. COMPACT HEADER (shrink-0) */}
+        <header className="shrink-0 px-3.5 py-2.5 sm:px-5 sm:py-3.5 bg-slate-900 text-white border-b border-slate-800 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black text-[16px] sm:text-[18px] shrink-0 shadow-xs tabular-nums">
+              {table.tableNumber}
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2
+                id="add-table-order-title"
+                className="text-[20px] sm:text-[22px] font-extrabold text-white leading-tight truncate"
+              >
+                Adicionar itens
+              </h2>
+              <div className="flex items-center gap-1.5 text-[13px] sm:text-[14px] text-slate-300 mt-0.5 truncate">
+                <span className="font-semibold text-amber-300 shrink-0">
+                  Mesa {table.tableNumber}
+                  {table.name ? ` (${table.name})` : ''}
+                </span>
+                <span aria-hidden="true" className="text-slate-500 shrink-0">·</span>
+                <span className="truncate">
+                  {effectiveSessionCode ? `Sessão #${effectiveSessionCode}` : 'Sessão aberta'}
+                </span>
+                {nextOrderSequence !== null && (
+                  <>
+                    <span aria-hidden="true" className="text-slate-500 shrink-0">·</span>
+                    <span className="text-emerald-300 font-semibold shrink-0">
+                      {nextOrderSequence}º pedido
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
           <button
+            type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-            title="Fechar catálogo"
+            aria-label="Fechar janela de adicionar itens"
+            title="Fechar"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 active:bg-slate-700 transition-colors shrink-0 cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
-        </div>
+        </header>
 
-        {/* Error Banner */}
-        {error && (
-          <div className="mx-4 mt-3 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2.5 text-rose-700 text-xs font-semibold">
-            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-            <span className="flex-1">{error}</span>
+        {/* STATUS / FEEDBACK BANNERS (shrink-0) */}
+        {isSessionUnavailable && (
+          <div className="shrink-0 px-3.5 py-2.5 bg-rose-600 text-white flex items-center justify-between gap-2.5 text-[13px] sm:text-[14px] font-semibold">
+            <div className="flex items-center gap-2 min-w-0">
+              <Lock className="w-4 h-4 shrink-0" />
+              <span>
+                A sessão desta mesa foi encerrada ou não está mais disponível para novos pedidos.
+              </span>
+            </div>
             <button
-              onClick={() => setError(null)}
-              className="text-rose-500 hover:text-rose-700 font-bold px-1.5"
+              type="button"
+              onClick={onClose}
+              className="min-h-[36px] px-3 rounded-lg bg-white text-rose-700 font-bold text-[13px] shrink-0"
             >
-              ✕
+              Fechar
             </button>
           </div>
         )}
 
-        {/* Main Content Split: Catalog (Left) + Cart Summary (Right) */}
-        <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-12">
-          {/* Left Column: Product Catalog */}
-          <div className="lg:col-span-7 xl:col-span-8 flex flex-col overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-200 bg-slate-50/50">
-            {/* Search and Category Bar */}
-            <div className="p-4 bg-white border-b border-slate-200 space-y-3">
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+        {error && (
+          <div
+            role="alert"
+            className="shrink-0 mx-3.5 mt-2.5 px-3.5 py-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2.5 text-rose-800 text-[13px] sm:text-[14px] font-semibold"
+          >
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+            <span className="flex-1 leading-snug">{error}</span>
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              aria-label="Dispensar mensagem de erro"
+              className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg text-rose-600 hover:bg-rose-100 font-bold shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {addedToast && !error && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="shrink-0 mx-3.5 mt-2 px-3.5 py-2 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between gap-2 text-emerald-800 text-[13px] font-bold"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span className="truncate">{addedToast}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsSummaryExpandedMobile(true)}
+              className="lg:hidden text-[12px] font-extrabold text-emerald-700 underline shrink-0"
+            >
+              Ver resumo
+            </button>
+          </div>
+        )}
+
+        {confirmedOrderInfo && (
+          <div
+            role="status"
+            className="shrink-0 mx-3.5 mt-2 px-3.5 py-2.5 bg-emerald-600 text-white rounded-xl flex items-center gap-2 text-[14px] font-bold"
+          >
+            <CheckCircle2 className="w-5 h-5 shrink-0" />
+            <span>
+              Pedido #{confirmedOrderInfo.orderNumber} confirmado e enviado para a cozinha!
+            </span>
+          </div>
+        )}
+
+        {/* 2. MAIN WORKSPACE: CATALOG + DESKTOP SIDEBAR + MOBILE EXPANDED SHEET */}
+        <div className="flex-1 min-h-0 flex flex-col lg:grid lg:grid-cols-12 overflow-hidden relative">
+          {/* LEFT / MAIN COLUMN: SEARCH + CATEGORIES + SCROLLABLE PRODUCTS */}
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden lg:col-span-7 xl:col-span-8 lg:border-r lg:border-slate-200 bg-slate-50">
+            {/* Search and Horizontal Category Bar (shrink-0, never overlaps product cards) */}
+            <div className="shrink-0 px-3.5 py-2.5 sm:px-5 sm:py-3 bg-white border-b border-slate-200 space-y-2.5">
+              {/* Search Field */}
+              <div className="relative flex items-center">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Pesquisar produto pelo nome, categoria ou código..."
-                  className="w-full pl-10 pr-9 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none transition-all"
+                  placeholder="Buscar produto por nome, código ou categoria..."
+                  className="w-full min-h-[44px] pl-10 pr-11 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[15px] text-slate-900 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none transition-all"
                 />
                 {searchQuery && (
                   <button
+                    type="button"
                     onClick={() => setSearchQuery('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
+                    aria-label="Limpar busca"
+                    className="min-w-[44px] min-h-[44px] absolute right-0 flex items-center justify-center text-slate-400 hover:text-slate-700 cursor-pointer"
                   >
-                    Limpar
+                    <X className="w-4 h-4" />
                   </button>
                 )}
               </div>
 
-              {/* Category Filter Buttons */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+              {/* Horizontal Scrollable Category Strip */}
+              <div
+                className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5"
+                role="tablist"
+                aria-label="Categorias de produtos"
+              >
                 <button
                   type="button"
+                  role="tab"
+                  aria-selected={selectedCategoryId === 'all'}
                   onClick={() => setSelectedCategoryId('all')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${
+                  className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-[13px] sm:text-[14px] font-bold whitespace-nowrap shrink-0 transition-all cursor-pointer ${
                     selectedCategoryId === 'all'
-                      ? 'bg-slate-900 text-white shadow-sm'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
                   Todos ({products.length})
@@ -500,18 +904,20 @@ export const AddTableOrderModal: React.FC<AddTableOrderModalProps> = ({
                 {categories.map((cat) => {
                   const count = products.filter((p) => p.categoryId === cat.id).length;
                   if (count === 0) return null;
+                  const isSelected = selectedCategoryId === cat.id;
                   return (
                     <button
                       key={cat.id}
                       type="button"
+                      role="tab"
+                      aria-selected={isSelected}
                       onClick={() => setSelectedCategoryId(cat.id)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                        selectedCategoryId === cat.id
-                          ? 'bg-amber-600 text-white shadow-sm'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-[13px] sm:text-[14px] font-bold whitespace-nowrap shrink-0 transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-amber-500 text-slate-950 shadow-xs'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                       }`}
                     >
-                      <Tag className="w-3 h-3" />
                       {cat.name} ({count})
                     </button>
                   );
@@ -519,23 +925,65 @@ export const AddTableOrderModal: React.FC<AddTableOrderModalProps> = ({
               </div>
             </div>
 
-            {/* Product List */}
-            <div className="flex-1 overflow-y-auto p-4">
+            {/* Dedicated Scrollable Product List */}
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3.5 pt-3.5 pb-10 sm:px-5 sm:pt-4 sm:pb-12">
               {isLoadingCatalog ? (
-                <div className="py-16 flex flex-col items-center justify-center text-slate-400">
+                <div className="py-16 flex flex-col items-center justify-center text-slate-500">
                   <Loader2 className="w-8 h-8 animate-spin text-amber-500 mb-3" />
-                  <p className="text-sm font-medium">Carregando catálogo oficial do restaurante...</p>
-                </div>
-              ) : filteredProducts.length === 0 ? (
-                <div className="py-16 text-center bg-white rounded-2xl border border-dashed border-slate-200 p-8">
-                  <Utensils className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                  <p className="text-sm font-bold text-slate-700">Nenhum produto encontrado</p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Tente ajustar o termo de busca ou selecionar outra categoria.
+                  <p className="text-[15px] font-semibold text-slate-700">
+                    Carregando catálogo do restaurante...
                   </p>
                 </div>
+              ) : catalogLoadError ? (
+                <div className="py-12 px-5 text-center bg-white rounded-2xl border border-rose-200 max-w-md mx-auto my-4">
+                  <AlertCircle className="w-10 h-10 text-rose-500 mx-auto mb-2.5" />
+                  <p className="text-[16px] font-bold text-slate-900">
+                    Falha ao carregar os produtos
+                  </p>
+                  <p className="text-[14px] text-slate-600 mt-1">
+                    {catalogLoadError}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={loadCatalogAndSession}
+                    className="mt-4 min-h-[44px] px-4 py-2 rounded-xl bg-slate-900 text-white font-bold text-[14px] inline-flex items-center gap-2 hover:bg-slate-800 cursor-pointer"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    Tentar novamente
+                  </button>
+                </div>
+              ) : products.length === 0 ? (
+                <div className="py-14 px-5 text-center bg-white rounded-2xl border border-dashed border-slate-200">
+                  <Utensils className="w-10 h-10 text-slate-300 mx-auto mb-2.5" />
+                  <p className="text-[16px] font-bold text-slate-800">
+                    Nenhum produto disponível no catálogo
+                  </p>
+                  <p className="text-[14px] text-slate-500 mt-1">
+                    Cadastre ou ative produtos no menu Catálogo de Produtos para lançá-los nas mesas.
+                  </p>
+                </div>
+              ) : filteredProducts.length === 0 ? (
+                <div className="py-12 px-5 text-center bg-white rounded-2xl border border-dashed border-slate-200">
+                  <Search className="w-9 h-9 text-slate-300 mx-auto mb-2.5" />
+                  <p className="text-[16px] font-bold text-slate-800">
+                    Nenhum produto encontrado
+                  </p>
+                  <p className="text-[14px] text-slate-500 mt-1">
+                    Não encontramos produtos para &ldquo;{searchQuery}&rdquo; nesta categoria.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setSelectedCategoryId('all');
+                    }}
+                    className="mt-4 min-h-[44px] px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-[14px] transition-colors cursor-pointer"
+                  >
+                    Limpar busca e filtros
+                  </button>
+                </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                   {filteredProducts.map((product) => {
                     const activeVariants = (product.variants || []).filter((v) => v.isActive);
                     const selectedVariantId = selectedVariantsByProduct[product.id];
@@ -546,38 +994,50 @@ export const AddTableOrderModal: React.FC<AddTableOrderModalProps> = ({
 
                     const availability = evaluateProductAvailability(product, selectedVariant);
                     const effectivePrice = getProductEffectivePrice(product, selectedVariant);
-                    const primaryImage =
+                    const basePrice = selectedVariant
+                      ? Number(selectedVariant.price || 0)
+                      : Number(product.price || 0);
+                    const hasPromo = effectivePrice > 0 && effectivePrice < basePrice;
+
+                    const rawPrimaryImage =
                       product.primaryImage?.publicUrl ||
                       product.images?.find((img) => img.isPrimary)?.publicUrl ||
                       product.images?.[0]?.publicUrl ||
                       null;
+                    const showImage = Boolean(rawPrimaryImage && !failedImageIds[product.id]);
+
                     const draftQty = draftQuantityByProduct[product.id] || 1;
                     const draftNote = draftNotesByProduct[product.id] || '';
                     const isNotesOpen = expandedNotesProductId === product.id || Boolean(draftNote);
+                    const isNameExpanded = Boolean(expandedNameProductIds[product.id]);
 
                     const inCartQty = cart
                       .filter((c) => c.productId === product.id)
                       .reduce((acc, c) => acc + c.quantity, 0);
 
                     return (
-                      <div
+                      <article
                         key={product.id}
-                        className={`bg-white rounded-xl border p-3.5 flex flex-col justify-between transition-all ${
+                        className={`bg-white rounded-2xl border p-3.5 sm:p-4 flex flex-col justify-between transition-all ${
                           !availability.available
-                            ? 'border-slate-200 opacity-60 bg-slate-50'
+                            ? 'border-slate-200 bg-slate-50/80 opacity-70'
                             : inCartQty > 0
-                            ? 'border-amber-400 ring-1 ring-amber-400/30 shadow-sm'
-                            : 'border-slate-200 hover:border-slate-300 shadow-sm'
+                            ? 'border-amber-500 ring-1 ring-amber-500/25 shadow-xs'
+                            : 'border-slate-200/90 hover:border-slate-300 shadow-2xs'
                         }`}
                       >
                         <div>
-                          <div className="flex gap-3">
-                            {/* Product Thumbnail */}
-                            <div className="w-16 h-16 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
-                              {primaryImage ? (
+                          {/* Top Row: Thumbnail + Name + Category + Price + Availability */}
+                          <div className="flex items-start gap-3">
+                            <div className="w-[68px] h-[68px] sm:w-[72px] sm:h-[72px] rounded-xl bg-slate-100 border border-slate-200/80 overflow-hidden shrink-0 flex items-center justify-center">
+                              {showImage ? (
                                 <img
-                                  src={primaryImage}
+                                  src={rawPrimaryImage!}
                                   alt={product.name}
+                                  referrerPolicy="no-referrer"
+                                  onError={() =>
+                                    setFailedImageIds((prev) => ({ ...prev, [product.id]: true }))
+                                  }
                                   className="w-full h-full object-cover"
                                 />
                               ) : (
@@ -585,40 +1045,76 @@ export const AddTableOrderModal: React.FC<AddTableOrderModalProps> = ({
                               )}
                             </div>
 
-                            {/* Info */}
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-start justify-between gap-1.5">
-                                <h4 className="font-bold text-slate-900 text-sm leading-snug line-clamp-2">
-                                  {product.name}
-                                </h4>
+                              <div className="flex items-start justify-between gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedNameProductIds((prev) => ({
+                                      ...prev,
+                                      [product.id]: !prev[product.id],
+                                    }))
+                                  }
+                                  title={product.name}
+                                  className="text-left focus:outline-none group min-w-0 flex-1"
+                                >
+                                  <h3
+                                    className={`font-bold text-slate-900 text-[16px] sm:text-[17px] leading-snug break-words ${
+                                      isNameExpanded ? '' : 'line-clamp-2'
+                                    }`}
+                                  >
+                                    {product.name}
+                                  </h3>
+                                </button>
+
                                 {inCartQty > 0 && (
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 shrink-0">
-                                    {inCartQty}x na lista
+                                  <span className="px-2.5 py-0.5 rounded-lg text-[12px] font-extrabold bg-amber-100 text-amber-900 shrink-0 tabular-nums">
+                                    {inCartQty}x no pedido
                                   </span>
                                 )}
                               </div>
 
-                              {product.category?.name && (
-                                <span className="inline-block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mt-0.5">
-                                  {product.category.name}
-                                </span>
+                              {/* Clean unboxed metadata: Category & SKU */}
+                              {(product.category?.name || product.sku) && (
+                                <div className="flex items-center gap-1.5 text-[13px] text-slate-500 mt-0.5 truncate">
+                                  {product.category?.name && (
+                                    <span className="truncate">{product.category.name}</span>
+                                  )}
+                                  {product.category?.name && product.sku && (
+                                    <span aria-hidden="true">·</span>
+                                  )}
+                                  {product.sku && (
+                                    <span className="font-mono text-[12px] text-slate-400 shrink-0">
+                                      Cód. {product.sku}
+                                    </span>
+                                  )}
+                                </div>
                               )}
 
-                              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                <span className="text-sm font-black text-emerald-700">
-                                  {formatCurrency(effectivePrice)}
-                                </span>
+                              {/* Price & Availability Row */}
+                              <div className="flex items-baseline justify-between gap-2 mt-1.5 flex-wrap">
+                                <div className="flex items-baseline gap-1.5">
+                                  <span className="text-[18px] sm:text-[19px] font-extrabold text-emerald-700 tabular-nums">
+                                    {formatCurrency(effectivePrice)}
+                                  </span>
+                                  {hasPromo && (
+                                    <span className="text-[13px] text-slate-400 line-through tabular-nums">
+                                      {formatCurrency(basePrice)}
+                                    </span>
+                                  )}
+                                </div>
+
                                 {!availability.available ? (
-                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">
+                                  <span className="text-[13px] font-bold text-rose-600">
                                     {availability.reason}
                                   </span>
                                 ) : availability.maxStock !== null &&
                                   availability.maxStock !== undefined ? (
-                                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600">
-                                    Estoque: {availability.maxStock}
+                                  <span className="text-[13px] font-medium text-slate-500 tabular-nums">
+                                    Estoque: {availability.maxStock} un.
                                   </span>
                                 ) : (
-                                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700">
+                                  <span className="text-[13px] font-semibold text-emerald-700">
                                     Disponível
                                   </span>
                                 )}
@@ -626,12 +1122,12 @@ export const AddTableOrderModal: React.FC<AddTableOrderModalProps> = ({
                             </div>
                           </div>
 
-                          {/* Variant Selector if product has variants */}
+                          {/* Variant Selector */}
                           {activeVariants.length > 0 && (
                             <div className="mt-3 pt-2.5 border-t border-slate-100">
-                              <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">
-                                <Layers className="w-3 h-3 text-slate-400" />
-                                Opção / Variação
+                              <label className="block text-[12px] font-bold text-slate-600 mb-1 flex items-center gap-1">
+                                <Layers className="w-3.5 h-3.5 text-slate-400" />
+                                Selecione a variação / opção
                               </label>
                               <select
                                 value={selectedVariant?.id || ''}
@@ -641,7 +1137,7 @@ export const AddTableOrderModal: React.FC<AddTableOrderModalProps> = ({
                                     [product.id]: e.target.value,
                                   }))
                                 }
-                                className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none"
+                                className="w-full min-h-[44px] px-3 py-2 text-[14px] bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none"
                               >
                                 {activeVariants.map((v) => {
                                   const vPrice = getProductEffectivePrice(product, v);
@@ -667,84 +1163,91 @@ export const AddTableOrderModal: React.FC<AddTableOrderModalProps> = ({
                                     [product.id]: e.target.value,
                                   }))
                                 }
-                                placeholder="Ex: Sem cebola, bem passado, gelo e limão..."
-                                className="w-full px-2.5 py-1.5 text-xs bg-amber-50/50 border border-amber-200 rounded-lg text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-amber-500 outline-none"
+                                placeholder="Observação do item (ex: sem cebola, bem passado)..."
+                                className="w-full min-h-[44px] px-3 py-2 text-[14px] bg-amber-50/50 border border-amber-300 rounded-xl text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-amber-500 outline-none"
                               />
                             </div>
                           )}
                         </div>
 
-                        {/* Card Actions: Quantity + Notes Toggle + Add Button */}
-                        <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1">
-                            <div className="flex items-center bg-slate-100 rounded-lg p-0.5 border border-slate-200">
-                              <button
-                                type="button"
-                                disabled={!availability.available || draftQty <= 1}
-                                onClick={() =>
-                                  setDraftQuantityByProduct((prev) => ({
-                                    ...prev,
-                                    [product.id]: Math.max(1, (prev[product.id] || 1) - 1),
-                                  }))
-                                }
-                                className="w-6 h-6 flex items-center justify-center rounded text-slate-600 hover:bg-white disabled:opacity-40"
-                              >
-                                <Minus className="w-3 h-3" />
-                              </button>
-                              <span className="w-7 text-center text-xs font-bold text-slate-800">
-                                {draftQty}
-                              </span>
-                              <button
-                                type="button"
-                                disabled={
-                                  !availability.available ||
-                                  (availability.maxStock !== null &&
-                                    availability.maxStock !== undefined &&
-                                    draftQty >= availability.maxStock)
-                                }
-                                onClick={() =>
-                                  setDraftQuantityByProduct((prev) => ({
-                                    ...prev,
-                                    [product.id]: (prev[product.id] || 1) + 1,
-                                  }))
-                                }
-                                className="w-6 h-6 flex items-center justify-center rounded text-slate-600 hover:bg-white disabled:opacity-40"
-                              >
-                                <Plus className="w-3 h-3" />
-                              </button>
-                            </div>
-
-                            {availability.available && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setExpandedNotesProductId((prev) =>
-                                    prev === product.id ? null : product.id
-                                  )
-                                }
-                                title="Adicionar observação ao item"
-                                className={`p-1.5 rounded-lg border text-xs transition-colors ${
-                                  isNotesOpen
-                                    ? 'bg-amber-50 border-amber-300 text-amber-700'
-                                    : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                                }`}
-                              >
-                                <MessageSquare className="w-3.5 h-3.5" />
-                              </button>
-                            )}
+                        {/* Card Controls Row: Quantity (- / +) + Notes Button + Add Button (all >= 44px touch targets) */}
+                        <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-center gap-2">
+                          {/* Quantity Selector */}
+                          <div className="inline-flex items-center bg-slate-100 rounded-xl p-0.5 border border-slate-200 shrink-0">
+                            <button
+                              type="button"
+                              disabled={!availability.available || isSessionUnavailable || draftQty <= 1}
+                              onClick={() =>
+                                setDraftQuantityByProduct((prev) => ({
+                                  ...prev,
+                                  [product.id]: Math.max(1, (prev[product.id] || 1) - 1),
+                                }))
+                              }
+                              aria-label={`Diminuir quantidade de ${product.name}`}
+                              className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-slate-700 hover:bg-white disabled:opacity-40 active:scale-95 transition-all cursor-pointer"
+                            >
+                              <Minus className="w-4 h-4" />
+                            </button>
+                            <span className="w-8 text-center text-[15px] font-extrabold text-slate-900 tabular-nums">
+                              {draftQty}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={
+                                !availability.available ||
+                                isSessionUnavailable ||
+                                (availability.maxStock !== null &&
+                                  availability.maxStock !== undefined &&
+                                  draftQty >= availability.maxStock)
+                              }
+                              onClick={() =>
+                                setDraftQuantityByProduct((prev) => ({
+                                  ...prev,
+                                  [product.id]: (prev[product.id] || 1) + 1,
+                                }))
+                              }
+                              aria-label={`Aumentar quantidade de ${product.name}`}
+                              className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-slate-700 hover:bg-white disabled:opacity-40 active:scale-95 transition-all cursor-pointer"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </button>
                           </div>
 
+                          {/* Item Notes Toggle Button */}
+                          {availability.available && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedNotesProductId((prev) =>
+                                  prev === product.id ? null : product.id
+                                )
+                              }
+                              title="Adicionar observação ao item"
+                              aria-label={`Observação para ${product.name}`}
+                              aria-expanded={isNotesOpen}
+                              className={`min-w-[44px] min-h-[44px] px-2.5 rounded-xl border flex items-center justify-center gap-1 text-[13px] font-semibold transition-colors shrink-0 cursor-pointer ${
+                                isNotesOpen
+                                  ? 'bg-amber-100 border-amber-400 text-amber-900'
+                                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                              }`}
+                            >
+                              <MessageSquare className="w-4 h-4" />
+                              <span className="hidden sm:inline">Obs.</span>
+                            </button>
+                          )}
+
+                          {/* Primary Add Product Button */}
                           <button
                             type="button"
-                            disabled={!availability.available}
+                            disabled={!availability.available || isSessionUnavailable}
                             onClick={() => handleAddProductToCart(product)}
-                            className="flex-1 py-1.5 px-3 bg-amber-500 hover:bg-amber-600 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                            className="flex-1 min-h-[44px] px-3.5 py-2 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 disabled:bg-slate-200 disabled:text-slate-400 text-slate-950 font-extrabold text-[15px] rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
                           >
-                            <Plus className="w-3.5 h-3.5" />
-                            Adicionar
+                            <Plus className="w-4 h-4 stroke-[2.5]" />
+                            <span>Adicionar</span>
                           </button>
                         </div>
-                      </div>
+                      </article>
                     );
                   })}
                 </div>
@@ -752,188 +1255,129 @@ export const AddTableOrderModal: React.FC<AddTableOrderModalProps> = ({
             </div>
           </div>
 
-          {/* Right Column: Selected Items Summary (New Additional Order) */}
-          <div className="lg:col-span-5 xl:col-span-4 flex flex-col bg-white overflow-hidden">
-            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+          {/* RIGHT COLUMN ON DESKTOP (lg:flex): PERMANENT SUMMARY SIDEBAR */}
+          <aside className="hidden lg:flex lg:col-span-5 xl:col-span-4 flex-col min-h-0 overflow-hidden bg-white">
+            <div className="shrink-0 px-4 py-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2">
                 <ShoppingBag className="w-4 h-4 text-amber-600" />
-                <h3 className="text-sm font-bold text-slate-900">
-                  Resumo do Novo Pedido
+                <h3 className="text-[16px] font-extrabold text-slate-900">
+                  Resumo do pedido adicional
                 </h3>
               </div>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
+              <span className="text-[14px] font-bold text-slate-600 tabular-nums">
                 {totalItemsCount} {totalItemsCount === 1 ? 'item' : 'itens'}
               </span>
             </div>
 
-            {/* Cart Items List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {cart.length === 0 ? (
-                <div className="h-full min-h-[180px] flex flex-col items-center justify-center text-center p-6 border border-dashed border-slate-200 rounded-xl bg-slate-50/40">
-                  <ShoppingBag className="w-9 h-9 text-slate-300 mb-2" />
-                  <p className="text-sm font-bold text-slate-600">
-                    Nenhum item selecionado
-                  </p>
-                  <p className="text-xs text-slate-400 mt-1 max-w-xs">
-                    Selecione produtos do catálogo ao lado para compor o pedido adicional desta mesa.
-                  </p>
+            {renderSummaryContent()}
+          </aside>
+
+          {/* MOBILE LAYER 2: EXPANDED SUMMARY PANEL (BOTTOM SHEET OVERLAY ON < lg) */}
+          {isSummaryExpandedMobile && (
+            <div
+              className="lg:hidden absolute inset-0 z-30 bg-slate-950/60 backdrop-blur-xs flex flex-col justify-end animate-in fade-in duration-150"
+              onClick={() => setIsSummaryExpandedMobile(false)}
+            >
+              <div
+                className="bg-white rounded-t-3xl max-h-[86%] flex flex-col overflow-hidden shadow-2xl border-t border-slate-200"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Grab Handle + Sheet Header */}
+                <div className="shrink-0 pt-2 pb-3 px-4 border-b border-slate-200 bg-slate-50">
+                  <div className="w-10 h-1.5 bg-slate-300 rounded-full mx-auto mb-2.5" />
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-[17px] font-extrabold text-slate-900">
+                        Resumo do pedido ({totalItemsCount} {totalItemsCount === 1 ? 'item' : 'itens'})
+                      </h3>
+                      <p className="text-[13px] text-slate-500">
+                        Confira quantidades, observações e o total estimado da conta
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsSummaryExpandedMobile(false)}
+                      className="min-h-[44px] px-3.5 rounded-xl bg-slate-200/80 hover:bg-slate-300 text-slate-800 font-bold text-[13px] inline-flex items-center gap-1.5 shrink-0 cursor-pointer"
+                    >
+                      <ChevronDown className="w-4 h-4" />
+                      <span>Voltar</span>
+                    </button>
+                  </div>
+                </div>
+
+                {renderSummaryContent()}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 3. MOBILE LAYER 1: COMPACT SUMMARY BAR (Fixed above confirmation bar on < lg when expanded sheet is closed) */}
+        {!isSummaryExpandedMobile && (
+          <div
+            data-testid="mobile-compact-summary-bar"
+            className="lg:hidden shrink-0 bg-slate-900 text-white px-3.5 py-2 border-t border-slate-800 flex items-center justify-between gap-2"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 text-[14px] truncate">
+                <span className="font-extrabold text-amber-400 tabular-nums shrink-0">
+                  {totalItemsCount} {totalItemsCount === 1 ? 'item' : 'itens'}
+                </span>
+                <span aria-hidden="true" className="text-slate-500 shrink-0">·</span>
+                <span className="text-slate-200 font-semibold text-[14px] truncate tabular-nums">
+                  Subtotal: {formatCurrency(newOrderSubtotal)}
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsSummaryExpandedMobile(true)}
+              className="min-h-[44px] px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-[13px] inline-flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
+              aria-expanded={isSummaryExpandedMobile}
+            >
+              <span>Ver resumo</span>
+              <ChevronUp className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* 4. FIXED CONFIRMATION FOOTER (shrink-0, respects bottom safe-area) */}
+        <footer className="shrink-0 bg-white border-t border-slate-200 px-3.5 py-2.5 sm:px-5 sm:py-3.5 pb-safe z-40">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="min-h-[48px] px-3.5 sm:px-5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-700 font-bold text-[15px] transition-colors shrink-0 cursor-pointer"
+            >
+              Cancelar
+            </button>
+
+            <button
+              type="button"
+              disabled={cart.length === 0 || isSubmitting || isSessionUnavailable}
+              onClick={handleSubmitOrder}
+              className="flex-1 min-h-[48px] px-3.5 sm:px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:bg-slate-200 disabled:text-slate-400 text-white font-extrabold text-[15px] sm:text-[16px] transition-all flex items-center justify-between sm:justify-center gap-2 shadow-sm cursor-pointer"
+            >
+              {isSubmitting ? (
+                <div className="w-full flex items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin shrink-0" />
+                  <span>Enviando para cozinha...</span>
                 </div>
               ) : (
-                cart.map((item) => (
-                  <div
-                    key={item.key}
-                    className="p-3 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-slate-900 leading-snug">
-                          {item.productName}
-                        </p>
-                        {item.variantName && (
-                          <p className="text-[11px] font-semibold text-amber-700">
-                            Opção: {item.variantName}
-                          </p>
-                        )}
-                        <p className="text-[11px] text-slate-500">
-                          {formatCurrency(item.unitPrice)} un.
-                        </p>
-                      </div>
-                      <span className="text-xs font-black text-slate-900 shrink-0">
-                        {formatCurrency(item.unitPrice * item.quantity)}
-                      </span>
-                    </div>
-
-                    {/* Item Note Editable */}
-                    <input
-                      type="text"
-                      value={item.notes}
-                      onChange={(e) => handleUpdateCartItemNotes(item.key, e.target.value)}
-                      placeholder="Observação do item (opcional)..."
-                      className="w-full px-2.5 py-1 text-[11px] bg-white border border-slate-200 rounded-lg text-slate-700 placeholder:text-slate-400 focus:border-amber-500 outline-none"
-                    />
-
-                    {/* Quantity Controls & Remove */}
-                    <div className="flex items-center justify-between pt-1">
-                      <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5">
-                        <button
-                          type="button"
-                          onClick={() => handleUpdateCartQuantity(item.key, -1)}
-                          className="w-6 h-6 flex items-center justify-center rounded text-slate-600 hover:bg-slate-100"
-                          title="Diminuir quantidade"
-                        >
-                          <Minus className="w-3 h-3" />
-                        </button>
-                        <span className="w-7 text-center text-xs font-bold text-slate-900">
-                          {item.quantity}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleUpdateCartQuantity(item.key, 1)}
-                          className="w-6 h-6 flex items-center justify-center rounded text-slate-600 hover:bg-slate-100"
-                          title="Aumentar quantidade"
-                        >
-                          <Plus className="w-3 h-3" />
-                        </button>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveCartItem(item.key)}
-                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-600 hover:text-rose-700 px-2 py-1 rounded hover:bg-rose-50 transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        Remover
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-
-              {/* Optional Order Metadata (Customer Name & General Observation) */}
-              {cart.length > 0 && (
-                <div className="pt-3 border-t border-slate-200 space-y-2.5">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1">
-                      <UserIcon className="w-3 h-3 text-slate-400" />
-                      Identificação do cliente na mesa (opcional)
-                    </label>
-                    <input
-                      type="text"
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      placeholder="Ex: João / Cliente cadeira 2"
-                      className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:border-amber-500 outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1 flex items-center gap-1">
-                      <MessageSquare className="w-3 h-3 text-slate-400" />
-                      Observação geral do pedido (opcional)
-                    </label>
-                    <input
-                      type="text"
-                      value={orderNotes}
-                      onChange={(e) => setOrderNotes(e.target.value)}
-                      placeholder="Ex: Trazer junto com as bebidas..."
-                      className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:border-amber-500 outline-none"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Footer Totals & Submit Button */}
-            <div className="p-4 border-t border-slate-200 bg-slate-50 space-y-3">
-              <div className="space-y-1.5 text-xs">
-                <div className="flex justify-between text-slate-500">
-                  <span>Consumo atual da mesa:</span>
-                  <span className="font-semibold text-slate-700">
-                    {formatCurrency(currentSessionTotal)}
+                <>
+                  <span className="flex items-center gap-1.5 text-left leading-tight">
+                    <CheckCircle2 className="w-5 h-5 shrink-0 hidden xs:inline sm:inline" />
+                    <span>Confirmar e enviar para cozinha</span>
                   </span>
-                </div>
-                <div className="flex justify-between text-amber-800 font-bold text-sm pt-1 border-t border-slate-200/80">
-                  <span>Subtotal deste novo pedido:</span>
-                  <span>+ {formatCurrency(newOrderSubtotal)}</span>
-                </div>
-                <div className="flex justify-between text-slate-900 font-black text-sm pt-1 border-t border-slate-200">
-                  <span>Novo total estimado da conta:</span>
-                  <span className="text-emerald-700">
-                    {formatCurrency(projectedSessionTotal)}
+                  <span className="px-2.5 py-1 rounded-lg bg-black/20 text-white font-black text-[15px] sm:text-[16px] tabular-nums shrink-0">
+                    {formatCurrency(newOrderSubtotal)}
                   </span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  disabled={isSubmitting}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 font-bold text-xs hover:bg-slate-100 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  disabled={cart.length === 0 || isSubmitting}
-                  onClick={handleSubmitOrder}
-                  className="flex-1 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-sm"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Lançando Pedido...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-4 h-4" />
-                      Confirmar e Enviar para Cozinha ({formatCurrency(newOrderSubtotal)})
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
+                </>
+              )}
+            </button>
           </div>
-        </div>
+        </footer>
       </div>
     </div>
   );

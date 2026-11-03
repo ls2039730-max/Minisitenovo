@@ -27,6 +27,7 @@ import {
   UtensilsCrossed,
   DollarSign,
   FileSpreadsheet,
+  Truck,
 } from 'lucide-react';
 
 import { useBackHandler } from '../../services/navigationManager';
@@ -44,7 +45,7 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({
   plans,
   children,
 }) => {
-  const { user, tenant, logout, isImpersonating, exitImpersonation, resolvedFeatures, isProfessional, linkedProfessional, refreshSession } = useAuth();
+  const { user, tenant, logout, isImpersonating, exitImpersonation, resolvedFeatures, isProfessional, isDeliveryDriver, refreshSession } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Close mobile sidebar first when Back is pressed
@@ -58,16 +59,17 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({
   const currentPlan = plans.find((p) => p.id === tenant?.planId);
 
   // Centralized feature resolution (Super Admin override > server resolvedFeatures > plan > false)
-  const hasSiteEditor = !isProfessional && isTenantFeatureEnabled('site_editor', resolvedFeatures, tenant, currentPlan);
-  const hasProducts = !isProfessional && isTenantFeatureEnabled('products', resolvedFeatures, tenant, currentPlan);
-  const hasShoppingCart = !isProfessional && isTenantFeatureEnabled('shopping_cart', resolvedFeatures, tenant, currentPlan);
-  const hasServices = !isProfessional && isTenantFeatureEnabled('services', resolvedFeatures, tenant, currentPlan);
-  const hasProfessionals = !isProfessional && isTenantFeatureEnabled('professionals', resolvedFeatures, tenant, currentPlan);
-  const hasAppointments = isTenantFeatureEnabled('appointments', resolvedFeatures, tenant, currentPlan);
-  const hasRestaurantCatalog = !isProfessional && isTenantFeatureEnabled('restaurant_tables', resolvedFeatures, tenant, currentPlan);
+  const isRestrictedRole = isProfessional || isDeliveryDriver;
+  const hasSiteEditor = !isRestrictedRole && isTenantFeatureEnabled('site_editor', resolvedFeatures, tenant, currentPlan);
+  const hasProducts = !isRestrictedRole && isTenantFeatureEnabled('products', resolvedFeatures, tenant, currentPlan);
+  const hasShoppingCart = !isRestrictedRole && isTenantFeatureEnabled('shopping_cart', resolvedFeatures, tenant, currentPlan);
+  const hasServices = !isRestrictedRole && isTenantFeatureEnabled('services', resolvedFeatures, tenant, currentPlan);
+  const hasProfessionals = !isRestrictedRole && isTenantFeatureEnabled('professionals', resolvedFeatures, tenant, currentPlan);
+  const hasAppointments = !isDeliveryDriver && isTenantFeatureEnabled('appointments', resolvedFeatures, tenant, currentPlan);
+  const hasRestaurantCatalog = !isRestrictedRole && isTenantFeatureEnabled('restaurant_tables', resolvedFeatures, tenant, currentPlan);
 
   // Dynamic upcoming modules (only visible for client admins)
-  const upcomingModules = isProfessional ? [] : [
+  const upcomingModules = isRestrictedRole ? [] : [
     { key: 'qr_code', label: 'QR Code', icon: QrCode },
     { key: 'analytics', label: 'Métricas & Visitas', icon: BarChart2 },
   ].filter((mod) =>
@@ -75,11 +77,14 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({
   );
 
   // Primary operational & financial menu items (strictly filtered by active features and numbered sequentially)
-  const operationalMenuItems = isProfessional
+  const operationalMenuItems = isDeliveryDriver
+    ? [{ key: 'driver_portal', label: 'Área do Motoboy', icon: Truck }]
+    : isProfessional
     ? [{ key: 'appointments', label: 'Minha Agenda', icon: Calendar }]
     : [
         { key: 'home', baseLabel: 'Visão Geral', icon: Home, enabled: true },
         { key: 'orders', baseLabel: 'Pedidos', icon: ShoppingCart, enabled: hasShoppingCart || hasRestaurantCatalog },
+        { key: 'delivery_hub', baseLabel: 'Central de Entregas', icon: Truck, enabled: hasShoppingCart || hasRestaurantCatalog },
         { key: 'restaurant', baseLabel: 'Mesas & Salão', icon: UtensilsCrossed, enabled: hasRestaurantCatalog },
         { key: 'financial', baseLabel: 'Financeiro', icon: DollarSign, enabled: true },
         { key: 'top_products', baseLabel: 'Mais Vendidos', icon: ShoppingBag, enabled: hasProducts || hasShoppingCart || hasRestaurantCatalog },
@@ -93,6 +98,9 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({
         }));
 
   const handleNavClick = (tabKey: string) => {
+    if (isDeliveryDriver && tabKey !== 'driver_portal') {
+      return;
+    }
     if (isProfessional && tabKey !== 'appointments') {
       return;
     }
@@ -199,7 +207,7 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({
                   </h2>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <span className="text-[10px] font-bold uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded text-white">
-                      {isProfessional ? 'Profissional' : (currentPlan?.name || 'Cliente')}
+                      {isDeliveryDriver ? 'Motoboy' : isProfessional ? 'Profissional' : (currentPlan?.name || 'Cliente')}
                     </span>
                   </div>
                 </div>
@@ -218,7 +226,7 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({
               {/* Menu Operacional & Financeiro */}
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block px-3 mb-2">
-                  {isProfessional ? 'Acesso Profissional' : (hasRestaurantCatalog ? 'Gestão do Restaurante' : 'Gestão do Negócio')}
+                  {isDeliveryDriver ? 'Acesso do Entregador' : isProfessional ? 'Acesso Profissional' : (hasRestaurantCatalog ? 'Gestão do Restaurante' : 'Gestão do Negócio')}
                 </span>
                 <nav className="space-y-1">
                   {operationalMenuItems.map((item) => {
@@ -246,7 +254,7 @@ export const ClientLayout: React.FC<ClientLayoutProps> = ({
               </div>
 
               {/* Menu Cadastros & Configurações */}
-              {!isProfessional && (
+              {!isRestrictedRole && (
                 <div>
                   <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block px-3 mb-2">
                     Configurações & Cadastros

@@ -163,6 +163,8 @@ export function getPublicStoreUrl(
   return `https://${cleanSlug}.${effectiveBase}${normalizedSubPath}`;
 }
 
+export const buildPublicTenantUrl = getPublicStoreUrl;
+
 /**
  * Returns the legacy compatibility URL format: "{origin}/p/{slug}"
  * Example: "https://minisitenovo.vercel.app/p/una-otica"

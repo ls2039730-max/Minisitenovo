@@ -87,6 +87,11 @@ class LocalSupabaseStore {
   public restaurant_order_status_history: any[] = [];
   public restaurant_fee_templates: any[] = [];
   public restaurant_session_fees: any[] = [];
+  public delivery_drivers: any[] = [];
+  public delivery_routes: any[] = [];
+  public delivery_route_stops: any[] = [];
+  public delivery_events: any[] = [];
+  public delivery_notifications: any[] = [];
   public storage_objects: Map<string, { buffer: Buffer; mimeType: string }> = new Map();
 
   private storeFilePath =
@@ -143,6 +148,11 @@ class LocalSupabaseStore {
         restaurant_order_status_history: this.restaurant_order_status_history,
         restaurant_fee_templates: this.restaurant_fee_templates,
         restaurant_session_fees: this.restaurant_session_fees,
+        delivery_drivers: this.delivery_drivers,
+        delivery_routes: this.delivery_routes,
+        delivery_route_stops: this.delivery_route_stops,
+        delivery_events: this.delivery_events,
+        delivery_notifications: this.delivery_notifications,
       };
 
       const dir = path.dirname(this.storeFilePath);
@@ -189,7 +199,8 @@ class LocalSupabaseStore {
             'service_categories', 'services', 'professionals', 'service_professionals',
             'appointment_settings', 'professional_schedules', 'schedule_blocks', 'appointments',
             'restaurant_tables', 'restaurant_sessions', 'restaurant_orders', 'restaurant_order_items', 'restaurant_order_status_history',
-            'restaurant_fee_templates', 'restaurant_session_fees'
+            'restaurant_fee_templates', 'restaurant_session_fees',
+            'delivery_drivers', 'delivery_routes', 'delivery_route_stops', 'delivery_events', 'delivery_notifications'
           ];
           for (const key of keys) {
             if (Array.isArray(parsed[key]) && parsed[key].length > 0) {
@@ -1592,6 +1603,45 @@ class PostgrestQueryBuilder {
           }
         }
 
+        if (this.op === 'insert' && this.tableName === 'delivery_notifications') {
+          const duplicateNotif = table.find(
+            (item: any) =>
+              (rec.idempotency_key && item.idempotency_key === rec.idempotency_key) ||
+              (rec.tenant_id &&
+                rec.order_id &&
+                rec.event_type &&
+                item.tenant_id === rec.tenant_id &&
+                item.order_id === rec.order_id &&
+                item.event_type === rec.event_type)
+          );
+          if (duplicateNotif) {
+            return Promise.resolve({
+              data: null,
+              error: {
+                code: '23505',
+                message: 'duplicate key value violates unique constraint "uq_delivery_notifications_order_event"',
+              },
+            }).then(resolve, reject);
+          }
+        }
+
+        if (this.op === 'insert' && this.tableName === 'delivery_drivers' && rec.tenant_id && rec.email) {
+          const dupDriver = table.find(
+            (item: any) =>
+              item.tenant_id === rec.tenant_id &&
+              String(item.email || '').toLowerCase() === String(rec.email || '').toLowerCase()
+          );
+          if (dupDriver) {
+            return Promise.resolve({
+              data: null,
+              error: {
+                code: '23505',
+                message: 'duplicate key value violates unique constraint "uq_delivery_drivers_tenant_email"',
+              },
+            }).then(resolve, reject);
+          }
+        }
+
         const onePerTenantTables = new Set([
           'tenant_settings',
           'delivery_settings',
@@ -1767,6 +1817,16 @@ export const pendingMigrationTables = new Set<string>([
   'restaurant_order_status_history',
 ]);
 
+const localFallbackTables = new Set<string>();
+
+export function markTableAsLocalFallback(tableName: string) {
+  localFallbackTables.add(tableName);
+}
+
+export function getLocalTableBuilder(tableName: string): any {
+  return new PostgrestQueryBuilder(tableName);
+}
+
 // Build Admin Client
 function createAdminClient(): ISupabaseAdminClient {
   if (isRealSupabaseConfigured) {
@@ -1779,7 +1839,12 @@ function createAdminClient(): ISupabaseAdminClient {
     });
 
     return {
-      from: (tableName: string) => remoteClient.from(tableName),
+      from: (tableName: string) => {
+        if (localFallbackTables.has(tableName)) {
+          return new PostgrestQueryBuilder(tableName);
+        }
+        return remoteClient.from(tableName);
+      },
       auth: remoteClient.auth,
       storage: remoteClient.storage,
       rpc: (fn: string, args: any) => remoteClient.rpc(fn, args),

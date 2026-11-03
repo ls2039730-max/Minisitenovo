@@ -90,6 +90,9 @@ export function calculateStraightLineDistanceKm(
   return R * c;
 }
 
+export const calculateHaversineDistanceKm = calculateStraightLineDistanceKm;
+
+
 /**
  * Applies configured rounding rule to a distance in km:
  * - roundDistanceUp = true: rounds up in increments of 0.1 km (e.g. 3.21 -> 3.3 km)
@@ -203,20 +206,30 @@ export function isOriginAddressValid(origin?: DeliveryOriginAddress | null): boo
 
 export function hasValidCoordinates(
   coords?: { latitude?: number | null; longitude?: number | null } | null
-): coords is { latitude: number; longitude: number } {
-  if (!coords) return false;
-  const lat = Number(coords.latitude);
-  const lng = Number(coords.longitude);
+): coords is { latitude: number; longitude: number };
+export function hasValidCoordinates(
+  lat?: number | null,
+  lng?: number | null
+): boolean;
+export function hasValidCoordinates(
+  coordsOrLat?: { latitude?: number | null; longitude?: number | null } | number | null,
+  maybeLng?: number | null
+): boolean {
+  if (coordsOrLat === null || coordsOrLat === undefined) return false;
+  const rawLat =
+    typeof coordsOrLat === 'object' ? coordsOrLat.latitude : coordsOrLat;
+  const rawLng =
+    typeof coordsOrLat === 'object' ? coordsOrLat.longitude : maybeLng;
+
+  if (typeof rawLat !== 'number' || typeof rawLng !== 'number') return false;
   return (
-    typeof coords.latitude === 'number' &&
-    typeof coords.longitude === 'number' &&
-    Number.isFinite(lat) &&
-    Number.isFinite(lng) &&
-    lat >= -90 &&
-    lat <= 90 &&
-    lng >= -180 &&
-    lng <= 180 &&
-    !(lat === 0 && lng === 0)
+    Number.isFinite(rawLat) &&
+    Number.isFinite(rawLng) &&
+    rawLat >= -90 &&
+    rawLat <= 90 &&
+    rawLng >= -180 &&
+    rawLng <= 180 &&
+    !(rawLat === 0 && rawLng === 0)
   );
 }
 

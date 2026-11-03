@@ -16,6 +16,7 @@ import {
   BellRing,
   TrendingUp,
   ChevronRight,
+  Truck,
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { FinancialDashboardResponse, EnrichedTablesOverviewResponse } from '../../types/analytics';
@@ -117,10 +118,20 @@ export const ClientHomeView: React.FC<ClientHomeViewProps> = ({
     {
       key: 'orders',
       baseLabel: 'Pedidos',
-      subtitle: 'Filtros & entregas',
+      subtitle: 'Filtros & vendas',
       icon: ShoppingBag,
       iconBg: 'bg-blue-50 text-blue-600',
       hoverText: 'group-hover:text-blue-600',
+      active: false,
+      enabled: hasOrdersAccess,
+    },
+    {
+      key: 'delivery_hub',
+      baseLabel: 'Central de Entregas',
+      subtitle: 'Mapa, rotas & motoboys',
+      icon: Truck,
+      iconBg: 'bg-orange-50 text-orange-600',
+      hoverText: 'group-hover:text-orange-600',
       active: false,
       enabled: hasOrdersAccess,
     },

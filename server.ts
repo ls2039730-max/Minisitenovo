@@ -112,10 +112,11 @@ async function startServer() {
     'node_modules',
     'm',
     'mesa',
+    'rastreio',
   ]);
 
-  // Handle table QR code routes (/m/:slug/:token and /mesa/:slug/:token)
-  app.get(['/m/:slug/:token', '/mesa/:slug/:token'], async (req, res, next) => {
+  // Handle table QR code routes (/m/:slug/:token and /mesa/:slug/:token) and public delivery tracking (/rastreio/:token)
+  app.get(['/m/:slug/:token', '/mesa/:slug/:token', '/rastreio/:token'], async (req, res, next) => {
     try {
       let template = fs.readFileSync(path.resolve(process.cwd(), 'index.html'), 'utf-8');
       if (!isProd && viteInstance) {

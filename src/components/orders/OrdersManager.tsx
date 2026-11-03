@@ -50,6 +50,7 @@ import { UnifiedOrderDetailModal } from './UnifiedOrderDetailModal';
 import { OrderEditModal } from './OrderEditModal';
 import { RestaurantOrderEditModal } from '../restaurant/modals/RestaurantOrderEditModal';
 import { DeliverySettingsTab } from './DeliverySettingsTab';
+import { DeliveryHubManager } from '../delivery/DeliveryHubManager';
 import { ConfirmModal } from '../common/ConfirmModal';
 
 interface OrdersManagerProps {
@@ -79,7 +80,7 @@ const DEFAULT_FILTERS: AdvancedOrderFilterParams = {
 };
 
 export const OrdersManager: React.FC<OrdersManagerProps> = ({ tenant }) => {
-  const [activeTab, setActiveTab] = useState<'orders' | 'settings'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'delivery_hub' | 'settings'>('orders');
 
   // Draft filters (in form inputs) vs Applied filters (sent to server)
   const [draftFilters, setDraftFilters] = useState<AdvancedOrderFilterParams>(DEFAULT_FILTERS);
@@ -256,7 +257,7 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({ tenant }) => {
         </div>
 
         {/* Tab switch */}
-        <div className="flex bg-slate-200/70 p-1 rounded-2xl self-start sm:self-auto">
+        <div className="flex flex-wrap bg-slate-200/70 p-1 rounded-2xl self-start sm:self-auto gap-1">
           <button
             type="button"
             onClick={() => setActiveTab('orders')}
@@ -271,6 +272,19 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({ tenant }) => {
             <span className="px-1.5 py-0.2 bg-indigo-600 text-white text-[10px] rounded-full font-black ml-1">
               {totalCount}
             </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('delivery_hub')}
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'delivery_hub'
+                ? 'bg-white text-indigo-600 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Truck className="w-3.5 h-3.5" />
+            <span>Central de Entregas & Rotas</span>
           </button>
 
           <button
@@ -1026,6 +1040,9 @@ export const OrdersManager: React.FC<OrdersManagerProps> = ({ tenant }) => {
           )}
         </div>
       )}
+
+      {/* SUB-TAB: CENTRAL DE ENTREGAS */}
+      {activeTab === 'delivery_hub' && <DeliveryHubManager tenant={tenant} />}
 
       {/* SUB-TAB: CONFIGURAÇÕES DE ENTREGA */}
       {activeTab === 'settings' && <DeliverySettingsTab tenantId={tenant.id} />}

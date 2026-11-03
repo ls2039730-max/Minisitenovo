@@ -239,6 +239,15 @@ export interface ValidatedCartResponse {
   closedNotice?: string;
 }
 
+export type GeocodeStatus = 'geocoded' | 'pending' | 'manual';
+
+export type OrderDispatchStatus =
+  | 'waiting_dispatch'
+  | 'assigned'
+  | 'in_route'
+  | 'delivered'
+  | 'delivery_issue';
+
 export interface OrderDeliveryAddress {
   id?: string;
   orderId?: string;
@@ -255,6 +264,9 @@ export interface OrderDeliveryAddress {
   distanceKm?: number | null;
   appliedRuleName?: string | null;
   deliveryBreakdown?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  geocodeStatus?: GeocodeStatus | null;
 }
 
 export interface OrderItem {
@@ -291,6 +303,13 @@ export interface Order {
   whatsappSentAt?: string | null;
   items: OrderItem[];
   deliveryAddress?: OrderDeliveryAddress | null;
+  dispatchStatus?: OrderDispatchStatus;
+  assignedDriverId?: string | null;
+  assignedDriverName?: string | null;
+  activeRouteId?: string | null;
+  activeRouteCode?: string | null;
+  trackingToken?: string | null;
+  failureReason?: string | null;
   createdAt: string;
   updatedAt: string;
 }

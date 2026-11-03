@@ -67,6 +67,9 @@ interface ExtendedOrderDeliveryMeta {
   distanceKm?: number | null;
   appliedRuleName?: string | null;
   deliveryBreakdown?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  geocodeStatus?: 'geocoded' | 'pending' | 'manual' | null;
 }
 
 interface TenantDeliveryExtendedConfig {
@@ -1588,6 +1591,43 @@ export class OrderRepository {
       }
 
       deliveryFee = quote.fee;
+
+      // Resolve coordinates for the delivery address (never invent coordinates if geocoding fails)
+      let resolvedLat: number | null = null;
+      let resolvedLng: number | null = null;
+      let resolvedGeocodeStatus: 'geocoded' | 'pending' | 'manual' = 'pending';
+
+      if (
+        quote.destinationCoordinates &&
+        hasValidCoordinates(quote.destinationCoordinates.latitude, quote.destinationCoordinates.longitude)
+      ) {
+        resolvedLat = Number(quote.destinationCoordinates.latitude);
+        resolvedLng = Number(quote.destinationCoordinates.longitude);
+        resolvedGeocodeStatus = 'geocoded';
+      } else if (hasValidCoordinates(addr.latitude, addr.longitude)) {
+        resolvedLat = Number(addr.latitude);
+        resolvedLng = Number(addr.longitude);
+        resolvedGeocodeStatus = 'geocoded';
+      } else {
+        try {
+          const geocoded = await geocodeAddressServer({
+            cep: cleanCep,
+            street: addr.street.trim(),
+            number: addr.number.trim(),
+            neighborhood: addr.neighborhood.trim(),
+            city: addr.city.trim(),
+            state: addr.state.trim().toUpperCase(),
+          });
+          if (geocoded && hasValidCoordinates(geocoded.latitude, geocoded.longitude)) {
+            resolvedLat = Number(geocoded.latitude);
+            resolvedLng = Number(geocoded.longitude);
+            resolvedGeocodeStatus = 'geocoded';
+          }
+        } catch {
+          // Geocoding failed — keep as 'pending' without inventing coordinates
+        }
+      }
+
       deliveryAddressRecord = {
         id: crypto.randomUUID(),
         tenant_id: tenant.id,
@@ -1600,6 +1640,9 @@ export class OrderRepository {
         state: addr.state.trim().toUpperCase(),
         reference: addr.reference?.trim() || null,
         delivery_rule_id: quote.ruleApplied?.id || null,
+        latitude: resolvedLat,
+        longitude: resolvedLng,
+        geocode_status: resolvedGeocodeStatus,
       };
 
       orderDeliveryMeta = {
@@ -1607,6 +1650,9 @@ export class OrderRepository {
         distanceKm: quote.distanceKm ?? null,
         appliedRuleName: quote.ruleName || null,
         deliveryBreakdown: quote.breakdown?.formulaText || null,
+        latitude: resolvedLat,
+        longitude: resolvedLng,
+        geocodeStatus: resolvedGeocodeStatus,
       };
     }
 
@@ -1732,7 +1778,13 @@ export class OrderRepository {
 
     if (deliveryAddressRecord) {
       deliveryAddressRecord.order_id = orderId;
-      await supabaseAdmin.from('order_delivery_addresses').insert(deliveryAddressRecord);
+      const { error: addrErr } = await supabaseAdmin
+        .from('order_delivery_addresses')
+        .insert(deliveryAddressRecord);
+      if (addrErr) {
+        const { latitude, longitude, geocode_status, ...legacyAddrRecord } = deliveryAddressRecord;
+        await supabaseAdmin.from('order_delivery_addresses').insert(legacyAddrRecord);
+      }
     }
 
     if (orderDeliveryMeta) {
@@ -1863,6 +1915,24 @@ export class OrderRepository {
 
       const rawAddr = addressMap.get(o.id);
       const meta = ordersMeta[o.id] || {};
+      const rawLat =
+        rawAddr?.latitude !== undefined && rawAddr?.latitude !== null
+          ? Number(rawAddr.latitude)
+          : meta.latitude !== undefined && meta.latitude !== null
+          ? Number(meta.latitude)
+          : null;
+      const rawLng =
+        rawAddr?.longitude !== undefined && rawAddr?.longitude !== null
+          ? Number(rawAddr.longitude)
+          : meta.longitude !== undefined && meta.longitude !== null
+          ? Number(meta.longitude)
+          : null;
+      const hasCoords = hasValidCoordinates(rawLat, rawLng);
+      const geocodeStatus =
+        rawAddr?.geocode_status ||
+        meta.geocodeStatus ||
+        (hasCoords ? 'geocoded' : 'pending');
+
       const deliveryAddress: OrderDeliveryAddress | null = rawAddr
         ? {
             id: rawAddr.id,
@@ -1883,6 +1953,9 @@ export class OrderRepository {
                 : meta.distanceKm ?? null,
             appliedRuleName: rawAddr.applied_rule_name ?? meta.appliedRuleName ?? null,
             deliveryBreakdown: rawAddr.delivery_breakdown ?? meta.deliveryBreakdown ?? null,
+            latitude: hasCoords ? rawLat : null,
+            longitude: hasCoords ? rawLng : null,
+            geocodeStatus,
           }
         : null;
 
@@ -1977,26 +2050,48 @@ export class OrderRepository {
         createdAt: i.created_at,
       })),
       deliveryAddress: rawAddr
-        ? {
-            id: rawAddr.id,
-            orderId: rawAddr.order_id,
-            cep: rawAddr.cep,
-            street: rawAddr.street,
-            number: rawAddr.number,
-            complement: rawAddr.complement,
-            neighborhood: rawAddr.neighborhood,
-            city: rawAddr.city,
-            state: rawAddr.state,
-            reference: rawAddr.reference,
-            deliveryRuleId: rawAddr.delivery_rule_id,
-            pricingMode: rawAddr.pricing_mode ?? meta.pricingMode ?? null,
-            distanceKm:
-              rawAddr.distance_km !== undefined && rawAddr.distance_km !== null
-                ? Number(rawAddr.distance_km)
-                : meta.distanceKm ?? null,
-            appliedRuleName: rawAddr.applied_rule_name ?? meta.appliedRuleName ?? null,
-            deliveryBreakdown: rawAddr.delivery_breakdown ?? meta.deliveryBreakdown ?? null,
-          }
+        ? (() => {
+            const rawLat =
+              rawAddr.latitude !== undefined && rawAddr.latitude !== null
+                ? Number(rawAddr.latitude)
+                : meta.latitude !== undefined && meta.latitude !== null
+                ? Number(meta.latitude)
+                : null;
+            const rawLng =
+              rawAddr.longitude !== undefined && rawAddr.longitude !== null
+                ? Number(rawAddr.longitude)
+                : meta.longitude !== undefined && meta.longitude !== null
+                ? Number(meta.longitude)
+                : null;
+            const hasCoords = hasValidCoordinates(rawLat, rawLng);
+            const geocodeStatus =
+              rawAddr.geocode_status ||
+              meta.geocodeStatus ||
+              (hasCoords ? 'geocoded' : 'pending');
+            return {
+              id: rawAddr.id,
+              orderId: rawAddr.order_id,
+              cep: rawAddr.cep,
+              street: rawAddr.street,
+              number: rawAddr.number,
+              complement: rawAddr.complement,
+              neighborhood: rawAddr.neighborhood,
+              city: rawAddr.city,
+              state: rawAddr.state,
+              reference: rawAddr.reference,
+              deliveryRuleId: rawAddr.delivery_rule_id,
+              pricingMode: rawAddr.pricing_mode ?? meta.pricingMode ?? null,
+              distanceKm:
+                rawAddr.distance_km !== undefined && rawAddr.distance_km !== null
+                  ? Number(rawAddr.distance_km)
+                  : meta.distanceKm ?? null,
+              appliedRuleName: rawAddr.applied_rule_name ?? meta.appliedRuleName ?? null,
+              deliveryBreakdown: rawAddr.delivery_breakdown ?? meta.deliveryBreakdown ?? null,
+              latitude: hasCoords ? rawLat : null,
+              longitude: hasCoords ? rawLng : null,
+              geocodeStatus,
+            };
+          })()
         : null,
       createdAt: rawOrder.created_at,
       updatedAt: rawOrder.updated_at,
@@ -2333,6 +2428,91 @@ export class OrderRepository {
     });
 
     return true;
+  }
+
+  public async updateOrderCoordinates(
+    tenantId: string,
+    orderId: string,
+    coords: {
+      latitude: number | null;
+      longitude: number | null;
+      geocodeStatus: 'geocoded' | 'pending' | 'manual';
+      street?: string;
+      number?: string;
+      neighborhood?: string;
+      city?: string;
+      state?: string;
+      cep?: string;
+    },
+    actor?: User
+  ): Promise<Order> {
+    const existing = await this.getOrderById(tenantId, orderId);
+    if (!existing) {
+      throw new Error('Pedido não encontrado.');
+    }
+
+    const ext = await this.getExtendedConfig(tenantId);
+    const prevMeta = ext.ordersMeta?.[orderId] || {};
+
+    const validCoords = hasValidCoordinates(coords.latitude, coords.longitude);
+    const finalLat = validCoords ? Number(coords.latitude) : null;
+    const finalLng = validCoords ? Number(coords.longitude) : null;
+    const finalStatus = validCoords ? coords.geocodeStatus : 'pending';
+
+    // Update order_delivery_addresses if present
+    const patch: Record<string, any> = {
+      latitude: finalLat,
+      longitude: finalLng,
+      geocode_status: finalStatus,
+    };
+    if (coords.street !== undefined) patch.street = coords.street.trim();
+    if (coords.number !== undefined) patch.number = coords.number.trim();
+    if (coords.neighborhood !== undefined) patch.neighborhood = coords.neighborhood.trim();
+    if (coords.city !== undefined) patch.city = coords.city.trim();
+    if (coords.state !== undefined) patch.state = coords.state.trim().toUpperCase();
+    if (coords.cep !== undefined) patch.cep = normalizeCep(coords.cep);
+
+    const { error: addrUpdateErr } = await supabaseAdmin
+      .from('order_delivery_addresses')
+      .update(patch)
+      .eq('tenant_id', tenantId)
+      .eq('order_id', orderId);
+
+    if (addrUpdateErr) {
+      const { latitude, longitude, geocode_status, ...legacyPatch } = patch;
+      if (Object.keys(legacyPatch).length > 0) {
+        await supabaseAdmin
+          .from('order_delivery_addresses')
+          .update(legacyPatch)
+          .eq('tenant_id', tenantId)
+          .eq('order_id', orderId);
+      }
+    }
+
+    await this.saveExtendedConfig(tenantId, {
+      ordersMeta: {
+        [orderId]: {
+          ...prevMeta,
+          latitude: finalLat,
+          longitude: finalLng,
+          geocodeStatus: finalStatus,
+        },
+      },
+    });
+
+    if (actor) {
+      await repo.logAudit({
+        actorUserId: actor.id,
+        actorUserName: actor.name,
+        tenantId,
+        action: 'ORDER_COORDINATES_UPDATE' as any,
+        entity: 'orders',
+        entityId: orderId,
+        metadata: { latitude: finalLat, longitude: finalLng, geocodeStatus: finalStatus },
+      });
+    }
+
+    return (await this.getOrderById(tenantId, orderId))!;
   }
 }
 

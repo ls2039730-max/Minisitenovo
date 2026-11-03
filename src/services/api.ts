@@ -17,6 +17,23 @@ import {
   OrdersSummary,
 } from '../types/order';
 import {
+  DeliveryDriver,
+  CreateDeliveryDriverPayload,
+  UpdateDeliveryDriverPayload,
+  DriverAvailabilityStatus,
+  DeliveryRoute,
+  DeliveryRouteStop,
+  DeliveryRouteStatus,
+  DeliveryFailureReason,
+  DeliveryEvent,
+  DeliveryNotification,
+  DeliveryHubFilters,
+  DeliveryHubOverview,
+  CreateDeliveryRoutePayload,
+  RoutePreviewResult,
+  PublicDeliveryTrackingInfo,
+} from '../types/deliveryHub';
+import {
   Service,
   ServicePayload,
   ServiceCategory,
@@ -191,6 +208,7 @@ class ApiService {
     tenant?: Tenant | null;
     resolvedFeatures?: Record<FeatureKey, boolean> | null;
     linkedProfessional?: Professional | null;
+    linkedDriver?: DeliveryDriver | null;
   }> {
     const res = await this.request<{
       success: boolean;
@@ -199,6 +217,7 @@ class ApiService {
       tenant?: Tenant | null;
       resolvedFeatures?: Record<FeatureKey, boolean> | null;
       linkedProfessional?: Professional | null;
+      linkedDriver?: DeliveryDriver | null;
     }>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
@@ -216,6 +235,7 @@ class ApiService {
     originalAdminUserName?: string;
     resolvedFeatures?: Record<FeatureKey, boolean>;
     linkedProfessional?: Professional | null;
+    linkedDriver?: DeliveryDriver | null;
   }> {
     return this.request('/api/auth/me');
   }
@@ -1596,6 +1616,348 @@ class ApiService {
     if (params?.endDate) qsParams.set('endDate', params.endDate);
     const qs = qsParams.toString() ? `?${qsParams.toString()}` : '';
     const res = await this.request<{ success: boolean; data: FinancialDashboardResponse }>(`/api/admin/financial/dashboard${qs}`);
+    return res.data;
+  }
+
+  // ==========================================
+  // CENTRAL DE ENTREGAS, MOTOBOYS, ROTAS, QR CODE, WHATSAPP & RASTREAMENTO
+  // ==========================================
+
+  async getDeliveryHubOverview(filters?: DeliveryHubFilters): Promise<DeliveryHubOverview> {
+    const params = new URLSearchParams();
+    if (filters?.dispatchFilter && filters.dispatchFilter !== 'all') {
+      params.set('dispatchFilter', filters.dispatchFilter);
+    }
+    if (filters?.neighborhood && filters.neighborhood !== 'all') {
+      params.set('neighborhood', filters.neighborhood);
+    }
+    if (filters?.driverId && filters.driverId !== 'all') {
+      params.set('driverId', filters.driverId);
+    }
+    if (filters?.search) {
+      params.set('search', filters.search);
+    }
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await this.request<{ success: boolean; data: DeliveryHubOverview }>(`/api/delivery-hub/overview${qs}`);
+    return res.data;
+  }
+
+  async retryOrderGeocode(orderId: string): Promise<{ order: Order; geocoded: boolean; message?: string }> {
+    const res = await this.request<{
+      success: boolean;
+      data: { order: Order; geocoded: boolean };
+      message?: string;
+    }>(`/api/delivery-hub/orders/${encodeURIComponent(orderId)}/geocode`, {
+      method: 'POST',
+    });
+    return { ...res.data, message: res.message };
+  }
+
+  async updateOrderManualLocation(
+    orderId: string,
+    payload: {
+      latitude: number;
+      longitude: number;
+      street?: string;
+      number?: string;
+      neighborhood?: string;
+      city?: string;
+      state?: string;
+      cep?: string;
+    }
+  ): Promise<Order> {
+    const res = await this.request<{ success: boolean; data: Order }>(
+      `/api/delivery-hub/orders/${encodeURIComponent(orderId)}/location`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }
+    );
+    return res.data;
+  }
+
+  async getDeliveryDrivers(): Promise<DeliveryDriver[]> {
+    const res = await this.request<{ success: boolean; data: DeliveryDriver[] }>('/api/delivery-hub/drivers');
+    return res.data;
+  }
+
+  async createDeliveryDriver(payload: CreateDeliveryDriverPayload): Promise<DeliveryDriver> {
+    const res = await this.request<{ success: boolean; data: DeliveryDriver }>(
+      '/api/delivery-hub/drivers',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    );
+    return res.data;
+  }
+
+  async updateDeliveryDriver(
+    driverId: string,
+    payload: UpdateDeliveryDriverPayload
+  ): Promise<DeliveryDriver> {
+    const res = await this.request<{ success: boolean; data: DeliveryDriver }>(
+      `/api/delivery-hub/drivers/${encodeURIComponent(driverId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }
+    );
+    return res.data;
+  }
+
+  async deleteDeliveryDriver(driverId: string): Promise<void> {
+    await this.request(`/api/delivery-hub/drivers/${encodeURIComponent(driverId)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async previewDeliveryRoute(
+    orderIds: string[],
+    optimizeOrder = true
+  ): Promise<RoutePreviewResult> {
+    const res = await this.request<{ success: boolean; data: RoutePreviewResult }>(
+      '/api/delivery-hub/routes/preview',
+      {
+        method: 'POST',
+        body: JSON.stringify({ orderIds, optimizeOrder }),
+      }
+    );
+    return res.data;
+  }
+
+  async createDeliveryRoute(payload: CreateDeliveryRoutePayload): Promise<DeliveryRoute> {
+    const res = await this.request<{ success: boolean; data: DeliveryRoute }>(
+      '/api/delivery-hub/routes',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    );
+    return res.data;
+  }
+
+  async getDeliveryRoutes(filters?: {
+    driverId?: string;
+    status?: DeliveryRouteStatus | 'active' | 'all';
+  }): Promise<DeliveryRoute[]> {
+    const params = new URLSearchParams();
+    if (filters?.driverId) params.set('driverId', filters.driverId);
+    if (filters?.status) params.set('status', filters.status);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await this.request<{ success: boolean; data: DeliveryRoute[] }>(
+      `/api/delivery-hub/routes${qs}`
+    );
+    return res.data;
+  }
+
+  async getDeliveryRouteById(routeId: string): Promise<DeliveryRoute> {
+    const res = await this.request<{ success: boolean; data: DeliveryRoute }>(
+      `/api/delivery-hub/routes/${encodeURIComponent(routeId)}`
+    );
+    return res.data;
+  }
+
+  async reorderDeliveryRouteStops(
+    routeId: string,
+    orderedStopIds: string[]
+  ): Promise<DeliveryRoute> {
+    const res = await this.request<{ success: boolean; data: DeliveryRoute }>(
+      `/api/delivery-hub/routes/${encodeURIComponent(routeId)}/reorder`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ orderedStopIds }),
+      }
+    );
+    return res.data;
+  }
+
+  async removeStopFromDeliveryRoute(routeId: string, stopId: string): Promise<DeliveryRoute> {
+    const res = await this.request<{ success: boolean; data: DeliveryRoute }>(
+      `/api/delivery-hub/routes/${encodeURIComponent(routeId)}/stops/${encodeURIComponent(stopId)}`,
+      {
+        method: 'DELETE',
+      }
+    );
+    return res.data;
+  }
+
+  async assignDriverToDeliveryRoute(
+    routeId: string,
+    driverId: string | null
+  ): Promise<DeliveryRoute> {
+    const res = await this.request<{ success: boolean; data: DeliveryRoute }>(
+      `/api/delivery-hub/routes/${encodeURIComponent(routeId)}/driver`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ driverId }),
+      }
+    );
+    return res.data;
+  }
+
+  async manageDeliveryRouteQr(
+    routeId: string,
+    action: 'revoke' | 'regenerate'
+  ): Promise<DeliveryRoute> {
+    const res = await this.request<{ success: boolean; data: DeliveryRoute }>(
+      `/api/delivery-hub/routes/${encodeURIComponent(routeId)}/qr`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ action }),
+      }
+    );
+    return res.data;
+  }
+
+  async cancelDeliveryRoute(routeId: string): Promise<DeliveryRoute> {
+    const res = await this.request<{ success: boolean; data: DeliveryRoute }>(
+      `/api/delivery-hub/routes/${encodeURIComponent(routeId)}/cancel`,
+      {
+        method: 'POST',
+      }
+    );
+    return res.data;
+  }
+
+  // --- Driver Portal & Route Execution ---
+  async getDriverPortalData(driverId?: string): Promise<{
+    driver: DeliveryDriver | null;
+    activeRoutes: DeliveryRoute[];
+    completedRoutes: DeliveryRoute[];
+  }> {
+    const qs = driverId ? `?driverId=${encodeURIComponent(driverId)}` : '';
+    const res = await this.request<{
+      success: boolean;
+      data: {
+        driver: DeliveryDriver | null;
+        activeRoutes: DeliveryRoute[];
+        completedRoutes: DeliveryRoute[];
+      };
+    }>(`/api/delivery-hub/driver-portal${qs}`);
+    return res.data;
+  }
+
+  async updateDriverPortalStatus(payload: {
+    driverId?: string;
+    availabilityStatus?: DriverAvailabilityStatus;
+    shareLocation?: boolean;
+    latitude?: number | null;
+    longitude?: number | null;
+  }): Promise<DeliveryDriver> {
+    const res = await this.request<{ success: boolean; data: DeliveryDriver }>(
+      '/api/delivery-hub/driver-portal/status',
+      {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }
+    );
+    return res.data;
+  }
+
+  async scanDeliveryRouteQrCode(qrToken: string): Promise<DeliveryRoute> {
+    const res = await this.request<{ success: boolean; data: DeliveryRoute }>(
+      '/api/delivery-hub/driver-portal/scan-qr',
+      {
+        method: 'POST',
+        body: JSON.stringify({ qrToken }),
+      }
+    );
+    return res.data;
+  }
+
+  async startDeliveryRoute(routeId: string): Promise<DeliveryRoute> {
+    const res = await this.request<{ success: boolean; data: DeliveryRoute }>(
+      `/api/delivery-hub/routes/${encodeURIComponent(routeId)}/start`,
+      {
+        method: 'POST',
+      }
+    );
+    return res.data;
+  }
+
+  async startDeliveryRouteStop(
+    routeId: string,
+    stopId: string
+  ): Promise<{
+    route: DeliveryRoute;
+    stop: DeliveryRouteStop;
+    notification: DeliveryNotification;
+  }> {
+    const res = await this.request<{
+      success: boolean;
+      data: {
+        route: DeliveryRoute;
+        stop: DeliveryRouteStop;
+        notification: DeliveryNotification;
+      };
+    }>(
+      `/api/delivery-hub/routes/${encodeURIComponent(routeId)}/stops/${encodeURIComponent(stopId)}/start`,
+      {
+        method: 'POST',
+      }
+    );
+    return res.data;
+  }
+
+  async completeDeliveryRouteStop(routeId: string, stopId: string): Promise<DeliveryRoute> {
+    const res = await this.request<{ success: boolean; data: DeliveryRoute }>(
+      `/api/delivery-hub/routes/${encodeURIComponent(routeId)}/stops/${encodeURIComponent(stopId)}/complete`,
+      {
+        method: 'POST',
+      }
+    );
+    return res.data;
+  }
+
+  async failDeliveryRouteStop(
+    routeId: string,
+    stopId: string,
+    payload: { reason: DeliveryFailureReason; notes?: string }
+  ): Promise<DeliveryRoute> {
+    const res = await this.request<{ success: boolean; data: DeliveryRoute }>(
+      `/api/delivery-hub/routes/${encodeURIComponent(routeId)}/stops/${encodeURIComponent(stopId)}/fail`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    );
+    return res.data;
+  }
+
+  async retryStopWhatsAppNotification(
+    routeId: string,
+    stopId: string,
+    forceRetry = true
+  ): Promise<DeliveryNotification> {
+    const res = await this.request<{ success: boolean; data: DeliveryNotification }>(
+      `/api/delivery-hub/routes/${encodeURIComponent(routeId)}/stops/${encodeURIComponent(stopId)}/notify`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ forceRetry }),
+      }
+    );
+    return res.data;
+  }
+
+  async getDeliveryEvents(params?: {
+    routeId?: string;
+    orderId?: string;
+  }): Promise<DeliveryEvent[]> {
+    const qsParams = new URLSearchParams();
+    if (params?.routeId) qsParams.set('routeId', params.routeId);
+    if (params?.orderId) qsParams.set('orderId', params.orderId);
+    const qs = qsParams.toString() ? `?${qsParams.toString()}` : '';
+    const res = await this.request<{ success: boolean; data: DeliveryEvent[] }>(
+      `/api/delivery-hub/events${qs}`
+    );
+    return res.data;
+  }
+
+  async getPublicDeliveryTracking(trackingToken: string): Promise<PublicDeliveryTrackingInfo> {
+    const res = await this.request<{ success: boolean; data: PublicDeliveryTrackingInfo }>(
+      `/api/public/delivery-tracking/${encodeURIComponent(trackingToken)}`
+    );
     return res.data;
   }
 }

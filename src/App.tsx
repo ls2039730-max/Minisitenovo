@@ -25,6 +25,9 @@ import { PublicSiteView } from './components/site/public/PublicSiteView';
 import { RestaurantManager } from './components/restaurant/RestaurantManager';
 import { PublicTableCatalogView } from './components/restaurant/public/PublicTableCatalogView';
 import { FinancialDashboardView } from './components/financial/FinancialDashboardView';
+import { DeliveryHubManager } from './components/delivery/DeliveryHubManager';
+import { DriverPortalView } from './components/delivery/DriverPortalView';
+import { PublicDeliveryTrackingPage } from './components/public/PublicDeliveryTrackingPage';
 
 import { api } from './services/api';
 import { Plan, Tenant, TenantStatus } from './types/saas';
@@ -49,6 +52,8 @@ const RESERVED_APP_PATHS = new Set([
   'index.html',
   'm',
   'mesa',
+  'rastreio',
+  'motoboy',
 ]);
 
 export const CROSS_TENANT_BLOCKED_SENTINEL = '__cross_tenant_blocked__';
@@ -179,8 +184,44 @@ function getTableParamsFromUrl(): { slug: string; token: string } | null {
   return null;
 }
 
+// Helper to detect public customer order tracking URL (/rastreio/:token or ?rastreio=:token)
+export function getTrackingTokenFromUrl(pathnameOverride?: string, searchOverride?: string): string | null {
+  if (typeof window === 'undefined' && pathnameOverride === undefined && searchOverride === undefined) {
+    return null;
+  }
+  const pathname = pathnameOverride !== undefined ? pathnameOverride : window.location.pathname;
+  const search = searchOverride !== undefined ? searchOverride : window.location.search;
+
+  const params = new URLSearchParams(search);
+  const queryToken = params.get('rastreio') || params.get('tracking');
+  if (queryToken && queryToken.trim()) {
+    return queryToken.trim();
+  }
+
+  const rawPath = pathname.replace(/^\/+|\/+$/g, '');
+  const segments = rawPath ? rawPath.split('/') : [];
+  if (segments[0]?.toLowerCase() === 'rastreio' && segments[1]?.trim()) {
+    return segments[1].trim();
+  }
+
+  return null;
+}
+
+function getRouteQrTokenFromUrl(): string | null {
+  if (typeof window === 'undefined') return null;
+  const params = new URLSearchParams(window.location.search);
+  const qr = params.get('routeQr');
+  return qr && qr.trim() ? qr.trim() : null;
+}
+
 const AppContent: React.FC = () => {
-  const { user, tenant, loading, setTenant, resolvedFeatures, logout, refreshSession, isProfessional, linkedProfessional } = useAuth();
+  const { user, tenant, loading, setTenant, resolvedFeatures, logout, refreshSession, isProfessional, linkedProfessional, isDeliveryDriver, linkedDriver } = useAuth();
+
+  // Public Customer Delivery Tracking View State
+  const [trackingToken] = useState<string | null>(getTrackingTokenFromUrl());
+
+  // Route QR Token from URL for driver handoff
+  const [routeQrToken] = useState<string | null>(getRouteQrTokenFromUrl());
 
   // Public Table QR Code View State
   const [tableParams] = useState<{ slug: string; token: string } | null>(getTableParamsFromUrl());
@@ -492,6 +533,13 @@ const AppContent: React.FC = () => {
   }, [user]);
 
   // ==========================================
+  // PUBLIC CUSTOMER DELIVERY TRACKING VIEW
+  // ==========================================
+  if (trackingToken) {
+    return <PublicDeliveryTrackingPage trackingToken={trackingToken} />;
+  }
+
+  // ==========================================
   // PUBLIC TABLE QR CODE DIGITAL CATALOG VIEW
   // ==========================================
   if (tableParams) {
@@ -633,9 +681,57 @@ const AppContent: React.FC = () => {
     );
   }
 
-  // 2. CLIENT / PROFESSIONAL INTERFACE
+  // 2. CLIENT / PROFESSIONAL / DELIVERY DRIVER INTERFACE
   // Strictly isolated to user's assigned tenant
   if (tenant) {
+    // If user is a DELIVERY_DRIVER: render strictly the Mobile-First Driver Portal
+    if (isDeliveryDriver) {
+      if (!linkedDriver) {
+        return (
+          <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 text-slate-300">
+            <div className="bg-slate-900 border border-amber-500/30 p-8 rounded-3xl max-w-lg w-full text-center shadow-2xl">
+              <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-5 shadow-lg">
+                <AlertCircle className="w-8 h-8" />
+              </div>
+              <h2 className="text-xl font-black text-white mb-2">Cadastro de Entregador Pendente</h2>
+              <p className="text-xs text-slate-400 mb-5 leading-relaxed">
+                Olá, <span className="text-white font-bold">{user?.name}</span>. Seu perfil é de <strong>Entregador (Motoboy)</strong>, mas seu cadastro ainda não está ativo ou vinculado na equipe de entregas de <strong>{tenant.name}</strong>.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={async () => {
+                    await refreshSession();
+                  }}
+                  className="flex-1 py-3 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Verificar Vínculo Novamente
+                </button>
+                <button
+                  onClick={async () => {
+                    await logout();
+                  }}
+                  className="py-3 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer border border-slate-700"
+                >
+                  <LogOut className="w-4 h-4 text-rose-400" />
+                  Sair
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <DriverPortalView
+          isStandaloneDriverSession={true}
+          tenantName={tenant.name}
+          onLogout={logout}
+          initialQrToken={routeQrToken}
+        />
+      );
+    }
+
     // If user is a PROFESSIONAL without an active link to a professional record
     if (isProfessional && !linkedProfessional) {
       return (
@@ -790,6 +886,29 @@ const AppContent: React.FC = () => {
               <h3 className="text-lg font-bold text-slate-900 mb-1">Módulo de Pedidos desativado</h3>
               <p className="text-xs text-slate-500 max-w-sm mb-6">
                 O módulo de pedidos e vendas (shopping_cart) está desativado para a sua empresa. Entre em contato com a administração da plataforma caso deseje habilitá-lo.
+              </p>
+              <button
+                onClick={() => navigateClientTab('home')}
+                className="px-5 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                Voltar para o Início
+              </button>
+            </div>
+          )
+        )}
+
+        {/* Delivery Hub & Dispatch Center Module */}
+        {(clientTab === 'delivery_hub' || clientTab === 'central_entregas') && (
+          (hasShoppingCart || hasRestaurantCatalog) ? (
+            <DeliveryHubManager tenant={tenant} />
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-600 bg-white m-6 rounded-3xl border border-slate-200">
+              <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mb-4">
+                <AlertCircle className="w-8 h-8" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 mb-1">Central de Entregas desativada</h3>
+              <p className="text-xs text-slate-500 max-w-sm mb-6">
+                A Central de Entregas requer que o módulo de pedidos (shopping_cart ou restaurant_tables) esteja habilitado para a sua empresa.
               </p>
               <button
                 onClick={() => navigateClientTab('home')}

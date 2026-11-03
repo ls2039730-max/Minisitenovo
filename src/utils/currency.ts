@@ -92,3 +92,6 @@ export function formatPriceBRL(val: unknown): string {
 export function formatCurrencyBRL(val: unknown): string {
   return `R$ ${formatPriceBRL(val)}`;
 }
+
+export const formatCurrency = formatCurrencyBRL;
+

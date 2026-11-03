@@ -94,6 +94,16 @@ export class SaasRepository {
   public async authenticateUser(email: string, password: string): Promise<User | null> {
     const cleanEmail = email.toLowerCase().trim();
 
+    // Pre-check local/hybrid explicit password accounts (e.g. DELIVERY_DRIVER) before any bootstrap or auto-heal
+    const preCheckLocalUser = localStore.auth_users.find(
+      (u: any) => u.email?.toLowerCase().trim() === cleanEmail
+    );
+    if (preCheckLocalUser && preCheckLocalUser.password) {
+      if (preCheckLocalUser.password !== password) {
+        return null;
+      }
+    }
+
     // Ensure initial demo data exists in database
     await bootstrapDatabaseIfNeeded();
 
@@ -132,7 +142,23 @@ export class SaasRepository {
         }
       }
 
-      if (signInError || !signInData?.user) {
+      // First check if this is a local/hybrid user with explicit password (e.g. DELIVERY_DRIVER)
+      const localExplicitUser =
+        preCheckLocalUser ||
+        localStore.auth_users.find(
+          (u: any) => u.email?.toLowerCase().trim() === cleanEmail
+        );
+      if (localExplicitUser && localExplicitUser.password) {
+        if (localExplicitUser.password !== password) {
+          return null;
+        }
+        if (signInError || !signInData?.user) {
+          authUser = localExplicitUser;
+          signInError = null;
+        }
+      }
+
+      if ((signInError || !signInData?.user) && !authUser) {
         console.log('[AUTH] Supabase signIn attempt note:', signInError?.message);
 
         // Auto-heal accounts in real Supabase when password mismatch or initial login fails
@@ -153,6 +179,11 @@ export class SaasRepository {
           let target = usersData?.users?.find(
             (u: any) => u.email?.toLowerCase().trim() === cleanEmailLower
           );
+
+          // Never auto-heal or overwrite passwords for DELIVERY_DRIVER accounts
+          if (target && target.user_metadata?.role === 'DELIVERY_DRIVER') {
+            return null;
+          }
 
           if (!target) {
             const { data: ownedTenant } = await supabaseAdmin
@@ -274,6 +305,13 @@ export class SaasRepository {
       .select('*')
       .eq('user_id', authUser.id);
 
+    if ((!tuList || tuList.length === 0) && localStore.tenant_users.length > 0) {
+      const localMatches = localStore.tenant_users.filter((r: any) => r.user_id === authUser.id);
+      if (localMatches.length > 0) {
+        tuList = localMatches;
+      }
+    }
+
     let tu =
       tuList && tuList.length > 0
         ? tuList.find((r: any) => r.status === 'active') ||
@@ -301,26 +339,59 @@ export class SaasRepository {
       let tenantId: string | null = null;
 
       if (!isSuperAdminEmail) {
-        // Check if there is an existing professional record for this user or email
+        // Check if there is an existing delivery driver record for this user or email
         try {
-          const { data: profs } = await supabaseAdmin
-            .from('professionals')
-            .select('id, tenant_id')
-            .or(`email.ilike.${emailLower},user_id.eq.${authUser.id}`)
-            .limit(1);
-
-          if (profs && profs.length > 0) {
-            role = 'PROFESSIONAL';
-            tenantId = profs[0].tenant_id;
-            await supabaseAdmin
-              .from('professionals')
-              .update({ user_id: authUser.id })
-              .eq('id', profs[0].id);
-          } else if (authUser.user_metadata?.role === 'PROFESSIONAL') {
-            role = 'PROFESSIONAL';
+          const localDriver = localStore.delivery_drivers.find(
+            (d: any) =>
+              d.user_id === authUser.id ||
+              String(d.email || '').toLowerCase().trim() === emailLower
+          );
+          if (localDriver) {
+            role = 'DELIVERY_DRIVER';
+            tenantId = localDriver.tenant_id;
+          } else {
+            const { data: drivers } = await supabaseAdmin
+              .from('delivery_drivers')
+              .select('id, tenant_id')
+              .or(`email.ilike.${emailLower},user_id.eq.${authUser.id}`)
+              .limit(1);
+            if (drivers && drivers.length > 0) {
+              role = 'DELIVERY_DRIVER';
+              tenantId = drivers[0].tenant_id;
+            } else if (authUser.user_metadata?.role === 'DELIVERY_DRIVER') {
+              role = 'DELIVERY_DRIVER';
+              tenantId = authUser.user_metadata?.tenant_id || null;
+            }
           }
-        } catch (profLookupErr) {
-          console.warn('[AUTH] Could not check professional records:', profLookupErr);
+        } catch {
+          if (authUser.user_metadata?.role === 'DELIVERY_DRIVER') {
+            role = 'DELIVERY_DRIVER';
+            tenantId = authUser.user_metadata?.tenant_id || null;
+          }
+        }
+
+        // Check if there is an existing professional record for this user or email
+        if (role !== 'DELIVERY_DRIVER') {
+          try {
+            const { data: profs } = await supabaseAdmin
+              .from('professionals')
+              .select('id, tenant_id')
+              .or(`email.ilike.${emailLower},user_id.eq.${authUser.id}`)
+              .limit(1);
+
+            if (profs && profs.length > 0) {
+              role = 'PROFESSIONAL';
+              tenantId = profs[0].tenant_id;
+              await supabaseAdmin
+                .from('professionals')
+                .update({ user_id: authUser.id })
+                .eq('id', profs[0].id);
+            } else if (authUser.user_metadata?.role === 'PROFESSIONAL') {
+              role = 'PROFESSIONAL';
+            }
+          } catch (profLookupErr) {
+            console.warn('[AUTH] Could not check professional records:', profLookupErr);
+          }
         }
 
         if (!tenantId) {
@@ -825,9 +896,9 @@ export class SaasRepository {
     );
   }
 
-  public async getTenantById(id: string, requester: User): Promise<Tenant | null> {
-    // Multi-tenant check
-    if (requester.role !== 'SUPER_ADMIN' && requester.tenantId !== id) {
+  public async getTenantById(id: string, requester?: User): Promise<Tenant | null> {
+    // Multi-tenant check when requester is provided
+    if (requester && requester.role !== 'SUPER_ADMIN' && requester.tenantId !== id) {
       throw new Error('Acesso negado: você não tem permissão para acessar os dados deste tenant.');
     }
 

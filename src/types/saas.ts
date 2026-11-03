@@ -4,7 +4,8 @@ export type UserRole =
   | 'OWNER'
   | 'MANAGER'
   | 'EMPLOYEE'
-  | 'PROFESSIONAL';
+  | 'PROFESSIONAL'
+  | 'DELIVERY_DRIVER';
 
 export type UserStatus = 'active' | 'inactive' | 'invited';
 
