@@ -1,685 +1,1026 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import L from 'leaflet';
 import {
   MapPin,
   Navigation,
   Store,
-  Phone,
-  Clock,
-  CheckSquare,
-  Square,
-  ZoomIn,
-  ZoomOut,
-  Maximize2,
+  Bike,
   AlertTriangle,
-  Truck,
-  X,
+  Plus,
+  Minus,
+  Maximize2,
+  Check,
+  Route as RouteIcon,
+  Layers,
+  Crosshair,
+  Clock,
+  User,
   ExternalLink,
+  X,
 } from 'lucide-react';
 import {
   DispatchOrderItem,
   DeliveryRoute,
   DeliveryDriver,
+  RoutePreviewResult,
 } from '../../types/deliveryHub';
 import {
   DeliveryOriginAddress,
   OrderDispatchStatus,
-  ORDER_STATUS_LABELS,
-  PAYMENT_METHOD_LABELS,
 } from '../../types/order';
-import { formatCurrency } from '../../utils/currency';
 
 interface InteractiveDeliveryMapProps {
   originAddress: DeliveryOriginAddress | null;
   orders: DispatchOrderItem[];
-  activeRoutes?: DeliveryRoute[];
-  drivers?: DeliveryDriver[];
+  routes: DeliveryRoute[];
+  drivers: DeliveryDriver[];
   selectedOrderIds: string[];
   onToggleSelectOrder: (orderId: string) => void;
-  onRetryGeocode?: (orderId: string) => void;
-  onOpenManualLocation?: (order: DispatchOrderItem) => void;
-  showPhone?: boolean;
+  onSelectClusterOrders?: (orderIds: string[]) => void;
+  onRequestManualGeocode?: (order: DispatchOrderItem) => void;
+  focusedOrderId?: string | null;
+  onFocusOrder?: (orderId: string | null) => void;
+  liveRoutePreview?: RoutePreviewResult | null;
+  liveRouteLoading?: boolean;
+  onOpenRouteModal?: () => void;
 }
+
+export const DISPATCH_PIN_COLORS: Record<
+  OrderDispatchStatus,
+  { bg: string; border: string; text: string; badgeBg: string; label: string }
+> = {
+  waiting_dispatch: {
+    bg: '#f97316', // Laranja: aguardando despacho
+    border: '#c2410c',
+    text: '#ffffff',
+    badgeBg: 'bg-orange-500',
+    label: 'Aguardando despacho',
+  },
+  assigned: {
+    bg: '#3b82f6', // Azul: atribuído ao motoboy
+    border: '#1d4ed8',
+    text: '#ffffff',
+    badgeBg: 'bg-blue-500',
+    label: 'Atribuído ao motoboy',
+  },
+  in_route: {
+    bg: '#8b5cf6', // Roxo: em rota
+    border: '#6d28d9',
+    text: '#ffffff',
+    badgeBg: 'bg-purple-500',
+    label: 'Em rota',
+  },
+  delivered: {
+    bg: '#10b981', // Verde: entregue
+    border: '#047857',
+    text: '#ffffff',
+    badgeBg: 'bg-emerald-500',
+    label: 'Entregue',
+  },
+  delivery_issue: {
+    bg: '#ef4444', // Vermelho: problema na entrega
+    border: '#b91c1c',
+    text: '#ffffff',
+    badgeBg: 'bg-red-500',
+    label: 'Problema na entrega',
+  },
+};
 
 export const DISPATCH_STATUS_CONFIG: Record<
   OrderDispatchStatus,
-  {
-    label: string;
-    hex: string;
-    bgClass: string;
-    textClass: string;
-    borderClass: string;
-    ringClass: string;
-  }
+  { hex: string; borderHex: string; label: string }
 > = {
   waiting_dispatch: {
+    hex: '#f97316',
+    borderHex: '#c2410c',
     label: 'Aguardando despacho',
-    hex: '#f97316', // Laranja
-    bgClass: 'bg-orange-500',
-    textClass: 'text-orange-700',
-    borderClass: 'border-orange-300',
-    ringClass: 'ring-orange-400',
   },
   assigned: {
-    label: 'Atribuído a motoboy',
-    hex: '#3b82f6', // Azul
-    bgClass: 'bg-blue-600',
-    textClass: 'text-blue-700',
-    borderClass: 'border-blue-300',
-    ringClass: 'ring-blue-400',
+    hex: '#3b82f6',
+    borderHex: '#1d4ed8',
+    label: 'Atribuído ao motoboy',
   },
   in_route: {
-    label: 'Em rota de entrega',
-    hex: '#8b5cf6', // Roxo
-    bgClass: 'bg-purple-600',
-    textClass: 'text-purple-700',
-    borderClass: 'border-purple-300',
-    ringClass: 'ring-purple-400',
+    hex: '#8b5cf6',
+    borderHex: '#6d28d9',
+    label: 'Em rota',
   },
   delivered: {
+    hex: '#10b981',
+    borderHex: '#047857',
     label: 'Entregue',
-    hex: '#10b981', // Verde
-    bgClass: 'bg-emerald-600',
-    textClass: 'text-emerald-700',
-    borderClass: 'border-emerald-300',
-    ringClass: 'ring-emerald-400',
   },
   delivery_issue: {
+    hex: '#ef4444',
+    borderHex: '#b91c1c',
     label: 'Problema na entrega',
-    hex: '#ef4444', // Vermelho
-    bgClass: 'bg-rose-600',
-    textClass: 'text-rose-700',
-    borderClass: 'border-rose-300',
-    ringClass: 'ring-rose-400',
   },
 };
+
+const ROUTE_LINE_PALETTE = [
+  '#6366f1', // Indigo
+  '#8b5cf6', // Violet
+  '#0ea5e9', // Sky
+  '#ec4899', // Pink
+  '#14b8a6', // Teal
+];
+
+// Default fallback center (São Paulo center) only when restaurant & orders have no coordinates yet
+const DEFAULT_MAP_CENTER: [number, number] = [-23.55052, -46.63331];
+
+const TILE_LAYERS = {
+  voyager: {
+    name: 'Mapa Logístico (Ruas & Bairros)',
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  },
+  osm: {
+    name: 'OpenStreetMap Padrão',
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  },
+};
+
+function isValidCoord(lat: number | null | undefined, lng: number | null | undefined): boolean {
+  return (
+    typeof lat === 'number' &&
+    typeof lng === 'number' &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    Math.abs(lat) <= 90 &&
+    Math.abs(lng) <= 180 &&
+    !(lat === 0 && lng === 0)
+  );
+}
+
+function escapeHtml(str: string): string {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
   originAddress,
   orders,
-  activeRoutes = [],
-  drivers = [],
+  routes,
+  drivers,
   selectedOrderIds,
   onToggleSelectOrder,
-  onRetryGeocode,
-  onOpenManualLocation,
-  showPhone = true,
+  onRequestManualGeocode,
+  focusedOrderId,
+  onFocusOrder,
+  liveRoutePreview,
+  liveRouteLoading,
+  onOpenRouteModal,
 }) => {
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const leafletMapRef = useRef<L.Map | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const markersLayerRef = useRef<L.LayerGroup | null>(null);
+  const routesLayerRef = useRef<L.LayerGroup | null>(null);
+  const hasInitializedBoundsRef = useRef(false);
+
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
-  const [zoom, setZoom] = useState<number>(1);
-  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [showRouteLines, setShowRouteLines] = useState<boolean>(true);
+  const [tileStyle, setTileStyle] = useState<'voyager' | 'osm'>('voyager');
+  const [mapReady, setMapReady] = useState<boolean>(false);
+  const [googleMapsStatus, setGoogleMapsStatus] = useState<
+    'checking' | 'configured' | 'not_configured' | 'auth_error'
+  >('checking');
+
+  // Check backend/frontend Google Maps API key availability for diagnostics & transparency
+  useEffect(() => {
+    let mounted = true;
+    const envKey = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY;
+    if (envKey && typeof envKey === 'string' && envKey.trim() && envKey !== 'YOUR_API_KEY') {
+      setGoogleMapsStatus('configured');
+      return;
+    }
+    fetch('/api/config')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!mounted) return;
+        if (data?.googleMapsConfigured && data?.googleMapsApiKey) {
+          setGoogleMapsStatus('configured');
+        } else {
+          setGoogleMapsStatus('not_configured');
+        }
+      })
+      .catch(() => {
+        if (mounted) setGoogleMapsStatus('not_configured');
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const validOrigin = useMemo(() => {
+    if (originAddress && isValidCoord(originAddress.latitude, originAddress.longitude)) {
+      return {
+        lat: Number(originAddress.latitude),
+        lng: Number(originAddress.longitude),
+        label: `${originAddress.street}, ${originAddress.number} — ${originAddress.neighborhood}`,
+      };
+    }
+    return null;
+  }, [originAddress]);
 
   const geocodedOrders = useMemo(
+    () => orders.filter((o) => isValidCoord(o.latitude, o.longitude)),
+    [orders]
+  );
+
+  const pendingGeocodeOrders = useMemo(
     () =>
       orders.filter(
-        (o) =>
-          typeof o.latitude === 'number' &&
-          typeof o.longitude === 'number' &&
-          Number.isFinite(o.latitude) &&
-          Number.isFinite(o.longitude)
+        (o) => !isValidCoord(o.latitude, o.longitude) && o.dispatchStatus !== 'delivered'
       ),
     [orders]
   );
 
-  const pendingOrders = useMemo(
-    () =>
-      orders.filter(
-        (o) =>
-          o.geocodeStatus === 'pending' ||
-          typeof o.latitude !== 'number' ||
-          typeof o.longitude !== 'number'
-      ),
-    [orders]
-  );
-
-  const liveDrivers = useMemo(
+  const activeDriversWithGps = useMemo(
     () =>
       drivers.filter(
-        (d) =>
-          d.shareLocation &&
-          d.activeRouteId &&
-          typeof d.lastLatitude === 'number' &&
-          typeof d.lastLongitude === 'number'
+        (d) => d.isActive && d.shareLocation && isValidCoord(d.lastLatitude, d.lastLongitude)
       ),
     [drivers]
   );
 
-  // Compute bounding box for coordinate projection into 800x480 viewport
-  const projection = useMemo(() => {
-    const points: Array<{ lat: number; lng: number }> = [];
-    if (
-      originAddress &&
-      typeof originAddress.latitude === 'number' &&
-      typeof originAddress.longitude === 'number'
-    ) {
-      points.push({ lat: originAddress.latitude, lng: originAddress.longitude });
+  // Map orderId -> sequence number in live route preview (when 2+ orders are selected)
+  const previewStopSequenceByOrderId = useMemo(() => {
+    const map = new Map<string, number>();
+    if (liveRoutePreview && liveRoutePreview.orderedStops.length > 0) {
+      for (const stop of liveRoutePreview.orderedStops) {
+        map.set(stop.orderId, stop.stopSequence);
+      }
+    } else if (selectedOrderIds.length > 0) {
+      selectedOrderIds.forEach((id, idx) => {
+        map.set(id, idx + 1);
+      });
     }
-    geocodedOrders.forEach((o) => {
-      points.push({ lat: o.latitude!, lng: o.longitude! });
-    });
-    liveDrivers.forEach((d) => {
-      points.push({ lat: d.lastLatitude!, lng: d.lastLongitude! });
-    });
-
-    if (points.length === 0) {
-      return {
-        hasPoints: false,
-        project: (_lat: number, _lng: number) => ({ x: 400, y: 240 }),
-      };
-    }
-
-    let minLat = Math.min(...points.map((p) => p.lat));
-    let maxLat = Math.max(...points.map((p) => p.lat));
-    let minLng = Math.min(...points.map((p) => p.lng));
-    let maxLng = Math.max(...points.map((p) => p.lng));
-
-    const latSpan = Math.max(0.008, maxLat - minLat);
-    const lngSpan = Math.max(0.008, maxLng - minLng);
-
-    minLat -= latSpan * 0.18;
-    maxLat += latSpan * 0.18;
-    minLng -= lngSpan * 0.18;
-    maxLng += lngSpan * 0.18;
-
-    const width = 800;
-    const height = 460;
-
-    return {
-      hasPoints: true,
-      project: (lat: number, lng: number) => {
-        const nx = (lng - minLng) / (maxLng - minLng || 1);
-        const ny = 1 - (lat - minLat) / (maxLat - minLat || 1);
-        return {
-          x: Math.round(60 + nx * (width - 120)),
-          y: Math.round(50 + ny * (height - 100)),
-        };
-      },
-    };
-  }, [originAddress, geocodedOrders, liveDrivers]);
+    return map;
+  }, [liveRoutePreview, selectedOrderIds]);
 
   const activeOrder = useMemo(
     () => orders.find((o) => o.id === activeOrderId) || null,
     [orders, activeOrderId]
   );
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('[data-map-interactive="true"]')) return;
-    setIsDragging(true);
-    dragStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
-  };
+  // Fit all orders + restaurant origin in viewport
+  const handleFitAllOrders = useCallback(() => {
+    const map = leafletMapRef.current;
+    if (!map) return;
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
-    setPan({
-      x: e.clientX - dragStartRef.current.x,
-      y: e.clientY - dragStartRef.current.y,
+    const points: Array<[number, number]> = [];
+    if (validOrigin) {
+      points.push([validOrigin.lat, validOrigin.lng]);
+    }
+    for (const o of geocodedOrders) {
+      points.push([Number(o.latitude), Number(o.longitude)]);
+    }
+    for (const d of activeDriversWithGps) {
+      points.push([Number(d.lastLatitude), Number(d.lastLongitude)]);
+    }
+
+    if (points.length === 0) {
+      map.setView(DEFAULT_MAP_CENTER, 13, { animate: true });
+      return;
+    }
+
+    if (points.length === 1) {
+      map.setView(points[0], 15, { animate: true });
+      return;
+    }
+
+    const bounds = L.latLngBounds(points);
+    map.fitBounds(bounds, {
+      padding: [56, 56],
+      maxZoom: 16,
+      animate: true,
     });
-  };
+  }, [validOrigin, geocodedOrders, activeDriversWithGps]);
 
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
+  // Center on restaurant origin
+  const handleCenterOnOrigin = useCallback(() => {
+    const map = leafletMapRef.current;
+    if (!map) return;
 
-  const resetView = () => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-  };
+    if (validOrigin) {
+      map.setView([validOrigin.lat, validOrigin.lng], 15, { animate: true });
+    } else {
+      handleFitAllOrders();
+    }
+  }, [validOrigin, handleFitAllOrders]);
 
-  const originPoint =
-    originAddress &&
-    typeof originAddress.latitude === 'number' &&
-    typeof originAddress.longitude === 'number'
-      ? projection.project(originAddress.latitude, originAddress.longitude)
-      : null;
+  const handleZoomIn = useCallback(() => {
+    leafletMapRef.current?.zoomIn();
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    leafletMapRef.current?.zoomOut();
+  }, []);
+
+  // Initialize Leaflet Interactive Street Map
+  useEffect(() => {
+    const container = mapContainerRef.current;
+    if (!container || leafletMapRef.current) return;
+
+    const initialCenter: [number, number] = validOrigin
+      ? [validOrigin.lat, validOrigin.lng]
+      : geocodedOrders.length > 0
+      ? [Number(geocodedOrders[0].latitude), Number(geocodedOrders[0].longitude)]
+      : DEFAULT_MAP_CENTER;
+
+    const map = L.map(container, {
+      center: initialCenter,
+      zoom: 14,
+      zoomControl: false,
+      attributionControl: true,
+    });
+
+    const tileCfg = TILE_LAYERS[tileStyle];
+    const tileLayer = L.tileLayer(tileCfg.url, {
+      attribution: tileCfg.attribution,
+      maxZoom: 19,
+      subdomains: 'abcd',
+    });
+
+    // Automatic fallback to standard OpenStreetMap if CARTO tile server errors
+    tileLayer.on('tileerror', () => {
+      if (tileStyle === 'voyager') {
+        setTileStyle('osm');
+      }
+    });
+
+    tileLayer.addTo(map);
+
+    const routesLayer = L.layerGroup().addTo(map);
+    const markersLayer = L.layerGroup().addTo(map);
+
+    leafletMapRef.current = map;
+    tileLayerRef.current = tileLayer;
+    routesLayerRef.current = routesLayer;
+    markersLayerRef.current = markersLayer;
+    setMapReady(true);
+
+    // Ensure container size changes (responsive layout / tab switch) always trigger invalidateSize
+    const resizeObserver = new ResizeObserver(() => {
+      map.invalidateSize();
+    });
+    resizeObserver.observe(container);
+
+    return () => {
+      resizeObserver.disconnect();
+      map.remove();
+      leafletMapRef.current = null;
+      tileLayerRef.current = null;
+      routesLayerRef.current = null;
+      markersLayerRef.current = null;
+    };
+  }, []);
+
+  // Switch tile style when user toggles layer
+  useEffect(() => {
+    const map = leafletMapRef.current;
+    if (!map) return;
+
+    if (tileLayerRef.current) {
+      map.removeLayer(tileLayerRef.current);
+    }
+
+    const tileCfg = TILE_LAYERS[tileStyle];
+    const newTileLayer = L.tileLayer(tileCfg.url, {
+      attribution: tileCfg.attribution,
+      maxZoom: 19,
+    });
+    newTileLayer.addTo(map);
+    tileLayerRef.current = newTileLayer;
+  }, [tileStyle]);
+
+  // Fit bounds automatically the first time coordinates arrive
+  useEffect(() => {
+    if (!mapReady || hasInitializedBoundsRef.current) return;
+    if (validOrigin || geocodedOrders.length > 0) {
+      hasInitializedBoundsRef.current = true;
+      handleFitAllOrders();
+    }
+  }, [mapReady, validOrigin, geocodedOrders.length, handleFitAllOrders]);
+
+  // Synchronize external focus request (clicking an order in the side list)
+  useEffect(() => {
+    if (!focusedOrderId || !leafletMapRef.current) return;
+    const targetOrder = orders.find((o) => o.id === focusedOrderId);
+    if (!targetOrder) return;
+
+    setActiveOrderId(targetOrder.id);
+
+    if (isValidCoord(targetOrder.latitude, targetOrder.longitude)) {
+      leafletMapRef.current.setView(
+        [Number(targetOrder.latitude), Number(targetOrder.longitude)],
+        Math.max(leafletMapRef.current.getZoom(), 16),
+        { animate: true }
+      );
+    }
+  }, [focusedOrderId, orders]);
+
+  // Render Route Polylines (Active Routes + Live Selected Multi-Order Route Preview)
+  useEffect(() => {
+    const routesLayer = routesLayerRef.current;
+    if (!routesLayer) return;
+
+    routesLayer.clearLayers();
+
+    // 1. Active dispatched routes
+    if (showRouteLines) {
+      const activeRoutes = routes.filter((r) =>
+        ['created', 'assigned', 'accepted', 'in_progress'].includes(r.status)
+      );
+
+      activeRoutes.forEach((route, idx) => {
+        const color = ROUTE_LINE_PALETTE[idx % ROUTE_LINE_PALETTE.length];
+        const coords: Array<[number, number]> = [];
+
+        if (validOrigin) {
+          coords.push([validOrigin.lat, validOrigin.lng]);
+        }
+
+        const sortedStops = [...route.stops]
+          .filter((s) => s.status !== 'cancelled' && isValidCoord(s.latitude, s.longitude))
+          .sort((a, b) => a.stopSequence - b.stopSequence);
+
+        for (const stop of sortedStops) {
+          coords.push([Number(stop.latitude), Number(stop.longitude)]);
+        }
+
+        if (coords.length >= 2) {
+          // Outer white halo for contrast over streets
+          L.polyline(coords, {
+            color: '#ffffff',
+            weight: 6,
+            opacity: 0.75,
+            lineCap: 'round',
+            lineJoin: 'round',
+          }).addTo(routesLayer);
+
+          // Colored dashed line for dispatched route
+          L.polyline(coords, {
+            color,
+            weight: 3.5,
+            opacity: 0.85,
+            dashArray: route.status === 'in_progress' ? undefined : '8, 6',
+            lineCap: 'round',
+            lineJoin: 'round',
+          }).addTo(routesLayer);
+        }
+      });
+    }
+
+    // 2. Live Route Preview when 2+ orders are selected
+    if (selectedOrderIds.length >= 2) {
+      let previewCoords: Array<[number, number]> = [];
+
+      if (
+        liveRoutePreview &&
+        Array.isArray(liveRoutePreview.routeGeometry) &&
+        liveRoutePreview.routeGeometry.length >= 2
+      ) {
+        previewCoords = liveRoutePreview.routeGeometry;
+      } else {
+        if (validOrigin) {
+          previewCoords.push([validOrigin.lat, validOrigin.lng]);
+        }
+        for (const id of selectedOrderIds) {
+          const ord = geocodedOrders.find((o) => o.id === id);
+          if (ord && isValidCoord(ord.latitude, ord.longitude)) {
+            previewCoords.push([Number(ord.latitude), Number(ord.longitude)]);
+          }
+        }
+      }
+
+      if (previewCoords.length >= 2) {
+        // White high-contrast casing
+        L.polyline(previewCoords, {
+          color: '#ffffff',
+          weight: 9,
+          opacity: 0.92,
+          lineCap: 'round',
+          lineJoin: 'round',
+        }).addTo(routesLayer);
+
+        // Primary Indigo route polyline
+        L.polyline(previewCoords, {
+          color: '#4f46e5',
+          weight: 5,
+          opacity: 0.95,
+          dashArray:
+            liveRoutePreview?.navigationProvider === 'estimated' ? '10, 8' : undefined,
+          lineCap: 'round',
+          lineJoin: 'round',
+        }).addTo(routesLayer);
+      }
+    }
+  }, [
+    routes,
+    showRouteLines,
+    validOrigin,
+    selectedOrderIds,
+    liveRoutePreview,
+    geocodedOrders,
+  ]);
+
+  // Render Markers (Restaurant Origin, Live GPS Drivers, and Numbered Order Pins)
+  useEffect(() => {
+    const markersLayer = markersLayerRef.current;
+    if (!markersLayer) return;
+
+    markersLayer.clearLayers();
+
+    // 1. Restaurant Origin Marker
+    if (validOrigin) {
+      const originHtml = `
+        <div style="position:relative;display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-100%);">
+          <div style="background:#0f172a;color:#ffffff;border:2.5px solid #ffffff;border-radius:9999px;padding:4px 10px;font-size:11px;font-weight:800;white-space:nowrap;box-shadow:0 6px 16px rgba(15,23,42,0.35);display:flex;align-items:center;gap:5px;">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:9999px;background:#38bdf8;"></span>
+            <span>Restaurante (Origem)</span>
+          </div>
+          <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid #0f172a;margin-top:-1px;"></div>
+        </div>
+      `;
+
+      const originIcon = L.divIcon({
+        className: 'custom-delivery-marker',
+        html: originHtml,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
+      });
+
+      const marker = L.marker([validOrigin.lat, validOrigin.lng], {
+        icon: originIcon,
+        zIndexOffset: 900,
+      });
+      marker.bindTooltip(`Restaurante: ${escapeHtml(validOrigin.label)}`, {
+        direction: 'top',
+        offset: [0, -34],
+      });
+      marker.addTo(markersLayer);
+    }
+
+    // 2. Live Driver GPS Markers
+    for (const driver of activeDriversWithGps) {
+      const firstName = escapeHtml(driver.name.split(' ')[0] || 'Motoboy');
+      const driverHtml = `
+        <div style="position:relative;display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-50%);">
+          <div style="background:#059669;color:#ffffff;border:2.5px solid #ffffff;border-radius:9999px;padding:3px 9px;font-size:10px;font-weight:800;white-space:nowrap;box-shadow:0 4px 12px rgba(5,150,105,0.4);display:flex;align-items:center;gap:4px;">
+            <span>🏍️ ${firstName}</span>
+          </div>
+        </div>
+      `;
+
+      const driverIcon = L.divIcon({
+        className: 'custom-delivery-marker',
+        html: driverHtml,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
+      });
+
+      L.marker([Number(driver.lastLatitude), Number(driver.lastLongitude)], {
+        icon: driverIcon,
+        zIndexOffset: 850,
+      }).addTo(markersLayer);
+    }
+
+    // 3. Geocoded Order Markers with Order Number, Status Color & Stop Sequence
+    for (const order of geocodedOrders) {
+      const isSelected = selectedOrderIds.includes(order.id);
+      const isFocused = activeOrderId === order.id || focusedOrderId === order.id;
+      const pinStyle =
+        DISPATCH_PIN_COLORS[order.dispatchStatus] || DISPATCH_PIN_COLORS.waiting_dispatch;
+      const previewSeq = previewStopSequenceByOrderId.get(order.id);
+      const stopSeq = previewSeq || order.activeStopSequence;
+
+      const orderLabel = escapeHtml(order.formattedOrderNumber || `#${order.orderNumber}`);
+      const ringShadow = isSelected
+        ? '0 0 0 4px rgba(79, 70, 229, 0.45), 0 8px 18px rgba(15, 23, 42, 0.35)'
+        : isFocused
+        ? '0 0 0 4px rgba(15, 23, 42, 0.35), 0 8px 18px rgba(15, 23, 42, 0.35)'
+        : '0 4px 12px rgba(15, 23, 42, 0.28)';
+
+      const borderColor = isSelected ? '#312e81' : '#ffffff';
+      const scaleTransform = isSelected || isFocused ? 'scale(1.12)' : 'scale(1)';
+
+      const seqBadgeHtml = stopSeq
+        ? `<span style="background:${
+            isSelected ? '#312e81' : '#0f172a'
+          };color:#ffffff;border:1.5px solid #ffffff;border-radius:9999px;padding:1px 5px;font-size:10px;font-weight:900;line-height:1.1;margin-right:3px;">${stopSeq}ª</span>`
+        : '';
+
+      const checkBadgeHtml = isSelected
+        ? `<span style="position:absolute;top:-7px;right:-7px;width:18px;height:18px;border-radius:9999px;background:#4f46e5;color:#ffffff;border:2px solid #ffffff;font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.25);">✓</span>`
+        : '';
+
+      const html = `
+        <div style="position:relative;display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-100%) ${scaleTransform};transition:transform 0.15s ease;">
+          <div style="position:relative;background:${pinStyle.bg};color:${pinStyle.text};border:2.5px solid ${borderColor};border-radius:9999px;padding:4px 10px;font-size:11.5px;font-weight:800;white-space:nowrap;box-shadow:${ringShadow};display:flex;align-items:center;gap:2px;cursor:pointer;">
+            ${seqBadgeHtml}
+            <span>${orderLabel}</span>
+            ${checkBadgeHtml}
+          </div>
+          <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:7px solid ${pinStyle.bg};margin-top:-1px;"></div>
+        </div>
+      `;
+
+      const icon = L.divIcon({
+        className: 'custom-delivery-marker',
+        html,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
+      });
+
+      const marker = L.marker([Number(order.latitude), Number(order.longitude)], {
+        icon,
+        zIndexOffset: isSelected ? 1000 : isFocused ? 950 : 500,
+      });
+
+      marker.on('click', () => {
+        setActiveOrderId(order.id);
+        if (onFocusOrder) {
+          onFocusOrder(order.id);
+        }
+      });
+
+      marker.addTo(markersLayer);
+    }
+  }, [
+    validOrigin,
+    activeDriversWithGps,
+    geocodedOrders,
+    selectedOrderIds,
+    activeOrderId,
+    focusedOrderId,
+    previewStopSequenceByOrderId,
+    onFocusOrder,
+  ]);
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-      {/* Top Legend & Controls Bar */}
-      <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-3 text-xs font-medium text-slate-600">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-full bg-orange-500 inline-block shadow-xs" />
-            Aguardando despacho
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-full bg-blue-600 inline-block shadow-xs" />
-            Atribuído
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-full bg-purple-600 inline-block shadow-xs" />
-            Em rota
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-full bg-emerald-600 inline-block shadow-xs" />
-            Entregue
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-full bg-rose-600 inline-block shadow-xs" />
-            Problema
-          </span>
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden flex flex-col h-full">
+      {/* Top Map Control & Status Bar */}
+      <div className="px-4 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 bg-slate-50/90">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
+            <Navigation className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm font-extrabold text-slate-900">
+                Mapa Operacional de Entregas
+              </h3>
+              <span className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold">
+                {geocodedOrders.length} no mapa
+              </span>
+              {selectedOrderIds.length > 0 && (
+                <span className="px-2 py-0.5 rounded-md bg-indigo-100 border border-indigo-200 text-indigo-800 text-[10px] font-extrabold">
+                  {selectedOrderIds.length} selecionado(s)
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-500">
+              Clique em um marcador para ver detalhes ou selecione 2+ pedidos para traçar a rota
+            </p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        {/* Map Controls: Zoom, Center on Origin, Fit All Orders, Layer Switcher */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="inline-flex items-center rounded-xl border border-slate-200 bg-white p-0.5 shadow-2xs">
+            <button
+              type="button"
+              onClick={handleZoomIn}
+              title="Aproximar mapa (Zoom +)"
+              className="p-1.5 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+            <div className="w-px h-4 bg-slate-200" />
+            <button
+              type="button"
+              onClick={handleZoomOut}
+              title="Afastar mapa (Zoom -)"
+              className="p-1.5 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors"
+            >
+              <Minus className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
           <button
             type="button"
-            onClick={() => setZoom((z) => Math.min(2.4, Number((z + 0.25).toFixed(2))))}
-            className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition"
-            title="Aproximar mapa"
+            onClick={handleCenterOnOrigin}
+            title="Centralizar no endereço do restaurante"
+            className="px-2.5 py-1.5 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 transition-colors inline-flex items-center gap-1.5 shadow-2xs"
           >
-            <ZoomIn className="w-4 h-4" />
+            <Crosshair className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Centralizar</span>
           </button>
+
           <button
             type="button"
-            onClick={() => setZoom((z) => Math.max(0.7, Number((z - 0.25).toFixed(2))))}
-            className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition"
-            title="Afastar mapa"
+            onClick={handleFitAllOrders}
+            title="Enquadrar todos os pedidos e o restaurante no mapa"
+            className="px-2.5 py-1.5 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 transition-colors inline-flex items-center gap-1.5 shadow-2xs"
           >
-            <ZoomOut className="w-4 h-4" />
+            <Maximize2 className="w-3.5 h-3.5 text-slate-600" />
+            <span className="hidden sm:inline">Ver todos os pedidos</span>
+            <span className="sm:hidden">Todos</span>
           </button>
+
           <button
             type="button"
-            onClick={resetView}
-            className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition"
-            title="Centralizar mapa"
+            onClick={() => setShowRouteLines((v) => !v)}
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-colors inline-flex items-center gap-1.5 shadow-2xs ${
+              showRouteLines
+                ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+            }`}
+            title="Exibir ou ocultar linhas das rotas em andamento"
           >
-            <Maximize2 className="w-4 h-4" />
+            <RouteIcon className="w-3.5 h-3.5" />
+            <span className="hidden xl:inline">Rotas Ativas</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setTileStyle((s) => (s === 'voyager' ? 'osm' : 'voyager'))}
+            className="p-1.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 transition-colors shadow-2xs"
+            title={`Alternar estilo de mapa (${
+              tileStyle === 'voyager' ? 'OpenStreetMap Padrão' : 'Mapa Logístico Detalhado'
+            })`}
+          >
+            <Layers className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      {/* Main Interactive Map Viewport */}
-      <div
-        className="relative w-full h-[380px] sm:h-[440px] bg-slate-100 overflow-hidden select-none cursor-grab active:cursor-grabbing"
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-      >
-        <svg
-          viewBox="0 0 800 460"
-          className="w-full h-full"
-          preserveAspectRatio="xMidYMid slice"
-        >
-          <defs>
-            <pattern id="delivery-grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path
-                d="M 40 0 L 0 0 0 40"
-                fill="none"
-                stroke="#e2e8f0"
-                strokeWidth="1"
-              />
-            </pattern>
-            <pattern id="delivery-subgrid" width="200" height="200" patternUnits="userSpaceOnUse">
-              <rect width="200" height="200" fill="url(#delivery-grid)" />
-              <path
-                d="M 200 0 L 0 0 0 200"
-                fill="none"
-                stroke="#cbd5e1"
-                strokeWidth="1.5"
-              />
-            </pattern>
-          </defs>
+      {/* Interactive Street Map Viewport */}
+      <div className="relative w-full flex-1 min-h-[460px] lg:min-h-[580px] bg-slate-100 overflow-hidden">
+        <div
+          ref={mapContainerRef}
+          data-testid="delivery-interactive-street-map"
+          className="w-full h-full min-h-[460px] lg:min-h-[580px]"
+        />
 
-          {/* Background Cartographic Canvas */}
-          <rect width="800" height="460" fill="#f8fafc" />
-          <g
-            transform={`translate(${400 + pan.x}, ${230 + pan.y}) scale(${zoom}) translate(-400, -230)`}
-          >
-            <rect x="-400" y="-400" width="1600" height="1260" fill="url(#delivery-subgrid)" />
+        {/* Live Selected Multi-Order Route HUD Banner (when 2+ orders are selected) */}
+        {selectedOrderIds.length >= 2 && (
+          <div className="absolute top-3 left-3 right-3 z-[400] pointer-events-none flex justify-center">
+            <div className="pointer-events-auto bg-slate-900/95 backdrop-blur-md text-white rounded-2xl px-4 py-3 shadow-xl border border-slate-700/80 w-full max-w-2xl flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 font-extrabold text-xs">
+                  {selectedOrderIds.length}x
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-extrabold text-white">
+                      Prévia da Rota Selecionada
+                    </span>
+                    {liveRouteLoading ? (
+                      <span className="px-2 py-0.5 rounded-md bg-slate-800 text-indigo-300 text-[10px] font-bold animate-pulse">
+                        Calculando trajeto viário...
+                      </span>
+                    ) : (
+                      liveRoutePreview && (
+                        <span
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                            liveRoutePreview.navigationProvider === 'google'
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                              : liveRoutePreview.navigationProvider === 'osrm'
+                              ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                              : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                          }`}
+                        >
+                          {liveRoutePreview.navigationProvider === 'google'
+                            ? 'Rota viária real (Google Maps)'
+                            : liveRoutePreview.navigationProvider === 'osrm'
+                            ? 'Rota viária real (OSRM)'
+                            : 'Estimativa linear (contingência)'}
+                        </span>
+                      )
+                    )}
+                  </div>
 
-            {/* Active Route Polylines */}
-            {activeRoutes
-              .filter((r) => ['created', 'assigned', 'accepted', 'in_progress'].includes(r.status))
-              .map((route) => {
-                const routeCoords: Array<{ x: number; y: number }> = [];
-                if (originPoint) routeCoords.push(originPoint);
-                route.stops.forEach((st) => {
-                  if (typeof st.latitude === 'number' && typeof st.longitude === 'number') {
-                    routeCoords.push(projection.project(st.latitude, st.longitude));
-                  }
-                });
-                if (routeCoords.length < 2) return null;
-                const pointsStr = routeCoords.map((pt) => `${pt.x},${pt.y}`).join(' ');
-                return (
-                  <g key={route.id}>
-                    <polyline
-                      points={pointsStr}
-                      fill="none"
-                      stroke={route.status === 'in_progress' ? '#8b5cf6' : '#3b82f6'}
-                      strokeWidth="3.5"
-                      strokeDasharray={route.status === 'in_progress' ? 'none' : '8 6'}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      opacity="0.75"
-                    />
-                  </g>
-                );
-              })}
-
-            {/* Selected Orders Preview Line from Origin */}
-            {selectedOrderIds.length > 0 && originPoint && (
-              <g>
-                {geocodedOrders
-                  .filter((o) => selectedOrderIds.includes(o.id))
-                  .map((o) => {
-                    const pt = projection.project(o.latitude!, o.longitude!);
-                    return (
-                      <line
-                        key={`sel-line-${o.id}`}
-                        x1={originPoint.x}
-                        y1={originPoint.y}
-                        x2={pt.x}
-                        y2={pt.y}
-                        stroke="#f97316"
-                        strokeWidth="2.5"
-                        strokeDasharray="5 5"
-                        opacity="0.7"
-                      />
-                    );
-                  })}
-              </g>
-            )}
-
-            {/* Restaurant Origin Pin */}
-            {originPoint && (
-              <g transform={`translate(${originPoint.x}, ${originPoint.y})`}>
-                <circle r="22" fill="#0f172a" fillOpacity="0.12" />
-                <circle r="14" fill="#0f172a" stroke="#ffffff" strokeWidth="3" />
-                <text
-                  y="4"
-                  textAnchor="middle"
-                  fill="#ffffff"
-                  fontSize="10"
-                  fontWeight="bold"
-                >
-                  HQ
-                </text>
-                <rect
-                  x="-46"
-                  y="18"
-                  width="92"
-                  height="18"
-                  rx="6"
-                  fill="#0f172a"
-                />
-                <text
-                  x="0"
-                  y="30"
-                  textAnchor="middle"
-                  fill="#ffffff"
-                  fontSize="9"
-                  fontWeight="600"
-                >
-                  Restaurante
-                </text>
-              </g>
-            )}
-
-            {/* Live Driver Pins (Etapa 10) */}
-            {liveDrivers.map((d) => {
-              const pt = projection.project(d.lastLatitude!, d.lastLongitude!);
-              return (
-                <g key={`driver-${d.id}`} transform={`translate(${pt.x}, ${pt.y})`}>
-                  <circle r="18" fill="#4f46e5" fillOpacity="0.2" />
-                  <circle r="12" fill="#4f46e5" stroke="#ffffff" strokeWidth="2.5" />
-                  <text y="4" textAnchor="middle" fill="#ffffff" fontSize="9" fontWeight="bold">
-                    M
-                  </text>
-                  <rect x="-45" y="-30" width="90" height="16" rx="4" fill="#312e81" />
-                  <text x="0" y="-19" textAnchor="middle" fill="#ffffff" fontSize="8.5" fontWeight="600">
-                    {d.name.split(' ')[0]} ({d.activeRouteCode})
-                  </text>
-                </g>
-              );
-            })}
-
-            {/* Order Markers */}
-            {geocodedOrders.map((order) => {
-              const pt = projection.project(order.latitude!, order.longitude!);
-              const cfg = DISPATCH_STATUS_CONFIG[order.dispatchStatus];
-              const isSelected = selectedOrderIds.includes(order.id);
-              const isActive = activeOrderId === order.id;
-
-              return (
-                <g
-                  key={order.id}
-                  transform={`translate(${pt.x}, ${pt.y})`}
-                  data-map-interactive="true"
-                  className="cursor-pointer"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setActiveOrderId(order.id);
-                  }}
-                >
-                  {(isSelected || isActive) && (
-                    <circle
-                      r="24"
-                      fill={cfg.hex}
-                      fillOpacity="0.25"
-                      stroke={cfg.hex}
-                      strokeWidth="2"
-                    />
+                  {liveRoutePreview && (
+                    <div className="flex items-center gap-3 text-[11px] text-slate-300 mt-0.5 flex-wrap">
+                      <span>
+                        Distância:{' '}
+                        <strong className="text-white">
+                          {liveRoutePreview.totalDistanceKm.toFixed(1).replace('.', ',')} km
+                        </strong>
+                      </span>
+                      <span>•</span>
+                      <span>
+                        Tempo estimado:{' '}
+                        <strong className="text-white">
+                          ~{liveRoutePreview.estimatedDurationMin} min
+                        </strong>
+                      </span>
+                      <span className="hidden sm:inline">•</span>
+                      <span className="hidden sm:inline truncate max-w-xs text-indigo-200 font-semibold">
+                        {liveRoutePreview.orderedStops
+                          .map((s) => `${s.stopSequence}ª ${s.formattedOrderNumber}`)
+                          .join(' → ')}
+                      </span>
+                    </div>
                   )}
-                  <circle
-                    r={isSelected ? 16 : 14}
-                    fill={cfg.hex}
-                    stroke={isSelected ? '#0f172a' : '#ffffff'}
-                    strokeWidth={isSelected ? 3.5 : 2.5}
-                  />
-                  <text
-                    y="4"
-                    textAnchor="middle"
-                    fill="#ffffff"
-                    fontSize="9.5"
-                    fontWeight="bold"
-                  >
-                    {order.activeStopSequence
-                      ? `${order.activeStopSequence}º`
-                      : order.formattedOrderNumber}
-                  </text>
-                  <rect
-                    x="-38"
-                    y="18"
-                    width="76"
-                    height="17"
-                    rx="5"
-                    fill="#ffffff"
-                    stroke="#cbd5e1"
-                    strokeWidth="1"
-                  />
-                  <text
-                    x="0"
-                    y="29"
-                    textAnchor="middle"
-                    fill="#1e293b"
-                    fontSize="8.5"
-                    fontWeight="700"
-                  >
-                    {order.formattedOrderNumber} • {order.neighborhood.slice(0, 8)}
-                  </text>
-                </g>
-              );
-            })}
-          </g>
-        </svg>
+                </div>
+              </div>
 
-        {/* Empty State Overlay when no geocoded orders exist */}
+              {onOpenRouteModal && (
+                <button
+                  type="button"
+                  onClick={onOpenRouteModal}
+                  className="px-3.5 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white text-xs font-extrabold transition-colors inline-flex items-center gap-1.5 shrink-0 shadow-sm"
+                >
+                  <RouteIcon className="w-3.5 h-3.5" />
+                  <span>Despachar Rota</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Empty State Overlay when there are 0 geocoded orders */}
         {geocodedOrders.length === 0 && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/5 backdrop-blur-[1px] p-6 text-center pointer-events-none">
-            <div className="bg-white/95 border border-slate-200 rounded-2xl px-6 py-5 shadow-sm max-w-md">
-              <MapPin className="w-8 h-8 text-indigo-600 mx-auto mb-2" />
-              <p className="text-sm font-semibold text-slate-800">
+          <div className="absolute top-3 left-3 z-[400] pointer-events-none max-w-xs">
+            <div className="pointer-events-auto bg-white/95 backdrop-blur-xs border border-slate-200 rounded-2xl p-3.5 shadow-lg space-y-1">
+              <div className="flex items-center gap-2 text-xs font-extrabold text-slate-800">
+                <MapPin className="w-4 h-4 text-indigo-600 shrink-0" />
+                <span>Mapa de Ruas Ativo</span>
+              </div>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
                 {orders.length === 0
-                  ? 'Nenhum pedido de entrega para os filtros selecionados'
-                  : 'Pedidos aguardando geocodificação de coordenadas'}
-              </p>
-              <p className="text-xs text-slate-500 mt-1">
-                {orders.length === 0
-                  ? 'Assim que novos pedidos de delivery entrarem, eles aparecerão posicionados automaticamente no mapa.'
-                  : 'Use o botão "Localizar" ou "Ajustar Coordenadas" nos pedidos com localização pendente abaixo.'}
+                  ? 'Nenhum pedido de entrega no filtro atual. Assim que novos pedidos entrarem, os marcadores numerados aparecerão nas ruas correspondentes.'
+                  : 'Os pedidos listados aguardam geocodificação. Use o botão "Geocodificar" ou "Posição Manual" no painel ao lado.'}
               </p>
             </div>
           </div>
         )}
 
-        {/* Selected Order Popup Card inside Map (Etapa 1) */}
+        {/* Selected / Focused Order Summary Card Overlay on Map */}
         {activeOrder && (
-          <div
-            data-map-interactive="true"
-            className="absolute bottom-3 left-3 right-3 sm:left-auto sm:right-4 sm:w-96 bg-white rounded-2xl border border-slate-200 shadow-xl p-4 z-20 animate-in fade-in slide-in-from-bottom-2"
-          >
-            <div className="flex items-start justify-between gap-2 mb-2">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-base font-bold text-slate-900">
-                    Pedido {activeOrder.formattedOrderNumber}
+          <div className="absolute bottom-3 left-3 right-3 sm:left-auto sm:right-3 sm:w-96 z-[400] bg-white/98 backdrop-blur-md border border-slate-200 rounded-2xl p-4 shadow-2xl space-y-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-black text-slate-900">
+                    {activeOrder.formattedOrderNumber}
                   </span>
                   <span
-                    className="px-2 py-0.5 rounded-md text-[11px] font-semibold text-white"
+                    className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white"
                     style={{
-                      backgroundColor: DISPATCH_STATUS_CONFIG[activeOrder.dispatchStatus].hex,
+                      backgroundColor:
+                        DISPATCH_PIN_COLORS[activeOrder.dispatchStatus]?.bg || '#f97316',
                     }}
                   >
-                    {DISPATCH_STATUS_CONFIG[activeOrder.dispatchStatus].label}
+                    {DISPATCH_PIN_COLORS[activeOrder.dispatchStatus]?.label ||
+                      'Aguardando despacho'}
                   </span>
+                  {previewStopSequenceByOrderId.has(activeOrder.id) && (
+                    <span className="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 text-[10px] font-extrabold">
+                      {previewStopSequenceByOrderId.get(activeOrder.id)}ª Parada
+                    </span>
+                  )}
                 </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Status do pedido: {ORDER_STATUS_LABELS[activeOrder.status]}
+                <p className="text-xs font-bold text-slate-800 mt-1 flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <span className="truncate">{activeOrder.customerName}</span>
                 </p>
               </div>
+
               <button
                 type="button"
-                onClick={() => setActiveOrderId(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                onClick={() => {
+                  setActiveOrderId(null);
+                  if (onFocusOrder) onFocusOrder(null);
+                }}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                title="Fechar resumo do pedido"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-1.5 text-xs text-slate-700 border-t border-slate-100 pt-2.5">
-              <div className="font-semibold text-slate-900">{activeOrder.customerName}</div>
-              <div className="flex items-start gap-1.5 text-slate-600">
-                <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
-                <span>
-                  {activeOrder.addressSummary} — <strong>{activeOrder.neighborhood}</strong>
-                </span>
+            <div className="text-xs text-slate-600 bg-slate-50 rounded-xl p-2.5 border border-slate-100 space-y-1">
+              <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                <span>Bairro: {activeOrder.neighborhood}</span>
               </div>
-              {showPhone && activeOrder.customerPhone && (
-                <div className="flex items-center gap-1.5 text-slate-600">
-                  <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <a
-                    href={`tel:${activeOrder.customerPhone}`}
-                    className="text-indigo-600 hover:underline font-medium"
-                  >
-                    {activeOrder.customerPhone}
-                  </a>
-                </div>
-              )}
-              <div className="flex items-center justify-between pt-1">
-                <span className="inline-flex items-center gap-1 text-slate-500">
-                  <Clock className="w-3.5 h-3.5" />
-                  Há {activeOrder.waitingMinutes} min
-                </span>
-                <span className="font-bold text-slate-900 text-sm">
-                  {formatCurrency(activeOrder.total)} ({PAYMENT_METHOD_LABELS[activeOrder.paymentMethod]})
-                </span>
+              <div className="text-[11px] text-slate-600 leading-snug pl-5">
+                {activeOrder.addressSummary}
               </div>
-              {activeOrder.notes && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 text-amber-800 text-[11px]">
-                  <strong>Obs:</strong> {activeOrder.notes}
+              {activeOrder.assignedDriverName && (
+                <div className="text-[11px] font-bold text-indigo-700 pt-1 pl-5 flex items-center gap-1">
+                  <Bike className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    Motoboy: {activeOrder.assignedDriverName}{' '}
+                    {activeOrder.activeRouteCode ? `(${activeOrder.activeRouteCode})` : ''}
+                  </span>
                 </div>
               )}
             </div>
 
-            <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
-              {activeOrder.dispatchStatus === 'waiting_dispatch' ||
-              activeOrder.dispatchStatus === 'delivery_issue' ? (
-                <button
-                  type="button"
-                  onClick={() => onToggleSelectOrder(activeOrder.id)}
-                  className={`flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition ${
-                    selectedOrderIds.includes(activeOrder.id)
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-slate-900 text-white hover:bg-slate-800'
-                  }`}
-                >
-                  {selectedOrderIds.includes(activeOrder.id) ? (
-                    <>
-                      <CheckSquare className="w-4 h-4" />
-                      Selecionado para Rota
-                    </>
-                  ) : (
-                    <>
-                      <Square className="w-4 h-4" />
-                      Selecionar para Rota
-                    </>
-                  )}
-                </button>
-              ) : (
-                <span className="text-xs text-slate-500 font-medium">
-                  {activeOrder.activeRouteCode
-                    ? `Vinculado à ${activeOrder.activeRouteCode}`
-                    : 'Pedido já processado'}
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <div className="text-xs text-slate-600 flex items-center gap-2">
+                <span>
+                  Total:{' '}
+                  <strong className="text-slate-900 font-extrabold">
+                    R$ {activeOrder.total.toFixed(2).replace('.', ',')}
+                  </strong>
                 </span>
-              )}
+                <span className="text-slate-300">•</span>
+                <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+                  <Clock className="w-3 h-3" />
+                  {activeOrder.waitingMinutes} min
+                </span>
+              </div>
 
-              {activeOrder.latitude && activeOrder.longitude && (
-                <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${activeOrder.latitude},${activeOrder.longitude}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 px-2.5 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  Abrir GPS
-                </a>
-              )}
+              <div className="flex items-center gap-1.5">
+                {onRequestManualGeocode && (
+                  <button
+                    type="button"
+                    onClick={() => onRequestManualGeocode(activeOrder)}
+                    className="px-2.5 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 text-[11px] font-bold transition-colors"
+                    title="Ajustar coordenadas deste endereço"
+                  >
+                    Posição
+                  </button>
+                )}
+
+                {activeOrder.dispatchStatus !== 'delivered' && (
+                  <button
+                    type="button"
+                    onClick={() => onToggleSelectOrder(activeOrder.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors inline-flex items-center gap-1 ${
+                      selectedOrderIds.includes(activeOrder.id)
+                        ? 'bg-slate-900 text-white hover:bg-slate-800'
+                        : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                    }`}
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    {selectedOrderIds.includes(activeOrder.id)
+                      ? 'Selecionado'
+                      : 'Selecionar p/ Rota'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* Pending Geocoding Banner (Etapa 1 & 11: Never invent coordinates; show "Localização pendente") */}
-      {pendingOrders.length > 0 && (
-        <div className="px-4 py-3 bg-amber-50 border-t border-amber-200 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-xs text-amber-900">
-            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-            <span>
-              <strong>{pendingOrders.length}</strong>{' '}
-              {pendingOrders.length === 1
-                ? 'pedido está com "Localização pendente"'
-                : 'pedidos estão com "Localização pendente"'}{' '}
-              (sem coordenadas no mapa, mas liberados para despacho).
+      {/* Compact Legend & Pending Geocode Alert Bar */}
+      <div className="px-4 py-2.5 bg-white border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-[11px] text-slate-600">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="inline-flex items-center gap-1.5 font-bold text-slate-800">
+            <span className="w-2.5 h-2.5 rounded-full bg-slate-900 inline-block" />
+            Restaurante
+          </span>
+          {(Object.keys(DISPATCH_PIN_COLORS) as OrderDispatchStatus[]).map((statusKey) => (
+            <span key={statusKey} className="inline-flex items-center gap-1.5 font-medium">
+              <span
+                className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
+                style={{ backgroundColor: DISPATCH_PIN_COLORS[statusKey].bg }}
+              />
+              {DISPATCH_PIN_COLORS[statusKey].label}
             </span>
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {pendingOrders.slice(0, 3).map((po) => (
-              <div key={po.id} className="inline-flex items-center gap-1 bg-white border border-amber-300 rounded-lg px-2 py-1 text-xs">
-                <span className="font-bold text-slate-800">{po.formattedOrderNumber}</span>
-                {onRetryGeocode && (
-                  <button
-                    type="button"
-                    onClick={() => onRetryGeocode(po.id)}
-                    className="text-indigo-600 hover:underline font-medium ml-1"
-                  >
-                    Geocodificar
-                  </button>
-                )}
-                {onOpenManualLocation && (
-                  <button
-                    type="button"
-                    onClick={() => onOpenManualLocation(po)}
-                    className="text-amber-700 hover:underline font-medium ml-1"
-                  >
-                    Ajustar
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
+          ))}
         </div>
-      )}
+
+        <div className="flex items-center gap-2 ml-auto">
+          {pendingGeocodeOrders.length > 0 && (
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 font-semibold">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+              <span>
+                {pendingGeocodeOrders.length} pedido(s) sem coordenadas (visíveis na lista ao lado)
+              </span>
+            </div>
+          )}
+
+          <span
+            className="text-[10px] text-slate-400 hidden sm:inline"
+            title={
+              googleMapsStatus === 'configured'
+                ? 'Chave Google Maps configurada no ambiente'
+                : 'Utilizando base cartográfica aberta OpenStreetMap / CARTO e rotas viárias OSRM'
+            }
+          >
+            {googleMapsStatus === 'configured'
+              ? 'Cartografia + Google API Ativa'
+              : 'Cartografia Viária OpenStreetMap / OSRM'}
+          </span>
+        </div>
+      </div>
     </div>
   );
 };

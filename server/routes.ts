@@ -270,10 +270,21 @@ export function requireFeature(featureKey: FeatureKey) {
 // ==========================================
 
 apiRouter.get('/config', (_req: Request, res: Response) => {
+  const rawMapsKey = (
+    process.env.VITE_GOOGLE_MAPS_API_KEY ||
+    process.env.GOOGLE_MAPS_API_KEY ||
+    ''
+  ).trim();
+  const isPlaceholder =
+    !rawMapsKey ||
+    rawMapsKey === 'YOUR_API_KEY' ||
+    rawMapsKey.toLowerCase().includes('your-');
   return res.json({
     success: true,
     isDevelopment: process.env.NODE_ENV !== 'production',
     baseDomain: getServerBaseDomain(),
+    googleMapsConfigured: !isPlaceholder,
+    googleMapsApiKey: !isPlaceholder ? rawMapsKey : null,
   });
 });
 
@@ -3498,12 +3509,22 @@ apiRouter.patch('/delivery-hub/driver-portal/status', authenticate, requireFeatu
 apiRouter.post('/delivery-hub/driver-portal/scan-qr', authenticate, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
-    const { qrToken } = req.body || {};
-    const route = await deliveryHubRepo.scanRouteQrCode(tenantId, String(qrToken || ''), req.user!);
+    const { qrToken, driverId, dryRun } = req.body || {};
+    const route = await deliveryHubRepo.scanRouteQrCode(
+      tenantId,
+      String(qrToken || ''),
+      req.user!,
+      {
+        driverId: typeof driverId === 'string' && driverId ? driverId : undefined,
+        dryRun: Boolean(dryRun),
+      }
+    );
     return res.json({
       success: true,
       data: route,
-      message: `Rota ${route.routeCode} vinculada com sucesso!`,
+      message: dryRun
+        ? `Rota ${route.routeCode} identificada com sucesso!`
+        : `Rota ${route.routeCode} vinculada com sucesso!`,
     });
   } catch (err: any) {
     return res.status(400).json({ success: false, error: err.message || 'Erro ao validar QR Code da rota.' });

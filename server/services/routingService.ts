@@ -592,3 +592,253 @@ export async function calculateRouteDistanceServer(
       'Não foi possível calcular a distância por rota viária entre o restaurante e o endereço informado no momento. Verifique o endereço ou tente novamente.',
   };
 }
+
+export interface MultiStopRoadRouteResult {
+  success: boolean;
+  totalDistanceKm: number;
+  totalDurationMin: number;
+  legDistancesKm: number[];
+  legDurationsMin: number[];
+  routeGeometry: Array<[number, number]>;
+  navigationProvider: 'google' | 'osrm' | 'estimated';
+}
+
+const multiStopRouteCache = new Map<
+  string,
+  { timestamp: number; data: MultiStopRoadRouteResult }
+>();
+
+/**
+ * Decodes a Google Maps encoded polyline string into an array of [lat, lng] pairs.
+ */
+function decodeGooglePolyline(encoded: string): Array<[number, number]> {
+  const points: Array<[number, number]> = [];
+  let index = 0;
+  const len = encoded.length;
+  let lat = 0;
+  let lng = 0;
+
+  while (index < len) {
+    let b: number;
+    let shift = 0;
+    let result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20 && index < len);
+    const dlat = result & 1 ? ~(result >> 1) : result >> 1;
+    lat += dlat;
+
+    shift = 0;
+    result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20 && index < len);
+    const dlng = result & 1 ? ~(result >> 1) : result >> 1;
+    lng += dlng;
+
+    points.push([lat / 1e5, lng / 1e5]);
+  }
+  return points;
+}
+
+/**
+ * Calculates a multi-stop road route (origin -> stop 1 -> stop 2 -> ... -> stop N)
+ * using real road navigation data (Google Directions API when GOOGLE_MAPS_API_KEY is configured,
+ * or OSRM driving route API with full road geometry).
+ * Falls back to Haversine estimation clearly tagged as 'estimated' if external routing is unreachable.
+ */
+export async function calculateMultiStopRoadRouteServer(
+  waypoints: Array<{ latitude: number; longitude: number }>
+): Promise<MultiStopRoadRouteResult> {
+  const validPoints = waypoints.filter((p) => hasValidCoordinates(p.latitude, p.longitude));
+  if (validPoints.length < 2) {
+    return {
+      success: false,
+      totalDistanceKm: 0,
+      totalDurationMin: 0,
+      legDistancesKm: [],
+      legDurationsMin: [],
+      routeGeometry: validPoints.map((p) => [p.latitude, p.longitude]),
+      navigationProvider: 'estimated',
+    };
+  }
+
+  const cacheKey = validPoints
+    .map((p) => `${p.latitude.toFixed(5)},${p.longitude.toFixed(5)}`)
+    .join(';');
+  const cached = multiStopRouteCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return cached.data;
+  }
+
+  // 1. Try Google Directions API if GOOGLE_MAPS_API_KEY is configured
+  const googleApiKey = (
+    process.env.GOOGLE_MAPS_API_KEY ||
+    process.env.VITE_GOOGLE_MAPS_API_KEY ||
+    ''
+  ).trim();
+  if (googleApiKey && googleApiKey !== 'YOUR_API_KEY' && !googleApiKey.includes('your-')) {
+    try {
+      const origin = `${validPoints[0].latitude},${validPoints[0].longitude}`;
+      const destination = `${validPoints[validPoints.length - 1].latitude},${
+        validPoints[validPoints.length - 1].longitude
+      }`;
+      const middle = validPoints
+        .slice(1, -1)
+        .map((p) => `${p.latitude},${p.longitude}`)
+        .join('|');
+      const waypointsParam = middle ? `&waypoints=${encodeURIComponent(middle)}` : '';
+      const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(
+        origin
+      )}&destination=${encodeURIComponent(
+        destination
+      )}${waypointsParam}&mode=driving&language=pt-BR&key=${encodeURIComponent(googleApiKey)}`;
+
+      const res = await fetchWithTimeout(url, {}, 4500);
+      if (res.ok) {
+        const data = await res.json();
+        const route = data?.routes?.[0];
+        if (data.status === 'OK' && route && Array.isArray(route.legs) && route.legs.length > 0) {
+          const legDistancesKm: number[] = [];
+          const legDurationsMin: number[] = [];
+          let totalDistanceKm = 0;
+          let totalDurationMin = 0;
+
+          for (const leg of route.legs) {
+            const distKm = Math.max(
+              0.1,
+              Math.round(((leg.distance?.value || 0) / 1000) * 100) / 100
+            );
+            // Add 2 min handoff buffer per delivery stop
+            const durMin = Math.max(3, Math.ceil((leg.duration?.value || 180) / 60) + 2);
+            legDistancesKm.push(distKm);
+            legDurationsMin.push(durMin);
+            totalDistanceKm = Math.round((totalDistanceKm + distKm) * 100) / 100;
+            totalDurationMin += durMin;
+          }
+
+          const encodedPoly = route.overview_polyline?.points;
+          const decodedGeometry =
+            typeof encodedPoly === 'string' && encodedPoly.length > 0
+              ? decodeGooglePolyline(encodedPoly)
+              : validPoints.map((p) => [p.latitude, p.longitude] as [number, number]);
+
+          const result: MultiStopRoadRouteResult = {
+            success: true,
+            totalDistanceKm,
+            totalDurationMin,
+            legDistancesKm,
+            legDurationsMin,
+            routeGeometry: decodedGeometry,
+            navigationProvider: 'google',
+          };
+          multiStopRouteCache.set(cacheKey, { timestamp: Date.now(), data: result });
+          return result;
+        }
+      }
+    } catch {
+      // Fallback to OSRM driving navigation below
+    }
+  }
+
+  // 2. Query OSRM public driving route engine with full GeoJSON road geometry
+  try {
+    const coordsString = validPoints
+      .map((p) => `${p.longitude.toFixed(6)},${p.latitude.toFixed(6)}`)
+      .join(';');
+    const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${coordsString}?overview=full&geometries=geojson&steps=false`;
+    const res = await fetchWithTimeout(
+      osrmUrl,
+      {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          Accept: 'application/json',
+        },
+      },
+      3800
+    );
+
+    if (res.ok) {
+      const data = await res.json();
+      const route = data?.routes?.[0];
+      if (data.code === 'Ok' && route && Array.isArray(route.legs)) {
+        const legDistancesKm: number[] = [];
+        const legDurationsMin: number[] = [];
+        let totalDistanceKm = 0;
+        let totalDurationMin = 0;
+
+        for (const leg of route.legs) {
+          const distKm = Math.max(0.1, Math.round(((leg.distance || 0) / 1000) * 100) / 100);
+          // Urban motorcycle/delivery speed + 2 min stop handoff
+          const rawMin = typeof leg.duration === 'number' ? Math.ceil(leg.duration / 60) : Math.ceil(distKm * 2.4);
+          const durMin = Math.max(3, rawMin + 2);
+          legDistancesKm.push(distKm);
+          legDurationsMin.push(durMin);
+          totalDistanceKm = Math.round((totalDistanceKm + distKm) * 100) / 100;
+          totalDurationMin += durMin;
+        }
+
+        const rawCoords = route.geometry?.coordinates;
+        const routeGeometry: Array<[number, number]> =
+          Array.isArray(rawCoords) && rawCoords.length >= 2
+            ? rawCoords
+                .filter((c: any) => Array.isArray(c) && c.length >= 2)
+                .map((c: any) => [Number(c[1]), Number(c[0])] as [number, number])
+            : validPoints.map((p) => [p.latitude, p.longitude] as [number, number]);
+
+        const result: MultiStopRoadRouteResult = {
+          success: true,
+          totalDistanceKm,
+          totalDurationMin,
+          legDistancesKm,
+          legDurationsMin,
+          routeGeometry,
+          navigationProvider: 'osrm',
+        };
+        multiStopRouteCache.set(cacheKey, { timestamp: Date.now(), data: result });
+        return result;
+      }
+    }
+  } catch {
+    // Fallback to Haversine estimation below
+  }
+
+  // 3. Fallback: Haversine estimation clearly tagged as 'estimated'
+  const legDistancesKm: number[] = [];
+  const legDurationsMin: number[] = [];
+  let totalDistanceKm = 0;
+  let totalDurationMin = 0;
+
+  for (let i = 1; i < validPoints.length; i++) {
+    const prev = validPoints[i - 1];
+    const curr = validPoints[i];
+    const straight = calculateStraightLineDistanceKm(
+      prev.latitude,
+      prev.longitude,
+      curr.latitude,
+      curr.longitude
+    );
+    const stepDistKm = Math.max(0.2, Math.round(straight * 1.28 * 100) / 100);
+    const stepDurationMin = Math.max(4, Math.ceil(stepDistKm * 2.4 + 3));
+    legDistancesKm.push(stepDistKm);
+    legDurationsMin.push(stepDurationMin);
+    totalDistanceKm = Math.round((totalDistanceKm + stepDistKm) * 100) / 100;
+    totalDurationMin += stepDurationMin;
+  }
+
+  return {
+    success: true,
+    totalDistanceKm,
+    totalDurationMin,
+    legDistancesKm,
+    legDurationsMin,
+    routeGeometry: validPoints.map((p) => [p.latitude, p.longitude]),
+    navigationProvider: 'estimated',
+  };
+}
+

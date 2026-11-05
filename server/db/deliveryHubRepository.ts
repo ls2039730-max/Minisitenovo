@@ -8,6 +8,7 @@ import {
 import { repo } from './repository.js';
 import { orderRepo } from './orderRepository.js';
 import {
+  calculateMultiStopRoadRouteServer,
   calculateRouteDistanceServer,
   geocodeAddressServer,
 } from '../services/routingService.js';
@@ -59,6 +60,7 @@ function isMissingTableError(error: any): boolean {
 
 export class DeliveryHubRepository {
   private inFlightNotifications = new Map<string, Promise<DeliveryNotification>>();
+  private attemptedAutoGeocodeIds = new Set<string>();
 
   // ==========================================
   // 0. RESILIENT MULTI-LAYER TABLE ACCESS
@@ -772,6 +774,58 @@ export class DeliveryHubRepository {
       this.listDrivers(tenantId),
     ]);
 
+    // Auto-geocode up to 6 legacy active orders that have a valid 8-digit CEP but no coordinates yet
+    const legacyCandidates = allOrders
+      .filter((o) => {
+        if (o.fulfillmentType !== 'delivery' || o.status === 'CANCELLED' || o.status === 'COMPLETED') {
+          return false;
+        }
+        const addr = o.deliveryAddress;
+        if (!addr || hasValidCoordinates(addr.latitude, addr.longitude)) {
+          return false;
+        }
+        if (this.attemptedAutoGeocodeIds.has(o.id)) {
+          return false;
+        }
+        const cleanCep = (addr.cep || '').replace(/\D/g, '');
+        return cleanCep.length === 8 && !/^0+$/.test(cleanCep);
+      })
+      .slice(0, 6);
+
+    if (legacyCandidates.length > 0) {
+      await Promise.all(
+        legacyCandidates.map(async (order) => {
+          this.attemptedAutoGeocodeIds.add(order.id);
+          const addr = order.deliveryAddress!;
+          try {
+            const geo = await geocodeAddressServer(
+              {
+                cep: addr.cep,
+                street: addr.street,
+                number: addr.number,
+                neighborhood: addr.neighborhood,
+                city: addr.city,
+                state: addr.state,
+              },
+              originAddress
+            );
+            if (geo.success && hasValidCoordinates(geo.latitude, geo.longitude)) {
+              addr.latitude = Number(geo.latitude);
+              addr.longitude = Number(geo.longitude);
+              addr.geocodeStatus = 'geocoded';
+              await orderRepo.updateOrderCoordinates(tenantId, order.id, {
+                latitude: addr.latitude,
+                longitude: addr.longitude,
+                geocodeStatus: 'geocoded',
+              });
+            }
+          } catch {
+            // Keep pending if geocoding fails
+          }
+        })
+      );
+    }
+
     // Map each order to its latest stop / active route
     const activeStopByOrderId = new Map<
       string,
@@ -1180,11 +1234,23 @@ export class DeliveryHubRepository {
       };
     });
 
+    const fallbackGeometry: Array<[number, number]> = [];
+    if (hasOrigin) {
+      fallbackGeometry.push([Number(originAddress!.latitude), Number(originAddress!.longitude)]);
+    }
+    for (const stop of orderedStops) {
+      if (hasValidCoordinates(stop.latitude, stop.longitude)) {
+        fallbackGeometry.push([stop.latitude!, stop.longitude!]);
+      }
+    }
+
     return {
       originAddress: (originAddress as any) || null,
       orderedStops,
       totalDistanceKm,
       estimatedDurationMin: cumulativeEtaMin,
+      routeGeometry: fallbackGeometry,
+      navigationProvider: 'estimated',
     };
   }
 
@@ -1207,7 +1273,80 @@ export class DeliveryHubRepository {
       throw new Error('Nenhum pedido válido selecionado para este restaurante.');
     }
 
-    return this.optimizeStopOrderSync(selected, overview.originAddress, !optimizeOrder);
+    const basePreview = this.optimizeStopOrderSync(
+      selected,
+      overview.originAddress,
+      !optimizeOrder
+    );
+
+    // Enrich with real road route geometry and driving legs when coordinates are available
+    const waypoints: Array<{ latitude: number; longitude: number }> = [];
+    const hasOrigin = hasValidCoordinates(
+      overview.originAddress?.latitude,
+      overview.originAddress?.longitude
+    );
+    if (hasOrigin) {
+      waypoints.push({
+        latitude: Number(overview.originAddress!.latitude),
+        longitude: Number(overview.originAddress!.longitude),
+      });
+    }
+
+    const geocodedIndices: number[] = [];
+    basePreview.orderedStops.forEach((s, idx) => {
+      if (hasValidCoordinates(s.latitude, s.longitude)) {
+        waypoints.push({
+          latitude: Number(s.latitude),
+          longitude: Number(s.longitude),
+        });
+        geocodedIndices.push(idx);
+      }
+    });
+
+    if (waypoints.length >= 2) {
+      const roadRoute = await calculateMultiStopRoadRouteServer(waypoints);
+      if (roadRoute.success && roadRoute.routeGeometry.length >= 2) {
+        let cumulativeEta = 0;
+        let totalDist = 0;
+        const enrichedStops = basePreview.orderedStops.map((stop, idx) => {
+          const geoPos = geocodedIndices.indexOf(idx);
+          const legIdx = hasOrigin ? geoPos : geoPos - 1;
+          if (
+            geoPos !== -1 &&
+            legIdx >= 0 &&
+            legIdx < roadRoute.legDistancesKm.length
+          ) {
+            const distKm = roadRoute.legDistancesKm[legIdx];
+            const durMin = roadRoute.legDurationsMin[legIdx];
+            totalDist = Math.round((totalDist + distKm) * 100) / 100;
+            cumulativeEta += durMin;
+            return {
+              ...stop,
+              distanceFromPrevKm: distKm,
+              durationFromPrevMin: durMin,
+              cumulativeEtaMin: cumulativeEta,
+            };
+          }
+          totalDist = Math.round((totalDist + stop.distanceFromPrevKm) * 100) / 100;
+          cumulativeEta += stop.durationFromPrevMin;
+          return {
+            ...stop,
+            cumulativeEtaMin: cumulativeEta,
+          };
+        });
+
+        return {
+          ...basePreview,
+          orderedStops: enrichedStops,
+          totalDistanceKm: totalDist || roadRoute.totalDistanceKm,
+          estimatedDurationMin: cumulativeEta || roadRoute.totalDurationMin,
+          routeGeometry: roadRoute.routeGeometry,
+          navigationProvider: roadRoute.navigationProvider,
+        };
+      }
+    }
+
+    return basePreview;
   }
 
   public async retryOrderGeocode(
@@ -1867,7 +2006,8 @@ export class DeliveryHubRepository {
     tenantId: string,
     route: DeliveryRoute,
     actor: User,
-    allowClaimUnassigned = false
+    allowClaimUnassigned = false,
+    preferredDriverId?: string
   ): Promise<DeliveryDriver | null> {
     if (route.tenantId !== tenantId) {
       throw new Error('Violação de isolamento: esta rota pertence a outro restaurante.');
@@ -1880,7 +2020,7 @@ export class DeliveryHubRepository {
       }
       if (route.driverId && route.driverId !== driver.id) {
         throw new Error(
-          'Acesso negado: esta rota está atribuída a outro entregador.'
+          'Acesso negado: esta rota já foi assumida ou está atribuída a outro entregador.'
         );
       }
       if (!allowClaimUnassigned && route.driverId !== driver.id) {
@@ -1891,7 +2031,19 @@ export class DeliveryHubRepository {
       return driver;
     }
 
-    // Restaurant Admin / Manager / Owner acting on route
+    // Restaurant Admin / Manager / Owner acting on route (including mobile preview mode)
+    if (preferredDriverId) {
+      const targetDriver = await this.getDriverById(tenantId, preferredDriverId);
+      if (targetDriver) {
+        if (route.driverId && route.driverId !== targetDriver.id) {
+          throw new Error(
+            'Acesso negado: esta rota já foi assumida ou está atribuída a outro entregador.'
+          );
+        }
+        return targetDriver;
+      }
+    }
+
     if (route.driverId) {
       return this.getDriverById(tenantId, route.driverId);
     }
@@ -1901,7 +2053,8 @@ export class DeliveryHubRepository {
   public async scanRouteQrCode(
     tenantId: string,
     qrTokenInput: string,
-    actor: User
+    actor: User,
+    options?: { driverId?: string; dryRun?: boolean }
   ): Promise<DeliveryRoute> {
     let cleanToken = (qrTokenInput || '').trim();
     // Extract token if full URL was scanned
@@ -1910,7 +2063,7 @@ export class DeliveryHubRepository {
         const u = new URL(cleanToken, 'https://minihub.tech');
         cleanToken = u.searchParams.get('routeQr') || cleanToken;
       } catch {
-        const match = cleanToken.match(/routeQr=([^&]+)/);
+        const match = cleanToken.match(/routeQr=([^&\s]+)/);
         if (match) cleanToken = decodeURIComponent(match[1]);
       }
     }
@@ -1924,7 +2077,7 @@ export class DeliveryHubRepository {
     );
 
     if (!rawRoute) {
-      throw new Error('Rota não localizada para este QR Code.');
+      throw new Error('QR Code inválido ou rota não localizada para este código.');
     }
 
     if (rawRoute.tenant_id !== tenantId) {
@@ -1950,7 +2103,18 @@ export class DeliveryHubRepository {
     }
 
     const route = (await this.getRouteById(tenantId, rawRoute.id))!;
-    const driver = await this.assertDriverAccessToRoute(tenantId, route, actor, true);
+    const driver = await this.assertDriverAccessToRoute(
+      tenantId,
+      route,
+      actor,
+      true,
+      options?.driverId
+    );
+
+    // If dryRun is true, return the validated route identification without claiming yet
+    if (options?.dryRun) {
+      return route;
+    }
 
     const now = new Date().toISOString();
     const nextStatus: DeliveryRouteStatus =

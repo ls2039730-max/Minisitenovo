@@ -321,6 +321,8 @@ export interface RoutePreviewResult {
   }>;
   totalDistanceKm: number;
   estimatedDurationMin: number;
+  routeGeometry?: Array<[number, number]>;
+  navigationProvider?: 'google' | 'osrm' | 'estimated';
 }
 
 export interface PublicDeliveryTrackingInfo {

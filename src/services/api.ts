@@ -1855,12 +1855,19 @@ class ApiService {
     return res.data;
   }
 
-  async scanDeliveryRouteQrCode(qrToken: string): Promise<DeliveryRoute> {
+  async scanDeliveryRouteQrCode(
+    qrToken: string,
+    options?: { driverId?: string; dryRun?: boolean }
+  ): Promise<DeliveryRoute> {
     const res = await this.request<{ success: boolean; data: DeliveryRoute }>(
       '/api/delivery-hub/driver-portal/scan-qr',
       {
         method: 'POST',
-        body: JSON.stringify({ qrToken }),
+        body: JSON.stringify({
+          qrToken,
+          driverId: options?.driverId,
+          dryRun: options?.dryRun,
+        }),
       }
     );
     return res.data;

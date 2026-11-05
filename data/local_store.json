@@ -5878,6 +5878,2004 @@
       },
       "created_at": "2026-11-03T12:56:51.317Z",
       "updated_at": "2026-11-03T12:56:51.317Z"
+    },
+    {
+      "id": "cc5426fc-5204-400d-92ba-34b1a7ca6806",
+      "actor_user_id": "super-admin-map-test",
+      "actor_user_name": "Super Admin Map Test",
+      "tenant_id": "63a65b32-17de-4b39-a681-b60206673879",
+      "action": "USER_CREATE",
+      "entity": "tenant_users",
+      "entity_id": "91a719ea-6f95-482e-8360-00da4950c4a5",
+      "metadata": {
+        "email": "admin-map-473762@teste.local",
+        "role": "CLIENT_ADMIN",
+        "status": "active"
+      },
+      "created_at": "2026-11-05T22:41:13.788Z",
+      "updated_at": "2026-11-05T22:41:13.788Z"
+    },
+    {
+      "id": "ff023abe-5117-41fc-a097-47b97c73ff5c",
+      "actor_user_id": "super-admin-map-test",
+      "actor_user_name": "Super Admin Map Test",
+      "tenant_id": "63a65b32-17de-4b39-a681-b60206673879",
+      "action": "TENANT_CREATE",
+      "entity": "tenants",
+      "entity_id": "63a65b32-17de-4b39-a681-b60206673879",
+      "metadata": {
+        "name": "Restaurante Mapa Teste 473762",
+        "slug": "test-map-hub-473762",
+        "planId": "33333333-3333-4333-8333-333333333333"
+      },
+      "created_at": "2026-11-05T22:41:13.793Z",
+      "updated_at": "2026-11-05T22:41:13.793Z"
+    },
+    {
+      "id": "1f63b979-f4e5-4bd7-96e1-1da346ef2e06",
+      "actor_user_id": "91a719ea-6f95-482e-8360-00da4950c4a5",
+      "actor_user_name": "Admin Mapa",
+      "tenant_id": "63a65b32-17de-4b39-a681-b60206673879",
+      "action": "DELIVERY_SETTINGS_UPDATE",
+      "entity": "delivery_settings",
+      "entity_id": "63a65b32-17de-4b39-a681-b60206673879",
+      "metadata": {
+        "diff": {
+          "before": {
+            "tenantId": "63a65b32-17de-4b39-a681-b60206673879",
+            "ordersEnabled": true,
+            "acceptOrdersWhenClosed": true,
+            "pickupEnabled": true,
+            "deliveryEnabled": true,
+            "pricingMode": "neighborhood",
+            "originAddress": null,
+            "kmConfig": {
+              "baseFee": 5,
+              "pricePerKm": 2,
+              "minDistanceKm": 1,
+              "maxDistanceKm": 15,
+              "distanceMethod": "road_route",
+              "roundDistanceUp": false,
+              "minDeliveryFee": null,
+              "freeDeliveryAbove": null
+            },
+            "minimumOrder": 0,
+            "freeDeliveryAbove": null,
+            "pickupInstructions": "Retire no balcão apresentando o número do pedido.",
+            "deliveryEstimateText": "40 a 60 minutos",
+            "orderWhatsappNumber": null,
+            "createdAt": "2026-11-05T22:41:13.799Z",
+            "updatedAt": "2026-11-05T22:41:13.799Z"
+          },
+          "after": {
+            "tenantId": "63a65b32-17de-4b39-a681-b60206673879",
+            "ordersEnabled": true,
+            "acceptOrdersWhenClosed": true,
+            "pickupEnabled": true,
+            "deliveryEnabled": true,
+            "pricingMode": "neighborhood",
+            "originAddress": {
+              "cep": "01310-100",
+              "street": "Avenida Paulista",
+              "number": "1000",
+              "neighborhood": "Bela Vista",
+              "city": "São Paulo",
+              "state": "SP",
+              "latitude": -23.5649,
+              "longitude": -46.652
+            },
+            "kmConfig": {
+              "baseFee": 5,
+              "pricePerKm": 2,
+              "minDistanceKm": 1,
+              "maxDistanceKm": 15,
+              "distanceMethod": "road_route",
+              "roundDistanceUp": false,
+              "minDeliveryFee": null,
+              "freeDeliveryAbove": null
+            },
+            "minimumOrder": 0,
+            "freeDeliveryAbove": null,
+            "pickupInstructions": "Retire no balcão apresentando o número do pedido.",
+            "deliveryEstimateText": "40 a 60 minutos",
+            "orderWhatsappNumber": null,
+            "createdAt": "2026-11-05T22:41:13.799Z",
+            "updatedAt": "2026-11-05T22:41:13.799Z"
+          }
+        }
+      },
+      "created_at": "2026-11-05T22:41:13.841Z",
+      "updated_at": "2026-11-05T22:41:13.841Z"
+    },
+    {
+      "id": "92a1e606-5d22-4899-b2c3-66bfac1546ea",
+      "actor_user_id": "91a719ea-6f95-482e-8360-00da4950c4a5",
+      "actor_user_name": "Admin Mapa",
+      "tenant_id": "63a65b32-17de-4b39-a681-b60206673879",
+      "action": "DELIVERY_RULE_CREATE",
+      "entity": "delivery_rules",
+      "entity_id": "e6093002-c43a-4901-9699-088c8ad79c13",
+      "metadata": {
+        "diff": {
+          "created": {
+            "id": "e6093002-c43a-4901-9699-088c8ad79c13",
+            "tenant_id": "63a65b32-17de-4b39-a681-b60206673879",
+            "type": "fixed",
+            "name": "Taxa Fixa Urbana",
+            "neighborhood": null,
+            "cep_start": null,
+            "cep_end": null,
+            "fee": 8,
+            "minimum_order": null,
+            "is_active": true,
+            "position": 0,
+            "created_at": "2026-11-05T22:41:13.845Z",
+            "updated_at": "2026-11-05T22:41:13.845Z",
+            "city": null,
+            "state": null,
+            "estimatedTime": null,
+            "freeDeliveryAbove": null,
+            "includedDistanceKm": null,
+            "extraKmFee": null
+          }
+        }
+      },
+      "created_at": "2026-11-05T22:41:13.854Z",
+      "updated_at": "2026-11-05T22:41:13.854Z"
+    },
+    {
+      "id": "0f7e4e95-9b02-44c9-9dfc-bfef345f91e1",
+      "actor_user_id": "super-admin-map-test",
+      "actor_user_name": "Super Admin Map Test",
+      "tenant_id": "912a233f-e00b-4e31-95eb-1f9ca0ece244",
+      "action": "USER_CREATE",
+      "entity": "tenant_users",
+      "entity_id": "de277577-ee05-4fdd-bdda-9c36bb760cc8",
+      "metadata": {
+        "email": "admin-map-504680@teste.local",
+        "role": "CLIENT_ADMIN",
+        "status": "active"
+      },
+      "created_at": "2026-11-05T22:41:44.743Z",
+      "updated_at": "2026-11-05T22:41:44.743Z"
+    },
+    {
+      "id": "b9d6e6bf-8792-4587-8878-62ade2876c0e",
+      "actor_user_id": "super-admin-map-test",
+      "actor_user_name": "Super Admin Map Test",
+      "tenant_id": "912a233f-e00b-4e31-95eb-1f9ca0ece244",
+      "action": "TENANT_CREATE",
+      "entity": "tenants",
+      "entity_id": "912a233f-e00b-4e31-95eb-1f9ca0ece244",
+      "metadata": {
+        "name": "Restaurante Mapa Teste 504680",
+        "slug": "test-map-hub-504680",
+        "planId": "33333333-3333-4333-8333-333333333333"
+      },
+      "created_at": "2026-11-05T22:41:44.750Z",
+      "updated_at": "2026-11-05T22:41:44.750Z"
+    },
+    {
+      "id": "d876a2e0-dfbf-44ac-8729-bfafa4d3f87b",
+      "actor_user_id": "de277577-ee05-4fdd-bdda-9c36bb760cc8",
+      "actor_user_name": "Admin Mapa",
+      "tenant_id": "912a233f-e00b-4e31-95eb-1f9ca0ece244",
+      "action": "DELIVERY_SETTINGS_UPDATE",
+      "entity": "delivery_settings",
+      "entity_id": "912a233f-e00b-4e31-95eb-1f9ca0ece244",
+      "metadata": {
+        "diff": {
+          "before": {
+            "tenantId": "912a233f-e00b-4e31-95eb-1f9ca0ece244",
+            "ordersEnabled": true,
+            "acceptOrdersWhenClosed": true,
+            "pickupEnabled": true,
+            "deliveryEnabled": true,
+            "pricingMode": "neighborhood",
+            "originAddress": null,
+            "kmConfig": {
+              "baseFee": 5,
+              "pricePerKm": 2,
+              "minDistanceKm": 1,
+              "maxDistanceKm": 15,
+              "distanceMethod": "road_route",
+              "roundDistanceUp": false,
+              "minDeliveryFee": null,
+              "freeDeliveryAbove": null
+            },
+            "minimumOrder": 0,
+            "freeDeliveryAbove": null,
+            "pickupInstructions": "Retire no balcão apresentando o número do pedido.",
+            "deliveryEstimateText": "40 a 60 minutos",
+            "orderWhatsappNumber": null,
+            "createdAt": "2026-11-05T22:41:44.759Z",
+            "updatedAt": "2026-11-05T22:41:44.759Z"
+          },
+          "after": {
+            "tenantId": "912a233f-e00b-4e31-95eb-1f9ca0ece244",
+            "ordersEnabled": true,
+            "acceptOrdersWhenClosed": true,
+            "pickupEnabled": true,
+            "deliveryEnabled": true,
+            "pricingMode": "neighborhood",
+            "originAddress": {
+              "cep": "01310-100",
+              "street": "Avenida Paulista",
+              "number": "1000",
+              "neighborhood": "Bela Vista",
+              "city": "São Paulo",
+              "state": "SP",
+              "latitude": -23.5649,
+              "longitude": -46.652
+            },
+            "kmConfig": {
+              "baseFee": 5,
+              "pricePerKm": 2,
+              "minDistanceKm": 1,
+              "maxDistanceKm": 15,
+              "distanceMethod": "road_route",
+              "roundDistanceUp": false,
+              "minDeliveryFee": null,
+              "freeDeliveryAbove": null
+            },
+            "minimumOrder": 0,
+            "freeDeliveryAbove": null,
+            "pickupInstructions": "Retire no balcão apresentando o número do pedido.",
+            "deliveryEstimateText": "40 a 60 minutos",
+            "orderWhatsappNumber": null,
+            "createdAt": "2026-11-05T22:41:44.759Z",
+            "updatedAt": "2026-11-05T22:41:44.759Z"
+          }
+        }
+      },
+      "created_at": "2026-11-05T22:41:44.783Z",
+      "updated_at": "2026-11-05T22:41:44.783Z"
+    },
+    {
+      "id": "79591bdd-c229-40f6-be49-cc23d6ac8d35",
+      "actor_user_id": "de277577-ee05-4fdd-bdda-9c36bb760cc8",
+      "actor_user_name": "Admin Mapa",
+      "tenant_id": "912a233f-e00b-4e31-95eb-1f9ca0ece244",
+      "action": "DELIVERY_RULE_CREATE",
+      "entity": "delivery_rules",
+      "entity_id": "b36f4ab7-afc1-456b-b319-e318435d0cd0",
+      "metadata": {
+        "diff": {
+          "created": {
+            "id": "b36f4ab7-afc1-456b-b319-e318435d0cd0",
+            "tenant_id": "912a233f-e00b-4e31-95eb-1f9ca0ece244",
+            "type": "fixed",
+            "name": "Taxa Fixa Urbana",
+            "neighborhood": null,
+            "cep_start": null,
+            "cep_end": null,
+            "fee": 8,
+            "minimum_order": null,
+            "is_active": true,
+            "position": 0,
+            "created_at": "2026-11-05T22:41:44.788Z",
+            "updated_at": "2026-11-05T22:41:44.788Z",
+            "city": null,
+            "state": null,
+            "estimatedTime": null,
+            "freeDeliveryAbove": null,
+            "includedDistanceKm": null,
+            "extraKmFee": null
+          }
+        }
+      },
+      "created_at": "2026-11-05T22:41:44.797Z",
+      "updated_at": "2026-11-05T22:41:44.797Z"
+    },
+    {
+      "id": "1cae15e6-b082-48ad-b1fb-d905225f5720",
+      "actor_user_id": "00000000-0000-0000-0000-000000000000",
+      "actor_user_name": "Cliente: Cliente 1 - Jardins (Checkout)",
+      "tenant_id": "912a233f-e00b-4e31-95eb-1f9ca0ece244",
+      "action": "ORDER_CREATE",
+      "entity": "orders",
+      "entity_id": "2913b02e-62ef-4765-b80d-9c04c5f1c4f1",
+      "metadata": {
+        "diff": {
+          "orderNumber": 1001,
+          "total": 50,
+          "deliveryFee": 8,
+          "fulfillmentType": "delivery",
+          "deliveryMeta": {
+            "pricingMode": "neighborhood",
+            "distanceKm": null,
+            "appliedRuleName": "Taxa Fixa Urbana",
+            "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+            "latitude": -23.5587,
+            "longitude": -46.6615,
+            "geocodeStatus": "geocoded"
+          }
+        }
+      },
+      "created_at": "2026-11-05T22:41:44.888Z",
+      "updated_at": "2026-11-05T22:41:44.888Z"
+    },
+    {
+      "id": "087b6b95-109e-461f-957a-5b4fa4ba829b",
+      "actor_user_id": "00000000-0000-0000-0000-000000000000",
+      "actor_user_name": "Cliente: Cliente 2 - Vila Mariana (Checkout)",
+      "tenant_id": "912a233f-e00b-4e31-95eb-1f9ca0ece244",
+      "action": "ORDER_CREATE",
+      "entity": "orders",
+      "entity_id": "c107396b-5db9-4709-95bf-a4feb1fdc6e3",
+      "metadata": {
+        "diff": {
+          "orderNumber": 1002,
+          "total": 50,
+          "deliveryFee": 8,
+          "fulfillmentType": "delivery",
+          "deliveryMeta": {
+            "pricingMode": "neighborhood",
+            "distanceKm": null,
+            "appliedRuleName": "Taxa Fixa Urbana",
+            "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+            "latitude": -23.5795,
+            "longitude": -46.6398,
+            "geocodeStatus": "geocoded"
+          }
+        }
+      },
+      "created_at": "2026-11-05T22:41:44.913Z",
+      "updated_at": "2026-11-05T22:41:44.913Z"
+    },
+    {
+      "id": "d0793a09-4b62-4693-bc66-14b0db57ca37",
+      "actor_user_id": "00000000-0000-0000-0000-000000000000",
+      "actor_user_name": "Cliente: Cliente 3 - Pinheiros (Checkout)",
+      "tenant_id": "912a233f-e00b-4e31-95eb-1f9ca0ece244",
+      "action": "ORDER_CREATE",
+      "entity": "orders",
+      "entity_id": "d1091935-7f00-44f5-b31c-321b3adc384b",
+      "metadata": {
+        "diff": {
+          "orderNumber": 1003,
+          "total": 50,
+          "deliveryFee": 8,
+          "fulfillmentType": "delivery",
+          "deliveryMeta": {
+            "pricingMode": "neighborhood",
+            "distanceKm": null,
+            "appliedRuleName": "Taxa Fixa Urbana",
+            "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+            "latitude": -23.5661,
+            "longitude": -46.6812,
+            "geocodeStatus": "geocoded"
+          }
+        }
+      },
+      "created_at": "2026-11-05T22:41:44.936Z",
+      "updated_at": "2026-11-05T22:41:44.936Z"
+    },
+    {
+      "id": "1bf70cf0-1250-4fde-a22c-0c97198c2de2",
+      "actor_user_id": "00000000-0000-0000-0000-000000000000",
+      "actor_user_name": "Cliente: Cliente 4 - Paraíso (Checkout)",
+      "tenant_id": "912a233f-e00b-4e31-95eb-1f9ca0ece244",
+      "action": "ORDER_CREATE",
+      "entity": "orders",
+      "entity_id": "c6c3c252-d2b3-42a5-8d76-b63769471f63",
+      "metadata": {
+        "diff": {
+          "orderNumber": 1004,
+          "total": 50,
+          "deliveryFee": 8,
+          "fulfillmentType": "delivery",
+          "deliveryMeta": {
+            "pricingMode": "neighborhood",
+            "distanceKm": null,
+            "appliedRuleName": "Taxa Fixa Urbana",
+            "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+            "latitude": -23.5742,
+            "longitude": -46.6512,
+            "geocodeStatus": "geocoded"
+          }
+        }
+      },
+      "created_at": "2026-11-05T22:41:44.960Z",
+      "updated_at": "2026-11-05T22:41:44.960Z"
+    },
+    {
+      "id": "c4d6bf04-aba1-4ebb-87cb-37b74e4096e7",
+      "actor_user_id": "00000000-0000-0000-0000-000000000000",
+      "actor_user_name": "Cliente: Cliente 5 - Moema (Checkout)",
+      "tenant_id": "912a233f-e00b-4e31-95eb-1f9ca0ece244",
+      "action": "ORDER_CREATE",
+      "entity": "orders",
+      "entity_id": "03f9b9c0-7d7b-48bb-93be-e5dd63ec6f87",
+      "metadata": {
+        "diff": {
+          "orderNumber": 1005,
+          "total": 50,
+          "deliveryFee": 8,
+          "fulfillmentType": "delivery",
+          "deliveryMeta": {
+            "pricingMode": "neighborhood",
+            "distanceKm": null,
+            "appliedRuleName": "Taxa Fixa Urbana",
+            "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+            "latitude": -23.6021,
+            "longitude": -46.6619,
+            "geocodeStatus": "geocoded"
+          }
+        }
+      },
+      "created_at": "2026-11-05T22:41:44.984Z",
+      "updated_at": "2026-11-05T22:41:44.984Z"
+    },
+    {
+      "id": "25c4ec2b-12d6-4079-9378-7945ec208395",
+      "actor_user_id": "super-admin-test",
+      "actor_user_name": "Super Admin Test",
+      "tenant_id": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+      "action": "USER_CREATE",
+      "entity": "tenant_users",
+      "entity_id": "869e4443-25f0-42cc-b00b-6ef8f7e0deff",
+      "metadata": {
+        "email": "admin-a-508543@teste.local",
+        "role": "CLIENT_ADMIN",
+        "status": "active"
+      },
+      "created_at": "2026-11-05T22:41:48.579Z",
+      "updated_at": "2026-11-05T22:41:48.579Z"
+    },
+    {
+      "id": "06aedf9e-6174-4db0-973d-cfe3ab4337c4",
+      "actor_user_id": "super-admin-test",
+      "actor_user_name": "Super Admin Test",
+      "tenant_id": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+      "action": "TENANT_CREATE",
+      "entity": "tenants",
+      "entity_id": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+      "metadata": {
+        "name": "Restaurante Teste Entregas A 508543",
+        "slug": "test-delivery-a-508543",
+        "planId": "33333333-3333-4333-8333-333333333333"
+      },
+      "created_at": "2026-11-05T22:41:48.584Z",
+      "updated_at": "2026-11-05T22:41:48.584Z"
+    },
+    {
+      "id": "4d82e4ce-ece8-4548-8d5b-6b40fc31c5f6",
+      "actor_user_id": "super-admin-test",
+      "actor_user_name": "Super Admin Test",
+      "tenant_id": "11ea735c-d90f-4129-b7e1-5c930fab89ce",
+      "action": "USER_CREATE",
+      "entity": "tenant_users",
+      "entity_id": "003aeef1-cd50-4b04-8092-67098b145884",
+      "metadata": {
+        "email": "admin-b-508543@teste.local",
+        "role": "CLIENT_ADMIN",
+        "status": "active"
+      },
+      "created_at": "2026-11-05T22:41:48.610Z",
+      "updated_at": "2026-11-05T22:41:48.610Z"
+    },
+    {
+      "id": "8b2d34aa-b0e0-486f-98ce-c806723cbac8",
+      "actor_user_id": "super-admin-test",
+      "actor_user_name": "Super Admin Test",
+      "tenant_id": "11ea735c-d90f-4129-b7e1-5c930fab89ce",
+      "action": "TENANT_CREATE",
+      "entity": "tenants",
+      "entity_id": "11ea735c-d90f-4129-b7e1-5c930fab89ce",
+      "metadata": {
+        "name": "Restaurante Teste Entregas B 508543",
+        "slug": "test-delivery-b-508543",
+        "planId": "33333333-3333-4333-8333-333333333333"
+      },
+      "created_at": "2026-11-05T22:41:48.642Z",
+      "updated_at": "2026-11-05T22:41:48.642Z"
+    },
+    {
+      "id": "467e4cca-1526-480f-8d20-21d548b7cb1a",
+      "actor_user_id": "869e4443-25f0-42cc-b00b-6ef8f7e0deff",
+      "actor_user_name": "Admin A",
+      "tenant_id": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+      "action": "DELIVERY_SETTINGS_UPDATE",
+      "entity": "delivery_settings",
+      "entity_id": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+      "metadata": {
+        "diff": {
+          "before": {
+            "tenantId": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+            "ordersEnabled": true,
+            "acceptOrdersWhenClosed": true,
+            "pickupEnabled": true,
+            "deliveryEnabled": true,
+            "pricingMode": "neighborhood",
+            "originAddress": null,
+            "kmConfig": {
+              "baseFee": 5,
+              "pricePerKm": 2,
+              "minDistanceKm": 1,
+              "maxDistanceKm": 15,
+              "distanceMethod": "road_route",
+              "roundDistanceUp": false,
+              "minDeliveryFee": null,
+              "freeDeliveryAbove": null
+            },
+            "minimumOrder": 0,
+            "freeDeliveryAbove": null,
+            "pickupInstructions": "Retire no balcão apresentando o número do pedido.",
+            "deliveryEstimateText": "40 a 60 minutos",
+            "orderWhatsappNumber": null,
+            "createdAt": "2026-11-05T22:41:48.650Z",
+            "updatedAt": "2026-11-05T22:41:48.650Z"
+          },
+          "after": {
+            "tenantId": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+            "ordersEnabled": true,
+            "acceptOrdersWhenClosed": true,
+            "pickupEnabled": true,
+            "deliveryEnabled": true,
+            "pricingMode": "neighborhood",
+            "originAddress": {
+              "cep": "77804-090",
+              "street": "Avenida Cônego João Lima",
+              "number": "1000",
+              "neighborhood": "Centro",
+              "city": "Araguaína",
+              "state": "TO",
+              "latitude": -7.192,
+              "longitude": -48.2075
+            },
+            "kmConfig": {
+              "baseFee": 5,
+              "pricePerKm": 2,
+              "minDistanceKm": 1,
+              "maxDistanceKm": 15,
+              "distanceMethod": "road_route",
+              "roundDistanceUp": false,
+              "minDeliveryFee": null,
+              "freeDeliveryAbove": null
+            },
+            "minimumOrder": 0,
+            "freeDeliveryAbove": null,
+            "pickupInstructions": "Retire no balcão apresentando o número do pedido.",
+            "deliveryEstimateText": "40 a 60 minutos",
+            "orderWhatsappNumber": null,
+            "createdAt": "2026-11-05T22:41:48.650Z",
+            "updatedAt": "2026-11-05T22:41:48.650Z"
+          }
+        }
+      },
+      "created_at": "2026-11-05T22:41:48.676Z",
+      "updated_at": "2026-11-05T22:41:48.676Z"
+    },
+    {
+      "id": "25ee21bc-4dbc-4044-8cf7-8ff3d2c701e2",
+      "actor_user_id": "869e4443-25f0-42cc-b00b-6ef8f7e0deff",
+      "actor_user_name": "Admin A",
+      "tenant_id": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+      "action": "DELIVERY_RULE_CREATE",
+      "entity": "delivery_rules",
+      "entity_id": "f1c8aea7-740f-4ffe-968e-a9d5c19acb09",
+      "metadata": {
+        "diff": {
+          "created": {
+            "id": "f1c8aea7-740f-4ffe-968e-a9d5c19acb09",
+            "tenant_id": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+            "type": "fixed",
+            "name": "Taxa Fixa Urbana",
+            "neighborhood": null,
+            "cep_start": null,
+            "cep_end": null,
+            "fee": 8,
+            "minimum_order": null,
+            "is_active": true,
+            "position": 0,
+            "created_at": "2026-11-05T22:41:48.683Z",
+            "updated_at": "2026-11-05T22:41:48.683Z",
+            "city": null,
+            "state": null,
+            "estimatedTime": null,
+            "freeDeliveryAbove": null,
+            "includedDistanceKm": null,
+            "extraKmFee": null
+          }
+        }
+      },
+      "created_at": "2026-11-05T22:41:48.698Z",
+      "updated_at": "2026-11-05T22:41:48.698Z"
+    },
+    {
+      "id": "94287fa8-ca0f-44e3-ac2a-f1f6491cd85c",
+      "actor_user_id": "003aeef1-cd50-4b04-8092-67098b145884",
+      "actor_user_name": "Admin B",
+      "tenant_id": "11ea735c-d90f-4129-b7e1-5c930fab89ce",
+      "action": "DELIVERY_SETTINGS_UPDATE",
+      "entity": "delivery_settings",
+      "entity_id": "11ea735c-d90f-4129-b7e1-5c930fab89ce",
+      "metadata": {
+        "diff": {
+          "before": {
+            "tenantId": "11ea735c-d90f-4129-b7e1-5c930fab89ce",
+            "ordersEnabled": true,
+            "acceptOrdersWhenClosed": true,
+            "pickupEnabled": true,
+            "deliveryEnabled": true,
+            "pricingMode": "neighborhood",
+            "originAddress": null,
+            "kmConfig": {
+              "baseFee": 5,
+              "pricePerKm": 2,
+              "minDistanceKm": 1,
+              "maxDistanceKm": 15,
+              "distanceMethod": "road_route",
+              "roundDistanceUp": false,
+              "minDeliveryFee": null,
+              "freeDeliveryAbove": null
+            },
+            "minimumOrder": 0,
+            "freeDeliveryAbove": null,
+            "pickupInstructions": "Retire no balcão apresentando o número do pedido.",
+            "deliveryEstimateText": "40 a 60 minutos",
+            "orderWhatsappNumber": null,
+            "createdAt": "2026-11-05T22:41:48.703Z",
+            "updatedAt": "2026-11-05T22:41:48.703Z"
+          },
+          "after": {
+            "tenantId": "11ea735c-d90f-4129-b7e1-5c930fab89ce",
+            "ordersEnabled": true,
+            "acceptOrdersWhenClosed": true,
+            "pickupEnabled": true,
+            "deliveryEnabled": true,
+            "pricingMode": "neighborhood",
+            "originAddress": {
+              "cep": "77804-090",
+              "street": "Avenida Cônego João Lima",
+              "number": "1000",
+              "neighborhood": "Centro",
+              "city": "Araguaína",
+              "state": "TO",
+              "latitude": -7.192,
+              "longitude": -48.2075
+            },
+            "kmConfig": {
+              "baseFee": 5,
+              "pricePerKm": 2,
+              "minDistanceKm": 1,
+              "maxDistanceKm": 15,
+              "distanceMethod": "road_route",
+              "roundDistanceUp": false,
+              "minDeliveryFee": null,
+              "freeDeliveryAbove": null
+            },
+            "minimumOrder": 0,
+            "freeDeliveryAbove": null,
+            "pickupInstructions": "Retire no balcão apresentando o número do pedido.",
+            "deliveryEstimateText": "40 a 60 minutos",
+            "orderWhatsappNumber": null,
+            "createdAt": "2026-11-05T22:41:48.703Z",
+            "updatedAt": "2026-11-05T22:41:48.703Z"
+          }
+        }
+      },
+      "created_at": "2026-11-05T22:41:48.759Z",
+      "updated_at": "2026-11-05T22:41:48.759Z"
+    },
+    {
+      "id": "29794f5a-4150-4240-874b-bba17fbb6df4",
+      "actor_user_id": "003aeef1-cd50-4b04-8092-67098b145884",
+      "actor_user_name": "Admin B",
+      "tenant_id": "11ea735c-d90f-4129-b7e1-5c930fab89ce",
+      "action": "DELIVERY_RULE_CREATE",
+      "entity": "delivery_rules",
+      "entity_id": "3df79c4f-4d83-4758-a569-ffc8d3ee4898",
+      "metadata": {
+        "diff": {
+          "created": {
+            "id": "3df79c4f-4d83-4758-a569-ffc8d3ee4898",
+            "tenant_id": "11ea735c-d90f-4129-b7e1-5c930fab89ce",
+            "type": "fixed",
+            "name": "Taxa Fixa Urbana",
+            "neighborhood": null,
+            "cep_start": null,
+            "cep_end": null,
+            "fee": 8,
+            "minimum_order": null,
+            "is_active": true,
+            "position": 0,
+            "created_at": "2026-11-05T22:41:48.766Z",
+            "updated_at": "2026-11-05T22:41:48.766Z",
+            "city": null,
+            "state": null,
+            "estimatedTime": null,
+            "freeDeliveryAbove": null,
+            "includedDistanceKm": null,
+            "extraKmFee": null
+          }
+        }
+      },
+      "created_at": "2026-11-05T22:41:48.781Z",
+      "updated_at": "2026-11-05T22:41:48.781Z"
+    },
+    {
+      "id": "056bcdf5-2c26-4bd3-9600-f94cb2e2be99",
+      "actor_user_id": "869e4443-25f0-42cc-b00b-6ef8f7e0deff",
+      "actor_user_name": "Admin A",
+      "tenant_id": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+      "action": "CREATE",
+      "entity": "delivery_drivers",
+      "entity_id": "1fbca772-239e-43cb-b3eb-303e8b705fb7",
+      "metadata": {
+        "name": "Carlos Motoboy",
+        "email": "motoboy1-508543@teste.local",
+        "phone": "63999991111",
+        "vehicleInfo": "Moto Honda CG 160",
+        "plate": "QWE-1234"
+      },
+      "created_at": "2026-11-05T22:41:48.840Z",
+      "updated_at": "2026-11-05T22:41:48.840Z"
+    },
+    {
+      "id": "26919e96-5009-4a08-a495-adee28729d9c",
+      "actor_user_id": "869e4443-25f0-42cc-b00b-6ef8f7e0deff",
+      "actor_user_name": "Admin A",
+      "tenant_id": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+      "action": "CREATE",
+      "entity": "delivery_drivers",
+      "entity_id": "01316a08-bd50-42e0-adce-a877a425debe",
+      "metadata": {
+        "name": "Marcos Entregador",
+        "email": "motoboy2-508543@teste.local",
+        "phone": "63999992222",
+        "vehicleInfo": "Moto Yamaha Factor",
+        "plate": "XYZ-9876"
+      },
+      "created_at": "2026-11-05T22:41:48.871Z",
+      "updated_at": "2026-11-05T22:41:48.871Z"
+    },
+    {
+      "id": "d15a527f-319c-4b63-a313-38ec9c461731",
+      "actor_user_id": "003aeef1-cd50-4b04-8092-67098b145884",
+      "actor_user_name": "Admin B",
+      "tenant_id": "11ea735c-d90f-4129-b7e1-5c930fab89ce",
+      "action": "CREATE",
+      "entity": "delivery_drivers",
+      "entity_id": "c8af4769-cf82-46c6-97be-4859d76258fa",
+      "metadata": {
+        "name": "Motoboy Restaurante B",
+        "email": "motoboy-b-508543@teste.local",
+        "phone": "63999993333",
+        "vehicleInfo": "Moto",
+        "plate": null
+      },
+      "created_at": "2026-11-05T22:41:48.909Z",
+      "updated_at": "2026-11-05T22:41:48.909Z"
+    },
+    {
+      "id": "20143a1f-4f98-43d5-83bd-5faaf034dafd",
+      "actor_user_id": "00000000-0000-0000-0000-000000000000",
+      "actor_user_name": "Cliente: Cliente Ana Silva (Checkout)",
+      "tenant_id": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+      "action": "ORDER_CREATE",
+      "entity": "orders",
+      "entity_id": "d72eb434-f1dd-4fe8-9608-e5a6f96afa51",
+      "metadata": {
+        "diff": {
+          "orderNumber": 1001,
+          "total": 53,
+          "deliveryFee": 8,
+          "fulfillmentType": "delivery",
+          "deliveryMeta": {
+            "pricingMode": "neighborhood",
+            "distanceKm": null,
+            "appliedRuleName": "Taxa Fixa Urbana",
+            "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+            "latitude": -7.1912,
+            "longitude": -48.2068,
+            "geocodeStatus": "geocoded"
+          }
+        }
+      },
+      "created_at": "2026-11-05T22:41:49.095Z",
+      "updated_at": "2026-11-05T22:41:49.096Z"
+    },
+    {
+      "id": "2c9eb57c-2c4d-4260-9eab-ae8898325e17",
+      "actor_user_id": "00000000-0000-0000-0000-000000000000",
+      "actor_user_name": "Cliente: Cliente Bruno Costa (Checkout)",
+      "tenant_id": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+      "action": "ORDER_CREATE",
+      "entity": "orders",
+      "entity_id": "0955b463-be89-4823-a9ce-e7bf22be774a",
+      "metadata": {
+        "diff": {
+          "orderNumber": 1002,
+          "total": 98,
+          "deliveryFee": 8,
+          "fulfillmentType": "delivery",
+          "deliveryMeta": {
+            "pricingMode": "neighborhood",
+            "distanceKm": null,
+            "appliedRuleName": "Taxa Fixa Urbana",
+            "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+            "latitude": -7.1935,
+            "longitude": -48.2055,
+            "geocodeStatus": "geocoded"
+          }
+        }
+      },
+      "created_at": "2026-11-05T22:41:49.153Z",
+      "updated_at": "2026-11-05T22:41:49.153Z"
+    },
+    {
+      "id": "a6afbf98-fd9c-4a21-b862-fe498c48876b",
+      "actor_user_id": "00000000-0000-0000-0000-000000000000",
+      "actor_user_name": "Cliente: Cliente Carla Mendes (Checkout)",
+      "tenant_id": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+      "action": "ORDER_CREATE",
+      "entity": "orders",
+      "entity_id": "9dfd33e2-95d7-45a6-8566-62c206b7fdd1",
+      "metadata": {
+        "diff": {
+          "orderNumber": 1003,
+          "total": 53,
+          "deliveryFee": 8,
+          "fulfillmentType": "delivery",
+          "deliveryMeta": {
+            "pricingMode": "neighborhood",
+            "distanceKm": null,
+            "appliedRuleName": "Taxa Fixa Urbana",
+            "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+            "latitude": -7.182,
+            "longitude": -48.198,
+            "geocodeStatus": "geocoded"
+          }
+        }
+      },
+      "created_at": "2026-11-05T22:41:49.189Z",
+      "updated_at": "2026-11-05T22:41:49.189Z"
+    },
+    {
+      "id": "d19dc88e-d2ab-4679-b494-21bc7de88ab0",
+      "actor_user_id": "00000000-0000-0000-0000-000000000000",
+      "actor_user_name": "Cliente: Cliente Diego Sem Mapa (Checkout)",
+      "tenant_id": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+      "action": "ORDER_CREATE",
+      "entity": "orders",
+      "entity_id": "19d442b0-98ff-4ffa-b382-ed50f54d7cb4",
+      "metadata": {
+        "diff": {
+          "orderNumber": 1004,
+          "total": 53,
+          "deliveryFee": 8,
+          "fulfillmentType": "delivery",
+          "deliveryMeta": {
+            "pricingMode": "neighborhood",
+            "distanceKm": null,
+            "appliedRuleName": "Taxa Fixa Urbana",
+            "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+            "latitude": null,
+            "longitude": null,
+            "geocodeStatus": "pending"
+          }
+        }
+      },
+      "created_at": "2026-11-05T22:41:50.165Z",
+      "updated_at": "2026-11-05T22:41:50.165Z"
+    },
+    {
+      "id": "fb243bfe-6b00-4ab7-a53a-539c4e735fac",
+      "actor_user_id": "00000000-0000-0000-0000-000000000000",
+      "actor_user_name": "Cliente: Cliente Outro Restaurante (Checkout)",
+      "tenant_id": "11ea735c-d90f-4129-b7e1-5c930fab89ce",
+      "action": "ORDER_CREATE",
+      "entity": "orders",
+      "entity_id": "f4e8da09-f6c9-4955-948b-7836dca23639",
+      "metadata": {
+        "diff": {
+          "orderNumber": 1001,
+          "total": 48,
+          "deliveryFee": 8,
+          "fulfillmentType": "delivery",
+          "deliveryMeta": {
+            "pricingMode": "neighborhood",
+            "distanceKm": null,
+            "appliedRuleName": "Taxa Fixa Urbana",
+            "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+            "latitude": -7.191,
+            "longitude": -48.207,
+            "geocodeStatus": "geocoded"
+          }
+        }
+      },
+      "created_at": "2026-11-05T22:41:50.256Z",
+      "updated_at": "2026-11-05T22:41:50.256Z"
+    },
+    {
+      "id": "8edaafd2-683d-4eed-82fb-ce8378d4dd06",
+      "actor_user_id": "869e4443-25f0-42cc-b00b-6ef8f7e0deff",
+      "actor_user_name": "Admin A",
+      "tenant_id": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+      "action": "ORDER_COORDINATES_UPDATE",
+      "entity": "orders",
+      "entity_id": "19d442b0-98ff-4ffa-b382-ed50f54d7cb4",
+      "metadata": {
+        "latitude": -7.185,
+        "longitude": -48.1995,
+        "geocodeStatus": "manual"
+      },
+      "created_at": "2026-11-05T22:41:50.281Z",
+      "updated_at": "2026-11-05T22:41:50.281Z"
+    },
+    {
+      "id": "303826f8-a3af-4ed7-9b60-ef3369f361d3",
+      "actor_user_id": "37f449d8-c8f1-427e-ad76-39a626568d8a",
+      "actor_user_name": "Carlos Motoboy",
+      "tenant_id": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+      "action": "ORDER_STATUS_CHANGE",
+      "entity": "orders",
+      "entity_id": "0955b463-be89-4823-a9ce-e7bf22be774a",
+      "metadata": {
+        "diff": {
+          "before": "NEW",
+          "after": "OUT_FOR_DELIVERY"
+        }
+      },
+      "created_at": "2026-11-05T22:41:50.511Z",
+      "updated_at": "2026-11-05T22:41:50.511Z"
+    },
+    {
+      "id": "8ceed627-b428-4bd3-acf7-79f748cfefab",
+      "actor_user_id": "37f449d8-c8f1-427e-ad76-39a626568d8a",
+      "actor_user_name": "Carlos Motoboy",
+      "tenant_id": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+      "action": "ORDER_STATUS_CHANGE",
+      "entity": "orders",
+      "entity_id": "0955b463-be89-4823-a9ce-e7bf22be774a",
+      "metadata": {
+        "diff": {
+          "before": "OUT_FOR_DELIVERY",
+          "after": "COMPLETED"
+        }
+      },
+      "created_at": "2026-11-05T22:41:50.579Z",
+      "updated_at": "2026-11-05T22:41:50.579Z"
+    },
+    {
+      "id": "42cd18dd-93f0-448f-ac50-8db9db802822",
+      "actor_user_id": "37f449d8-c8f1-427e-ad76-39a626568d8a",
+      "actor_user_name": "Carlos Motoboy",
+      "tenant_id": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+      "action": "ORDER_STATUS_CHANGE",
+      "entity": "orders",
+      "entity_id": "d72eb434-f1dd-4fe8-9608-e5a6f96afa51",
+      "metadata": {
+        "diff": {
+          "before": "NEW",
+          "after": "OUT_FOR_DELIVERY"
+        }
+      },
+      "created_at": "2026-11-05T22:41:50.645Z",
+      "updated_at": "2026-11-05T22:41:50.645Z"
+    },
+    {
+      "id": "049151be-b4ef-4940-ab43-25257a8d3357",
+      "actor_user_id": "super-admin-qr-test",
+      "actor_user_name": "Super Admin QR Test",
+      "tenant_id": "6bdf79dd-1f73-4848-a2ac-ab9909a93fbd",
+      "action": "USER_CREATE",
+      "entity": "tenant_users",
+      "entity_id": "faee2e88-c033-4ec1-974a-a920bee9bede",
+      "metadata": {
+        "email": "admin-qr-660282@teste.local",
+        "role": "CLIENT_ADMIN",
+        "status": "active"
+      },
+      "created_at": "2026-11-05T23:01:00.304Z",
+      "updated_at": "2026-11-05T23:01:00.304Z"
+    },
+    {
+      "id": "01da8d02-8f45-44bf-ae51-56eac7e7aa30",
+      "actor_user_id": "super-admin-qr-test",
+      "actor_user_name": "Super Admin QR Test",
+      "tenant_id": "6bdf79dd-1f73-4848-a2ac-ab9909a93fbd",
+      "action": "TENANT_CREATE",
+      "entity": "tenants",
+      "entity_id": "6bdf79dd-1f73-4848-a2ac-ab9909a93fbd",
+      "metadata": {
+        "name": "Restaurante QR Teste 660282",
+        "slug": "test-qr-scan-660282",
+        "planId": "33333333-3333-4333-8333-333333333333"
+      },
+      "created_at": "2026-11-05T23:01:00.311Z",
+      "updated_at": "2026-11-05T23:01:00.311Z"
+    },
+    {
+      "id": "067f0c0f-eade-444a-ba88-54424727def0",
+      "actor_user_id": "faee2e88-c033-4ec1-974a-a920bee9bede",
+      "actor_user_name": "Admin QR",
+      "tenant_id": "6bdf79dd-1f73-4848-a2ac-ab9909a93fbd",
+      "action": "DELIVERY_SETTINGS_UPDATE",
+      "entity": "delivery_settings",
+      "entity_id": "6bdf79dd-1f73-4848-a2ac-ab9909a93fbd",
+      "metadata": {
+        "diff": {
+          "before": {
+            "tenantId": "6bdf79dd-1f73-4848-a2ac-ab9909a93fbd",
+            "ordersEnabled": true,
+            "acceptOrdersWhenClosed": true,
+            "pickupEnabled": true,
+            "deliveryEnabled": true,
+            "pricingMode": "neighborhood",
+            "originAddress": null,
+            "kmConfig": {
+              "baseFee": 5,
+              "pricePerKm": 2,
+              "minDistanceKm": 1,
+              "maxDistanceKm": 15,
+              "distanceMethod": "road_route",
+              "roundDistanceUp": false,
+              "minDeliveryFee": null,
+              "freeDeliveryAbove": null
+            },
+            "minimumOrder": 0,
+            "freeDeliveryAbove": null,
+            "pickupInstructions": "Retire no balcão apresentando o número do pedido.",
+            "deliveryEstimateText": "40 a 60 minutos",
+            "orderWhatsappNumber": null,
+            "createdAt": "2026-11-05T23:01:00.317Z",
+            "updatedAt": "2026-11-05T23:01:00.317Z"
+          },
+          "after": {
+            "tenantId": "6bdf79dd-1f73-4848-a2ac-ab9909a93fbd",
+            "ordersEnabled": true,
+            "acceptOrdersWhenClosed": true,
+            "pickupEnabled": true,
+            "deliveryEnabled": true,
+            "pricingMode": "neighborhood",
+            "originAddress": {
+              "cep": "01310-100",
+              "street": "Avenida Paulista",
+              "number": "1000",
+              "neighborhood": "Bela Vista",
+              "city": "São Paulo",
+              "state": "SP",
+              "latitude": -23.5649,
+              "longitude": -46.652
+            },
+            "kmConfig": {
+              "baseFee": 5,
+              "pricePerKm": 2,
+              "minDistanceKm": 1,
+              "maxDistanceKm": 15,
+              "distanceMethod": "road_route",
+              "roundDistanceUp": false,
+              "minDeliveryFee": null,
+              "freeDeliveryAbove": null
+            },
+            "minimumOrder": 0,
+            "freeDeliveryAbove": null,
+            "pickupInstructions": "Retire no balcão apresentando o número do pedido.",
+            "deliveryEstimateText": "40 a 60 minutos",
+            "orderWhatsappNumber": null,
+            "createdAt": "2026-11-05T23:01:00.317Z",
+            "updatedAt": "2026-11-05T23:01:00.317Z"
+          }
+        }
+      },
+      "created_at": "2026-11-05T23:01:00.354Z",
+      "updated_at": "2026-11-05T23:01:00.354Z"
+    },
+    {
+      "id": "56b31dd3-56b4-4795-9b2e-007d82dcaaee",
+      "actor_user_id": "faee2e88-c033-4ec1-974a-a920bee9bede",
+      "actor_user_name": "Admin QR",
+      "tenant_id": "6bdf79dd-1f73-4848-a2ac-ab9909a93fbd",
+      "action": "DELIVERY_RULE_CREATE",
+      "entity": "delivery_rules",
+      "entity_id": "ebcc7304-2ce2-4364-be7c-fb19ba9c7dae",
+      "metadata": {
+        "diff": {
+          "created": {
+            "id": "ebcc7304-2ce2-4364-be7c-fb19ba9c7dae",
+            "tenant_id": "6bdf79dd-1f73-4848-a2ac-ab9909a93fbd",
+            "type": "fixed",
+            "name": "Taxa Fixa",
+            "neighborhood": null,
+            "cep_start": null,
+            "cep_end": null,
+            "fee": 7,
+            "minimum_order": null,
+            "is_active": true,
+            "position": 0,
+            "created_at": "2026-11-05T23:01:00.359Z",
+            "updated_at": "2026-11-05T23:01:00.359Z",
+            "city": null,
+            "state": null,
+            "estimatedTime": null,
+            "freeDeliveryAbove": null,
+            "includedDistanceKm": null,
+            "extraKmFee": null
+          }
+        }
+      },
+      "created_at": "2026-11-05T23:01:00.368Z",
+      "updated_at": "2026-11-05T23:01:00.368Z"
+    },
+    {
+      "id": "6dbaaa58-b97d-41a4-840f-ad9d350f847a",
+      "actor_user_id": "faee2e88-c033-4ec1-974a-a920bee9bede",
+      "actor_user_name": "Admin QR",
+      "tenant_id": "6bdf79dd-1f73-4848-a2ac-ab9909a93fbd",
+      "action": "CREATE",
+      "entity": "delivery_drivers",
+      "entity_id": "f7a29fb4-39b0-419a-8225-c0b0e14da2da",
+      "metadata": {
+        "name": "Rafael Motoboy 1",
+        "email": "rafael.qr1.660282@teste.local",
+        "phone": "11988881111",
+        "vehicleInfo": "Honda CG 160",
+        "plate": "QRX-1001"
+      },
+      "created_at": "2026-11-05T23:01:00.396Z",
+      "updated_at": "2026-11-05T23:01:00.396Z"
+    },
+    {
+      "id": "e44531fb-c6c6-4107-bec3-79ff94d59536",
+      "actor_user_id": "faee2e88-c033-4ec1-974a-a920bee9bede",
+      "actor_user_name": "Admin QR",
+      "tenant_id": "6bdf79dd-1f73-4848-a2ac-ab9909a93fbd",
+      "action": "CREATE",
+      "entity": "delivery_drivers",
+      "entity_id": "8d369023-d941-46d1-b2ec-657359a32a1d",
+      "metadata": {
+        "name": "Lucas Motoboy 2",
+        "email": "lucas.qr2.660282@teste.local",
+        "phone": "11988882222",
+        "vehicleInfo": "Yamaha Factor",
+        "plate": "QRX-2002"
+      },
+      "created_at": "2026-11-05T23:01:00.420Z",
+      "updated_at": "2026-11-05T23:01:00.420Z"
+    },
+    {
+      "id": "1b0c9df4-bb98-4b6f-8439-1449a101296a",
+      "actor_user_id": "00000000-0000-0000-0000-000000000000",
+      "actor_user_name": "Cliente: Cliente QR 1 (Checkout)",
+      "tenant_id": "6bdf79dd-1f73-4848-a2ac-ab9909a93fbd",
+      "action": "ORDER_CREATE",
+      "entity": "orders",
+      "entity_id": "2cfe7e8d-c85e-4c35-9095-de52b41b1bc7",
+      "metadata": {
+        "diff": {
+          "orderNumber": 1001,
+          "total": 45,
+          "deliveryFee": 7,
+          "fulfillmentType": "delivery",
+          "deliveryMeta": {
+            "pricingMode": "neighborhood",
+            "distanceKm": null,
+            "appliedRuleName": "Taxa Fixa",
+            "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa: R$ 7,00",
+            "latitude": -23.5587,
+            "longitude": -46.6615,
+            "geocodeStatus": "geocoded"
+          }
+        }
+      },
+      "created_at": "2026-11-05T23:01:00.501Z",
+      "updated_at": "2026-11-05T23:01:00.501Z"
+    },
+    {
+      "id": "8bb063ec-f047-4f0d-a64b-6976b10f0f79",
+      "actor_user_id": "00000000-0000-0000-0000-000000000000",
+      "actor_user_name": "Cliente: Cliente QR 2 (Checkout)",
+      "tenant_id": "6bdf79dd-1f73-4848-a2ac-ab9909a93fbd",
+      "action": "ORDER_CREATE",
+      "entity": "orders",
+      "entity_id": "db652c8c-297e-4a0c-8b64-9c70984fcfac",
+      "metadata": {
+        "diff": {
+          "orderNumber": 1002,
+          "total": 45,
+          "deliveryFee": 7,
+          "fulfillmentType": "delivery",
+          "deliveryMeta": {
+            "pricingMode": "neighborhood",
+            "distanceKm": null,
+            "appliedRuleName": "Taxa Fixa",
+            "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa: R$ 7,00",
+            "latitude": -23.5795,
+            "longitude": -46.6398,
+            "geocodeStatus": "geocoded"
+          }
+        }
+      },
+      "created_at": "2026-11-05T23:01:00.530Z",
+      "updated_at": "2026-11-05T23:01:00.530Z"
+    },
+    {
+      "id": "609fc766-3463-4fc5-aa6b-7180fac86c63",
+      "actor_user_id": "super-admin-qr-test",
+      "actor_user_name": "Super Admin QR Test",
+      "tenant_id": "4e59faf9-c08a-4868-8374-a8c4615ff617",
+      "action": "USER_CREATE",
+      "entity": "tenant_users",
+      "entity_id": "9bcb2455-0084-453b-92b8-7f7a6a93521a",
+      "metadata": {
+        "email": "admin-qr-715456@teste.local",
+        "role": "CLIENT_ADMIN",
+        "status": "active"
+      },
+      "created_at": "2026-11-05T23:01:55.500Z",
+      "updated_at": "2026-11-05T23:01:55.500Z"
+    },
+    {
+      "id": "0db077dd-22c0-4775-8f17-0a2378fc4dbc",
+      "actor_user_id": "super-admin-qr-test",
+      "actor_user_name": "Super Admin QR Test",
+      "tenant_id": "4e59faf9-c08a-4868-8374-a8c4615ff617",
+      "action": "TENANT_CREATE",
+      "entity": "tenants",
+      "entity_id": "4e59faf9-c08a-4868-8374-a8c4615ff617",
+      "metadata": {
+        "name": "Restaurante QR Teste 715456",
+        "slug": "test-qr-scan-715456",
+        "planId": "33333333-3333-4333-8333-333333333333"
+      },
+      "created_at": "2026-11-05T23:01:55.508Z",
+      "updated_at": "2026-11-05T23:01:55.508Z"
+    },
+    {
+      "id": "5e65d7fe-dc65-439b-9ef2-ef95112e44d9",
+      "actor_user_id": "9bcb2455-0084-453b-92b8-7f7a6a93521a",
+      "actor_user_name": "Admin QR",
+      "tenant_id": "4e59faf9-c08a-4868-8374-a8c4615ff617",
+      "action": "DELIVERY_SETTINGS_UPDATE",
+      "entity": "delivery_settings",
+      "entity_id": "4e59faf9-c08a-4868-8374-a8c4615ff617",
+      "metadata": {
+        "diff": {
+          "before": {
+            "tenantId": "4e59faf9-c08a-4868-8374-a8c4615ff617",
+            "ordersEnabled": true,
+            "acceptOrdersWhenClosed": true,
+            "pickupEnabled": true,
+            "deliveryEnabled": true,
+            "pricingMode": "neighborhood",
+            "originAddress": null,
+            "kmConfig": {
+              "baseFee": 5,
+              "pricePerKm": 2,
+              "minDistanceKm": 1,
+              "maxDistanceKm": 15,
+              "distanceMethod": "road_route",
+              "roundDistanceUp": false,
+              "minDeliveryFee": null,
+              "freeDeliveryAbove": null
+            },
+            "minimumOrder": 0,
+            "freeDeliveryAbove": null,
+            "pickupInstructions": "Retire no balcão apresentando o número do pedido.",
+            "deliveryEstimateText": "40 a 60 minutos",
+            "orderWhatsappNumber": null,
+            "createdAt": "2026-11-05T23:01:55.518Z",
+            "updatedAt": "2026-11-05T23:01:55.518Z"
+          },
+          "after": {
+            "tenantId": "4e59faf9-c08a-4868-8374-a8c4615ff617",
+            "ordersEnabled": true,
+            "acceptOrdersWhenClosed": true,
+            "pickupEnabled": true,
+            "deliveryEnabled": true,
+            "pricingMode": "neighborhood",
+            "originAddress": {
+              "cep": "01310-100",
+              "street": "Avenida Paulista",
+              "number": "1000",
+              "neighborhood": "Bela Vista",
+              "city": "São Paulo",
+              "state": "SP",
+              "latitude": -23.5649,
+              "longitude": -46.652
+            },
+            "kmConfig": {
+              "baseFee": 5,
+              "pricePerKm": 2,
+              "minDistanceKm": 1,
+              "maxDistanceKm": 15,
+              "distanceMethod": "road_route",
+              "roundDistanceUp": false,
+              "minDeliveryFee": null,
+              "freeDeliveryAbove": null
+            },
+            "minimumOrder": 0,
+            "freeDeliveryAbove": null,
+            "pickupInstructions": "Retire no balcão apresentando o número do pedido.",
+            "deliveryEstimateText": "40 a 60 minutos",
+            "orderWhatsappNumber": null,
+            "createdAt": "2026-11-05T23:01:55.518Z",
+            "updatedAt": "2026-11-05T23:01:55.518Z"
+          }
+        }
+      },
+      "created_at": "2026-11-05T23:01:55.546Z",
+      "updated_at": "2026-11-05T23:01:55.546Z"
+    },
+    {
+      "id": "24b2fde3-dbb6-4956-a82e-8ae477039e27",
+      "actor_user_id": "9bcb2455-0084-453b-92b8-7f7a6a93521a",
+      "actor_user_name": "Admin QR",
+      "tenant_id": "4e59faf9-c08a-4868-8374-a8c4615ff617",
+      "action": "DELIVERY_RULE_CREATE",
+      "entity": "delivery_rules",
+      "entity_id": "46d39eae-3d24-412b-a6d7-00981fe8f110",
+      "metadata": {
+        "diff": {
+          "created": {
+            "id": "46d39eae-3d24-412b-a6d7-00981fe8f110",
+            "tenant_id": "4e59faf9-c08a-4868-8374-a8c4615ff617",
+            "type": "fixed",
+            "name": "Taxa Fixa",
+            "neighborhood": null,
+            "cep_start": null,
+            "cep_end": null,
+            "fee": 7,
+            "minimum_order": null,
+            "is_active": true,
+            "position": 0,
+            "created_at": "2026-11-05T23:01:55.553Z",
+            "updated_at": "2026-11-05T23:01:55.553Z",
+            "city": null,
+            "state": null,
+            "estimatedTime": null,
+            "freeDeliveryAbove": null,
+            "includedDistanceKm": null,
+            "extraKmFee": null
+          }
+        }
+      },
+      "created_at": "2026-11-05T23:01:55.565Z",
+      "updated_at": "2026-11-05T23:01:55.565Z"
+    },
+    {
+      "id": "8537a730-c233-4109-92f9-5c1a889a18bb",
+      "actor_user_id": "9bcb2455-0084-453b-92b8-7f7a6a93521a",
+      "actor_user_name": "Admin QR",
+      "tenant_id": "4e59faf9-c08a-4868-8374-a8c4615ff617",
+      "action": "CREATE",
+      "entity": "delivery_drivers",
+      "entity_id": "80c7f9a2-f44f-4d8a-b65f-6007c848b911",
+      "metadata": {
+        "name": "Rafael Motoboy 1",
+        "email": "rafael.qr1.715456@teste.local",
+        "phone": "11988881111",
+        "vehicleInfo": "Honda CG 160",
+        "plate": "QRX-1001"
+      },
+      "created_at": "2026-11-05T23:01:55.607Z",
+      "updated_at": "2026-11-05T23:01:55.607Z"
+    },
+    {
+      "id": "6ff93fe8-95fe-4558-bdee-b39e38fa4e20",
+      "actor_user_id": "9bcb2455-0084-453b-92b8-7f7a6a93521a",
+      "actor_user_name": "Admin QR",
+      "tenant_id": "4e59faf9-c08a-4868-8374-a8c4615ff617",
+      "action": "CREATE",
+      "entity": "delivery_drivers",
+      "entity_id": "9e579310-63a6-4f86-9535-b0f815c54a1b",
+      "metadata": {
+        "name": "Lucas Motoboy 2",
+        "email": "lucas.qr2.715456@teste.local",
+        "phone": "11988882222",
+        "vehicleInfo": "Yamaha Factor",
+        "plate": "QRX-2002"
+      },
+      "created_at": "2026-11-05T23:01:55.685Z",
+      "updated_at": "2026-11-05T23:01:55.685Z"
+    },
+    {
+      "id": "dc890903-a35e-472e-a159-984b654ba3b0",
+      "actor_user_id": "00000000-0000-0000-0000-000000000000",
+      "actor_user_name": "Cliente: Cliente QR 1 (Checkout)",
+      "tenant_id": "4e59faf9-c08a-4868-8374-a8c4615ff617",
+      "action": "ORDER_CREATE",
+      "entity": "orders",
+      "entity_id": "afff1cd8-3f39-4f95-843b-021c74de7679",
+      "metadata": {
+        "diff": {
+          "orderNumber": 1001,
+          "total": 45,
+          "deliveryFee": 7,
+          "fulfillmentType": "delivery",
+          "deliveryMeta": {
+            "pricingMode": "neighborhood",
+            "distanceKm": null,
+            "appliedRuleName": "Taxa Fixa",
+            "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa: R$ 7,00",
+            "latitude": -23.5587,
+            "longitude": -46.6615,
+            "geocodeStatus": "geocoded"
+          }
+        }
+      },
+      "created_at": "2026-11-05T23:01:55.848Z",
+      "updated_at": "2026-11-05T23:01:55.848Z"
+    },
+    {
+      "id": "3806e6f5-3f92-4a07-9145-5de3332c037f",
+      "actor_user_id": "00000000-0000-0000-0000-000000000000",
+      "actor_user_name": "Cliente: Cliente QR 2 (Checkout)",
+      "tenant_id": "4e59faf9-c08a-4868-8374-a8c4615ff617",
+      "action": "ORDER_CREATE",
+      "entity": "orders",
+      "entity_id": "96adf778-cd37-40ff-895f-88bea5e8b350",
+      "metadata": {
+        "diff": {
+          "orderNumber": 1002,
+          "total": 45,
+          "deliveryFee": 7,
+          "fulfillmentType": "delivery",
+          "deliveryMeta": {
+            "pricingMode": "neighborhood",
+            "distanceKm": null,
+            "appliedRuleName": "Taxa Fixa",
+            "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa: R$ 7,00",
+            "latitude": -23.5795,
+            "longitude": -46.6398,
+            "geocodeStatus": "geocoded"
+          }
+        }
+      },
+      "created_at": "2026-11-05T23:01:55.886Z",
+      "updated_at": "2026-11-05T23:01:55.886Z"
+    },
+    {
+      "id": "ae0f870d-b2df-4436-a8ba-d83dba7fca83",
+      "actor_user_id": "super-admin-test",
+      "actor_user_name": "Super Admin Test",
+      "tenant_id": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+      "action": "USER_CREATE",
+      "entity": "tenant_users",
+      "entity_id": "28e53345-540f-464e-be9b-996309c10078",
+      "metadata": {
+        "email": "admin-a-719499@teste.local",
+        "role": "CLIENT_ADMIN",
+        "status": "active"
+      },
+      "created_at": "2026-11-05T23:01:59.557Z",
+      "updated_at": "2026-11-05T23:01:59.557Z"
+    },
+    {
+      "id": "31dde4ed-298e-4dfd-9707-31c187aaf207",
+      "actor_user_id": "super-admin-test",
+      "actor_user_name": "Super Admin Test",
+      "tenant_id": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+      "action": "TENANT_CREATE",
+      "entity": "tenants",
+      "entity_id": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+      "metadata": {
+        "name": "Restaurante Teste Entregas A 719499",
+        "slug": "test-delivery-a-719499",
+        "planId": "33333333-3333-4333-8333-333333333333"
+      },
+      "created_at": "2026-11-05T23:01:59.562Z",
+      "updated_at": "2026-11-05T23:01:59.562Z"
+    },
+    {
+      "id": "b65c4711-2750-4abf-87a3-1d89a21978c6",
+      "actor_user_id": "super-admin-test",
+      "actor_user_name": "Super Admin Test",
+      "tenant_id": "a757c53b-aa73-40e7-bfd8-dfe2724e1fc0",
+      "action": "USER_CREATE",
+      "entity": "tenant_users",
+      "entity_id": "11c68aac-ffff-4216-946f-193704ff622a",
+      "metadata": {
+        "email": "admin-b-719499@teste.local",
+        "role": "CLIENT_ADMIN",
+        "status": "active"
+      },
+      "created_at": "2026-11-05T23:01:59.591Z",
+      "updated_at": "2026-11-05T23:01:59.591Z"
+    },
+    {
+      "id": "2535f56e-c23e-4cd0-890f-256ab1a7341b",
+      "actor_user_id": "super-admin-test",
+      "actor_user_name": "Super Admin Test",
+      "tenant_id": "a757c53b-aa73-40e7-bfd8-dfe2724e1fc0",
+      "action": "TENANT_CREATE",
+      "entity": "tenants",
+      "entity_id": "a757c53b-aa73-40e7-bfd8-dfe2724e1fc0",
+      "metadata": {
+        "name": "Restaurante Teste Entregas B 719499",
+        "slug": "test-delivery-b-719499",
+        "planId": "33333333-3333-4333-8333-333333333333"
+      },
+      "created_at": "2026-11-05T23:01:59.596Z",
+      "updated_at": "2026-11-05T23:01:59.596Z"
+    },
+    {
+      "id": "e63e24f0-b4e5-46e5-b36e-41b12ef3742a",
+      "actor_user_id": "28e53345-540f-464e-be9b-996309c10078",
+      "actor_user_name": "Admin A",
+      "tenant_id": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+      "action": "DELIVERY_SETTINGS_UPDATE",
+      "entity": "delivery_settings",
+      "entity_id": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+      "metadata": {
+        "diff": {
+          "before": {
+            "tenantId": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+            "ordersEnabled": true,
+            "acceptOrdersWhenClosed": true,
+            "pickupEnabled": true,
+            "deliveryEnabled": true,
+            "pricingMode": "neighborhood",
+            "originAddress": null,
+            "kmConfig": {
+              "baseFee": 5,
+              "pricePerKm": 2,
+              "minDistanceKm": 1,
+              "maxDistanceKm": 15,
+              "distanceMethod": "road_route",
+              "roundDistanceUp": false,
+              "minDeliveryFee": null,
+              "freeDeliveryAbove": null
+            },
+            "minimumOrder": 0,
+            "freeDeliveryAbove": null,
+            "pickupInstructions": "Retire no balcão apresentando o número do pedido.",
+            "deliveryEstimateText": "40 a 60 minutos",
+            "orderWhatsappNumber": null,
+            "createdAt": "2026-11-05T23:01:59.606Z",
+            "updatedAt": "2026-11-05T23:01:59.606Z"
+          },
+          "after": {
+            "tenantId": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+            "ordersEnabled": true,
+            "acceptOrdersWhenClosed": true,
+            "pickupEnabled": true,
+            "deliveryEnabled": true,
+            "pricingMode": "neighborhood",
+            "originAddress": {
+              "cep": "77804-090",
+              "street": "Avenida Cônego João Lima",
+              "number": "1000",
+              "neighborhood": "Centro",
+              "city": "Araguaína",
+              "state": "TO",
+              "latitude": -7.192,
+              "longitude": -48.2075
+            },
+            "kmConfig": {
+              "baseFee": 5,
+              "pricePerKm": 2,
+              "minDistanceKm": 1,
+              "maxDistanceKm": 15,
+              "distanceMethod": "road_route",
+              "roundDistanceUp": false,
+              "minDeliveryFee": null,
+              "freeDeliveryAbove": null
+            },
+            "minimumOrder": 0,
+            "freeDeliveryAbove": null,
+            "pickupInstructions": "Retire no balcão apresentando o número do pedido.",
+            "deliveryEstimateText": "40 a 60 minutos",
+            "orderWhatsappNumber": null,
+            "createdAt": "2026-11-05T23:01:59.606Z",
+            "updatedAt": "2026-11-05T23:01:59.606Z"
+          }
+        }
+      },
+      "created_at": "2026-11-05T23:01:59.662Z",
+      "updated_at": "2026-11-05T23:01:59.662Z"
+    },
+    {
+      "id": "df4992a8-264a-457e-890b-5a41c432e7e5",
+      "actor_user_id": "28e53345-540f-464e-be9b-996309c10078",
+      "actor_user_name": "Admin A",
+      "tenant_id": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+      "action": "DELIVERY_RULE_CREATE",
+      "entity": "delivery_rules",
+      "entity_id": "c7644d32-ad4f-455a-b673-67dc6c93054f",
+      "metadata": {
+        "diff": {
+          "created": {
+            "id": "c7644d32-ad4f-455a-b673-67dc6c93054f",
+            "tenant_id": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+            "type": "fixed",
+            "name": "Taxa Fixa Urbana",
+            "neighborhood": null,
+            "cep_start": null,
+            "cep_end": null,
+            "fee": 8,
+            "minimum_order": null,
+            "is_active": true,
+            "position": 0,
+            "created_at": "2026-11-05T23:01:59.669Z",
+            "updated_at": "2026-11-05T23:01:59.669Z",
+            "city": null,
+            "state": null,
+            "estimatedTime": null,
+            "freeDeliveryAbove": null,
+            "includedDistanceKm": null,
+            "extraKmFee": null
+          }
+        }
+      },
+      "created_at": "2026-11-05T23:01:59.682Z",
+      "updated_at": "2026-11-05T23:01:59.682Z"
+    },
+    {
+      "id": "0bcbf67f-3ae3-4567-9532-805ba6445a8c",
+      "actor_user_id": "11c68aac-ffff-4216-946f-193704ff622a",
+      "actor_user_name": "Admin B",
+      "tenant_id": "a757c53b-aa73-40e7-bfd8-dfe2724e1fc0",
+      "action": "DELIVERY_SETTINGS_UPDATE",
+      "entity": "delivery_settings",
+      "entity_id": "a757c53b-aa73-40e7-bfd8-dfe2724e1fc0",
+      "metadata": {
+        "diff": {
+          "before": {
+            "tenantId": "a757c53b-aa73-40e7-bfd8-dfe2724e1fc0",
+            "ordersEnabled": true,
+            "acceptOrdersWhenClosed": true,
+            "pickupEnabled": true,
+            "deliveryEnabled": true,
+            "pricingMode": "neighborhood",
+            "originAddress": null,
+            "kmConfig": {
+              "baseFee": 5,
+              "pricePerKm": 2,
+              "minDistanceKm": 1,
+              "maxDistanceKm": 15,
+              "distanceMethod": "road_route",
+              "roundDistanceUp": false,
+              "minDeliveryFee": null,
+              "freeDeliveryAbove": null
+            },
+            "minimumOrder": 0,
+            "freeDeliveryAbove": null,
+            "pickupInstructions": "Retire no balcão apresentando o número do pedido.",
+            "deliveryEstimateText": "40 a 60 minutos",
+            "orderWhatsappNumber": null,
+            "createdAt": "2026-11-05T23:01:59.693Z",
+            "updatedAt": "2026-11-05T23:01:59.693Z"
+          },
+          "after": {
+            "tenantId": "a757c53b-aa73-40e7-bfd8-dfe2724e1fc0",
+            "ordersEnabled": true,
+            "acceptOrdersWhenClosed": true,
+            "pickupEnabled": true,
+            "deliveryEnabled": true,
+            "pricingMode": "neighborhood",
+            "originAddress": {
+              "cep": "77804-090",
+              "street": "Avenida Cônego João Lima",
+              "number": "1000",
+              "neighborhood": "Centro",
+              "city": "Araguaína",
+              "state": "TO",
+              "latitude": -7.192,
+              "longitude": -48.2075
+            },
+            "kmConfig": {
+              "baseFee": 5,
+              "pricePerKm": 2,
+              "minDistanceKm": 1,
+              "maxDistanceKm": 15,
+              "distanceMethod": "road_route",
+              "roundDistanceUp": false,
+              "minDeliveryFee": null,
+              "freeDeliveryAbove": null
+            },
+            "minimumOrder": 0,
+            "freeDeliveryAbove": null,
+            "pickupInstructions": "Retire no balcão apresentando o número do pedido.",
+            "deliveryEstimateText": "40 a 60 minutos",
+            "orderWhatsappNumber": null,
+            "createdAt": "2026-11-05T23:01:59.693Z",
+            "updatedAt": "2026-11-05T23:01:59.693Z"
+          }
+        }
+      },
+      "created_at": "2026-11-05T23:01:59.756Z",
+      "updated_at": "2026-11-05T23:01:59.756Z"
+    },
+    {
+      "id": "c1f4cb26-1fb7-482b-8ce0-eaa443e69de2",
+      "actor_user_id": "11c68aac-ffff-4216-946f-193704ff622a",
+      "actor_user_name": "Admin B",
+      "tenant_id": "a757c53b-aa73-40e7-bfd8-dfe2724e1fc0",
+      "action": "DELIVERY_RULE_CREATE",
+      "entity": "delivery_rules",
+      "entity_id": "2acdfde1-b7a1-4d39-a24a-8051a800f077",
+      "metadata": {
+        "diff": {
+          "created": {
+            "id": "2acdfde1-b7a1-4d39-a24a-8051a800f077",
+            "tenant_id": "a757c53b-aa73-40e7-bfd8-dfe2724e1fc0",
+            "type": "fixed",
+            "name": "Taxa Fixa Urbana",
+            "neighborhood": null,
+            "cep_start": null,
+            "cep_end": null,
+            "fee": 8,
+            "minimum_order": null,
+            "is_active": true,
+            "position": 0,
+            "created_at": "2026-11-05T23:01:59.767Z",
+            "updated_at": "2026-11-05T23:01:59.767Z",
+            "city": null,
+            "state": null,
+            "estimatedTime": null,
+            "freeDeliveryAbove": null,
+            "includedDistanceKm": null,
+            "extraKmFee": null
+          }
+        }
+      },
+      "created_at": "2026-11-05T23:01:59.784Z",
+      "updated_at": "2026-11-05T23:01:59.784Z"
+    },
+    {
+      "id": "81203740-1cf5-4096-b709-446e97234016",
+      "actor_user_id": "28e53345-540f-464e-be9b-996309c10078",
+      "actor_user_name": "Admin A",
+      "tenant_id": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+      "action": "CREATE",
+      "entity": "delivery_drivers",
+      "entity_id": "2e532a20-14e1-4059-b84d-1e6a9afa8f03",
+      "metadata": {
+        "name": "Carlos Motoboy",
+        "email": "motoboy1-719499@teste.local",
+        "phone": "63999991111",
+        "vehicleInfo": "Moto Honda CG 160",
+        "plate": "QWE-1234"
+      },
+      "created_at": "2026-11-05T23:01:59.845Z",
+      "updated_at": "2026-11-05T23:01:59.845Z"
+    },
+    {
+      "id": "20a6c226-0ae3-462d-ab1a-e50f3f15b94c",
+      "actor_user_id": "28e53345-540f-464e-be9b-996309c10078",
+      "actor_user_name": "Admin A",
+      "tenant_id": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+      "action": "CREATE",
+      "entity": "delivery_drivers",
+      "entity_id": "b8ba42c9-2127-4a41-9c14-895997461996",
+      "metadata": {
+        "name": "Marcos Entregador",
+        "email": "motoboy2-719499@teste.local",
+        "phone": "63999992222",
+        "vehicleInfo": "Moto Yamaha Factor",
+        "plate": "XYZ-9876"
+      },
+      "created_at": "2026-11-05T23:01:59.880Z",
+      "updated_at": "2026-11-05T23:01:59.880Z"
+    },
+    {
+      "id": "095c3b03-3342-4e45-ade8-099220a81467",
+      "actor_user_id": "11c68aac-ffff-4216-946f-193704ff622a",
+      "actor_user_name": "Admin B",
+      "tenant_id": "a757c53b-aa73-40e7-bfd8-dfe2724e1fc0",
+      "action": "CREATE",
+      "entity": "delivery_drivers",
+      "entity_id": "e5f80b6a-1353-432e-9e16-7a22fa432dd8",
+      "metadata": {
+        "name": "Motoboy Restaurante B",
+        "email": "motoboy-b-719499@teste.local",
+        "phone": "63999993333",
+        "vehicleInfo": "Moto",
+        "plate": null
+      },
+      "created_at": "2026-11-05T23:01:59.948Z",
+      "updated_at": "2026-11-05T23:01:59.948Z"
+    },
+    {
+      "id": "90375b65-699a-46dc-ab7d-8bd9e79ade9f",
+      "actor_user_id": "00000000-0000-0000-0000-000000000000",
+      "actor_user_name": "Cliente: Cliente Ana Silva (Checkout)",
+      "tenant_id": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+      "action": "ORDER_CREATE",
+      "entity": "orders",
+      "entity_id": "adf791d7-faaa-4877-8062-99cc499e1628",
+      "metadata": {
+        "diff": {
+          "orderNumber": 1001,
+          "total": 53,
+          "deliveryFee": 8,
+          "fulfillmentType": "delivery",
+          "deliveryMeta": {
+            "pricingMode": "neighborhood",
+            "distanceKm": null,
+            "appliedRuleName": "Taxa Fixa Urbana",
+            "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+            "latitude": -7.1912,
+            "longitude": -48.2068,
+            "geocodeStatus": "geocoded"
+          }
+        }
+      },
+      "created_at": "2026-11-05T23:02:00.107Z",
+      "updated_at": "2026-11-05T23:02:00.107Z"
+    },
+    {
+      "id": "041e2690-aa21-4347-95de-f2040ac95965",
+      "actor_user_id": "00000000-0000-0000-0000-000000000000",
+      "actor_user_name": "Cliente: Cliente Bruno Costa (Checkout)",
+      "tenant_id": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+      "action": "ORDER_CREATE",
+      "entity": "orders",
+      "entity_id": "35e32162-9e6c-4580-a677-1351126534f2",
+      "metadata": {
+        "diff": {
+          "orderNumber": 1002,
+          "total": 98,
+          "deliveryFee": 8,
+          "fulfillmentType": "delivery",
+          "deliveryMeta": {
+            "pricingMode": "neighborhood",
+            "distanceKm": null,
+            "appliedRuleName": "Taxa Fixa Urbana",
+            "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+            "latitude": -7.1935,
+            "longitude": -48.2055,
+            "geocodeStatus": "geocoded"
+          }
+        }
+      },
+      "created_at": "2026-11-05T23:02:00.169Z",
+      "updated_at": "2026-11-05T23:02:00.169Z"
+    },
+    {
+      "id": "5c7b132b-9990-48a6-b7d0-560e95db8c4c",
+      "actor_user_id": "00000000-0000-0000-0000-000000000000",
+      "actor_user_name": "Cliente: Cliente Carla Mendes (Checkout)",
+      "tenant_id": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+      "action": "ORDER_CREATE",
+      "entity": "orders",
+      "entity_id": "d330290e-012a-4d95-a2ac-d19ab5799702",
+      "metadata": {
+        "diff": {
+          "orderNumber": 1003,
+          "total": 53,
+          "deliveryFee": 8,
+          "fulfillmentType": "delivery",
+          "deliveryMeta": {
+            "pricingMode": "neighborhood",
+            "distanceKm": null,
+            "appliedRuleName": "Taxa Fixa Urbana",
+            "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+            "latitude": -7.182,
+            "longitude": -48.198,
+            "geocodeStatus": "geocoded"
+          }
+        }
+      },
+      "created_at": "2026-11-05T23:02:00.201Z",
+      "updated_at": "2026-11-05T23:02:00.201Z"
+    },
+    {
+      "id": "07f63908-e6cc-4cdb-92b1-31ad2fc3d7ae",
+      "actor_user_id": "00000000-0000-0000-0000-000000000000",
+      "actor_user_name": "Cliente: Cliente Diego Sem Mapa (Checkout)",
+      "tenant_id": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+      "action": "ORDER_CREATE",
+      "entity": "orders",
+      "entity_id": "be2bb842-620c-4c7e-8787-d86d4880f5d9",
+      "metadata": {
+        "diff": {
+          "orderNumber": 1004,
+          "total": 53,
+          "deliveryFee": 8,
+          "fulfillmentType": "delivery",
+          "deliveryMeta": {
+            "pricingMode": "neighborhood",
+            "distanceKm": null,
+            "appliedRuleName": "Taxa Fixa Urbana",
+            "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+            "latitude": null,
+            "longitude": null,
+            "geocodeStatus": "pending"
+          }
+        }
+      },
+      "created_at": "2026-11-05T23:02:01.055Z",
+      "updated_at": "2026-11-05T23:02:01.055Z"
+    },
+    {
+      "id": "2db9afa7-4974-4a52-8d79-e8f009e3d9db",
+      "actor_user_id": "00000000-0000-0000-0000-000000000000",
+      "actor_user_name": "Cliente: Cliente Outro Restaurante (Checkout)",
+      "tenant_id": "a757c53b-aa73-40e7-bfd8-dfe2724e1fc0",
+      "action": "ORDER_CREATE",
+      "entity": "orders",
+      "entity_id": "32dd4d7e-bac2-4f4b-bb17-bab8f9d916f7",
+      "metadata": {
+        "diff": {
+          "orderNumber": 1001,
+          "total": 48,
+          "deliveryFee": 8,
+          "fulfillmentType": "delivery",
+          "deliveryMeta": {
+            "pricingMode": "neighborhood",
+            "distanceKm": null,
+            "appliedRuleName": "Taxa Fixa Urbana",
+            "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+            "latitude": -7.191,
+            "longitude": -48.207,
+            "geocodeStatus": "geocoded"
+          }
+        }
+      },
+      "created_at": "2026-11-05T23:02:01.164Z",
+      "updated_at": "2026-11-05T23:02:01.164Z"
+    },
+    {
+      "id": "1deede1b-f401-415c-8de9-332eb9bdd506",
+      "actor_user_id": "28e53345-540f-464e-be9b-996309c10078",
+      "actor_user_name": "Admin A",
+      "tenant_id": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+      "action": "ORDER_COORDINATES_UPDATE",
+      "entity": "orders",
+      "entity_id": "be2bb842-620c-4c7e-8787-d86d4880f5d9",
+      "metadata": {
+        "latitude": -7.185,
+        "longitude": -48.1995,
+        "geocodeStatus": "manual"
+      },
+      "created_at": "2026-11-05T23:02:01.199Z",
+      "updated_at": "2026-11-05T23:02:01.199Z"
+    },
+    {
+      "id": "76c011e6-b09d-499c-acad-41f0130eb2e3",
+      "actor_user_id": "dac40847-20c6-497e-afca-c96cdbf1f15d",
+      "actor_user_name": "Carlos Motoboy",
+      "tenant_id": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+      "action": "ORDER_STATUS_CHANGE",
+      "entity": "orders",
+      "entity_id": "35e32162-9e6c-4580-a677-1351126534f2",
+      "metadata": {
+        "diff": {
+          "before": "NEW",
+          "after": "OUT_FOR_DELIVERY"
+        }
+      },
+      "created_at": "2026-11-05T23:02:01.672Z",
+      "updated_at": "2026-11-05T23:02:01.672Z"
+    },
+    {
+      "id": "3fea0e1c-58b1-4ade-9dad-4ac410023f41",
+      "actor_user_id": "dac40847-20c6-497e-afca-c96cdbf1f15d",
+      "actor_user_name": "Carlos Motoboy",
+      "tenant_id": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+      "action": "ORDER_STATUS_CHANGE",
+      "entity": "orders",
+      "entity_id": "35e32162-9e6c-4580-a677-1351126534f2",
+      "metadata": {
+        "diff": {
+          "before": "OUT_FOR_DELIVERY",
+          "after": "COMPLETED"
+        }
+      },
+      "created_at": "2026-11-05T23:02:01.786Z",
+      "updated_at": "2026-11-05T23:02:01.786Z"
+    },
+    {
+      "id": "314abda7-140c-46de-92f8-3b8e456db184",
+      "actor_user_id": "dac40847-20c6-497e-afca-c96cdbf1f15d",
+      "actor_user_name": "Carlos Motoboy",
+      "tenant_id": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+      "action": "ORDER_STATUS_CHANGE",
+      "entity": "orders",
+      "entity_id": "adf791d7-faaa-4877-8062-99cc499e1628",
+      "metadata": {
+        "diff": {
+          "before": "NEW",
+          "after": "OUT_FOR_DELIVERY"
+        }
+      },
+      "created_at": "2026-11-05T23:02:01.894Z",
+      "updated_at": "2026-11-05T23:02:01.894Z"
     }
   ],
   "auth_users": [
@@ -8645,6 +10643,480 @@
       },
       "created_at": "2026-11-03T12:56:50.270Z",
       "updated_at": "2026-11-03T12:56:51.023Z"
+    },
+    {
+      "id": "dc2e3e77-7ad3-4c83-a62f-32e3a8f3ffb1",
+      "tenant_id": "63a65b32-17de-4b39-a681-b60206673879",
+      "slug": "site-63a65b32",
+      "status": "draft",
+      "draft_data": {
+        "deliveryExtendedConfig": {
+          "pricingMode": "neighborhood",
+          "pricingModeExplicitlySet": true,
+          "originAddress": {
+            "cep": "01310100",
+            "street": "Avenida Paulista",
+            "number": "1000",
+            "complement": null,
+            "neighborhood": "Bela Vista",
+            "city": "São Paulo",
+            "state": "SP",
+            "latitude": -23.5649,
+            "longitude": -46.652
+          },
+          "kmConfig": null,
+          "rulesMeta": {
+            "e6093002-c43a-4901-9699-088c8ad79c13": {
+              "city": null,
+              "state": null,
+              "estimatedTime": null,
+              "freeDeliveryAbove": null,
+              "includedDistanceKm": null,
+              "extraKmFee": null
+            }
+          },
+          "ordersMeta": {}
+        }
+      },
+      "created_at": "2026-11-05T22:41:13.815Z",
+      "updated_at": "2026-11-05T22:41:13.850Z"
+    },
+    {
+      "id": "45b4dacc-b244-4448-8ca9-387328ab4bad",
+      "tenant_id": "912a233f-e00b-4e31-95eb-1f9ca0ece244",
+      "slug": "site-912a233f",
+      "status": "draft",
+      "draft_data": {
+        "deliveryExtendedConfig": {
+          "pricingMode": "neighborhood",
+          "pricingModeExplicitlySet": true,
+          "originAddress": {
+            "cep": "01310100",
+            "street": "Avenida Paulista",
+            "number": "1000",
+            "complement": null,
+            "neighborhood": "Bela Vista",
+            "city": "São Paulo",
+            "state": "SP",
+            "latitude": -23.5649,
+            "longitude": -46.652
+          },
+          "kmConfig": null,
+          "rulesMeta": {
+            "b36f4ab7-afc1-456b-b319-e318435d0cd0": {
+              "city": null,
+              "state": null,
+              "estimatedTime": null,
+              "freeDeliveryAbove": null,
+              "includedDistanceKm": null,
+              "extraKmFee": null
+            }
+          },
+          "ordersMeta": {
+            "2913b02e-62ef-4765-b80d-9c04c5f1c4f1": {
+              "pricingMode": "neighborhood",
+              "distanceKm": null,
+              "appliedRuleName": "Taxa Fixa Urbana",
+              "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+              "latitude": -23.5587,
+              "longitude": -46.6615,
+              "geocodeStatus": "geocoded"
+            },
+            "c107396b-5db9-4709-95bf-a4feb1fdc6e3": {
+              "pricingMode": "neighborhood",
+              "distanceKm": null,
+              "appliedRuleName": "Taxa Fixa Urbana",
+              "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+              "latitude": -23.5795,
+              "longitude": -46.6398,
+              "geocodeStatus": "geocoded"
+            },
+            "d1091935-7f00-44f5-b31c-321b3adc384b": {
+              "pricingMode": "neighborhood",
+              "distanceKm": null,
+              "appliedRuleName": "Taxa Fixa Urbana",
+              "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+              "latitude": -23.5661,
+              "longitude": -46.6812,
+              "geocodeStatus": "geocoded"
+            },
+            "c6c3c252-d2b3-42a5-8d76-b63769471f63": {
+              "pricingMode": "neighborhood",
+              "distanceKm": null,
+              "appliedRuleName": "Taxa Fixa Urbana",
+              "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+              "latitude": -23.5742,
+              "longitude": -46.6512,
+              "geocodeStatus": "geocoded"
+            },
+            "03f9b9c0-7d7b-48bb-93be-e5dd63ec6f87": {
+              "pricingMode": "neighborhood",
+              "distanceKm": null,
+              "appliedRuleName": "Taxa Fixa Urbana",
+              "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+              "latitude": -23.6021,
+              "longitude": -46.6619,
+              "geocodeStatus": "geocoded"
+            }
+          }
+        }
+      },
+      "created_at": "2026-11-05T22:41:44.776Z",
+      "updated_at": "2026-11-05T22:41:44.979Z"
+    },
+    {
+      "id": "e2252db9-e62c-49f0-85e7-376a4e3951d3",
+      "tenant_id": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+      "slug": "site-1691bdba",
+      "status": "draft",
+      "draft_data": {
+        "deliveryExtendedConfig": {
+          "pricingMode": "neighborhood",
+          "pricingModeExplicitlySet": true,
+          "originAddress": {
+            "cep": "77804090",
+            "street": "Avenida Cônego João Lima",
+            "number": "1000",
+            "complement": null,
+            "neighborhood": "Centro",
+            "city": "Araguaína",
+            "state": "TO",
+            "latitude": -7.192,
+            "longitude": -48.2075
+          },
+          "kmConfig": null,
+          "rulesMeta": {
+            "f1c8aea7-740f-4ffe-968e-a9d5c19acb09": {
+              "city": null,
+              "state": null,
+              "estimatedTime": null,
+              "freeDeliveryAbove": null,
+              "includedDistanceKm": null,
+              "extraKmFee": null
+            }
+          },
+          "ordersMeta": {
+            "d72eb434-f1dd-4fe8-9608-e5a6f96afa51": {
+              "pricingMode": "neighborhood",
+              "distanceKm": null,
+              "appliedRuleName": "Taxa Fixa Urbana",
+              "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+              "latitude": -7.1912,
+              "longitude": -48.2068,
+              "geocodeStatus": "geocoded"
+            },
+            "0955b463-be89-4823-a9ce-e7bf22be774a": {
+              "pricingMode": "neighborhood",
+              "distanceKm": null,
+              "appliedRuleName": "Taxa Fixa Urbana",
+              "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+              "latitude": -7.1935,
+              "longitude": -48.2055,
+              "geocodeStatus": "geocoded"
+            },
+            "9dfd33e2-95d7-45a6-8566-62c206b7fdd1": {
+              "pricingMode": "neighborhood",
+              "distanceKm": null,
+              "appliedRuleName": "Taxa Fixa Urbana",
+              "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+              "latitude": -7.182,
+              "longitude": -48.198,
+              "geocodeStatus": "geocoded"
+            },
+            "19d442b0-98ff-4ffa-b382-ed50f54d7cb4": {
+              "pricingMode": "neighborhood",
+              "distanceKm": null,
+              "appliedRuleName": "Taxa Fixa Urbana",
+              "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+              "latitude": -7.185,
+              "longitude": -48.1995,
+              "geocodeStatus": "manual"
+            }
+          }
+        }
+      },
+      "created_at": "2026-11-05T22:41:48.670Z",
+      "updated_at": "2026-11-05T22:41:50.275Z"
+    },
+    {
+      "id": "1132761f-2e06-4c34-9bb8-ddfd9b02ecc3",
+      "tenant_id": "11ea735c-d90f-4129-b7e1-5c930fab89ce",
+      "slug": "site-11ea735c",
+      "status": "draft",
+      "draft_data": {
+        "deliveryExtendedConfig": {
+          "pricingMode": "neighborhood",
+          "pricingModeExplicitlySet": true,
+          "originAddress": {
+            "cep": "77804090",
+            "street": "Avenida Cônego João Lima",
+            "number": "1000",
+            "complement": null,
+            "neighborhood": "Centro",
+            "city": "Araguaína",
+            "state": "TO",
+            "latitude": -7.192,
+            "longitude": -48.2075
+          },
+          "kmConfig": null,
+          "rulesMeta": {
+            "3df79c4f-4d83-4758-a569-ffc8d3ee4898": {
+              "city": null,
+              "state": null,
+              "estimatedTime": null,
+              "freeDeliveryAbove": null,
+              "includedDistanceKm": null,
+              "extraKmFee": null
+            }
+          },
+          "ordersMeta": {
+            "f4e8da09-f6c9-4955-948b-7836dca23639": {
+              "pricingMode": "neighborhood",
+              "distanceKm": null,
+              "appliedRuleName": "Taxa Fixa Urbana",
+              "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+              "latitude": -7.191,
+              "longitude": -48.207,
+              "geocodeStatus": "geocoded"
+            }
+          }
+        }
+      },
+      "created_at": "2026-11-05T22:41:48.752Z",
+      "updated_at": "2026-11-05T22:41:50.250Z"
+    },
+    {
+      "id": "b20c48aa-d179-47a1-be6a-413620f1950f",
+      "tenant_id": "6bdf79dd-1f73-4848-a2ac-ab9909a93fbd",
+      "slug": "site-6bdf79dd",
+      "status": "draft",
+      "draft_data": {
+        "deliveryExtendedConfig": {
+          "pricingMode": "neighborhood",
+          "pricingModeExplicitlySet": true,
+          "originAddress": {
+            "cep": "01310100",
+            "street": "Avenida Paulista",
+            "number": "1000",
+            "complement": null,
+            "neighborhood": "Bela Vista",
+            "city": "São Paulo",
+            "state": "SP",
+            "latitude": -23.5649,
+            "longitude": -46.652
+          },
+          "kmConfig": null,
+          "rulesMeta": {
+            "ebcc7304-2ce2-4364-be7c-fb19ba9c7dae": {
+              "city": null,
+              "state": null,
+              "estimatedTime": null,
+              "freeDeliveryAbove": null,
+              "includedDistanceKm": null,
+              "extraKmFee": null
+            }
+          },
+          "ordersMeta": {
+            "2cfe7e8d-c85e-4c35-9095-de52b41b1bc7": {
+              "pricingMode": "neighborhood",
+              "distanceKm": null,
+              "appliedRuleName": "Taxa Fixa",
+              "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa: R$ 7,00",
+              "latitude": -23.5587,
+              "longitude": -46.6615,
+              "geocodeStatus": "geocoded"
+            },
+            "db652c8c-297e-4a0c-8b64-9c70984fcfac": {
+              "pricingMode": "neighborhood",
+              "distanceKm": null,
+              "appliedRuleName": "Taxa Fixa",
+              "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa: R$ 7,00",
+              "latitude": -23.5795,
+              "longitude": -46.6398,
+              "geocodeStatus": "geocoded"
+            }
+          }
+        }
+      },
+      "created_at": "2026-11-05T23:01:00.349Z",
+      "updated_at": "2026-11-05T23:01:00.523Z"
+    },
+    {
+      "id": "54612ccc-98da-49a7-86fe-7dcbf576c9c8",
+      "tenant_id": "4e59faf9-c08a-4868-8374-a8c4615ff617",
+      "slug": "site-4e59faf9",
+      "status": "draft",
+      "draft_data": {
+        "deliveryExtendedConfig": {
+          "pricingMode": "neighborhood",
+          "pricingModeExplicitlySet": true,
+          "originAddress": {
+            "cep": "01310100",
+            "street": "Avenida Paulista",
+            "number": "1000",
+            "complement": null,
+            "neighborhood": "Bela Vista",
+            "city": "São Paulo",
+            "state": "SP",
+            "latitude": -23.5649,
+            "longitude": -46.652
+          },
+          "kmConfig": null,
+          "rulesMeta": {
+            "46d39eae-3d24-412b-a6d7-00981fe8f110": {
+              "city": null,
+              "state": null,
+              "estimatedTime": null,
+              "freeDeliveryAbove": null,
+              "includedDistanceKm": null,
+              "extraKmFee": null
+            }
+          },
+          "ordersMeta": {
+            "afff1cd8-3f39-4f95-843b-021c74de7679": {
+              "pricingMode": "neighborhood",
+              "distanceKm": null,
+              "appliedRuleName": "Taxa Fixa",
+              "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa: R$ 7,00",
+              "latitude": -23.5587,
+              "longitude": -46.6615,
+              "geocodeStatus": "geocoded"
+            },
+            "96adf778-cd37-40ff-895f-88bea5e8b350": {
+              "pricingMode": "neighborhood",
+              "distanceKm": null,
+              "appliedRuleName": "Taxa Fixa",
+              "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa: R$ 7,00",
+              "latitude": -23.5795,
+              "longitude": -46.6398,
+              "geocodeStatus": "geocoded"
+            }
+          }
+        }
+      },
+      "created_at": "2026-11-05T23:01:55.539Z",
+      "updated_at": "2026-11-05T23:01:55.880Z"
+    },
+    {
+      "id": "b7f98251-6b4b-45a7-be10-27a24675ad68",
+      "tenant_id": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+      "slug": "site-934529e0",
+      "status": "draft",
+      "draft_data": {
+        "deliveryExtendedConfig": {
+          "pricingMode": "neighborhood",
+          "pricingModeExplicitlySet": true,
+          "originAddress": {
+            "cep": "77804090",
+            "street": "Avenida Cônego João Lima",
+            "number": "1000",
+            "complement": null,
+            "neighborhood": "Centro",
+            "city": "Araguaína",
+            "state": "TO",
+            "latitude": -7.192,
+            "longitude": -48.2075
+          },
+          "kmConfig": null,
+          "rulesMeta": {
+            "c7644d32-ad4f-455a-b673-67dc6c93054f": {
+              "city": null,
+              "state": null,
+              "estimatedTime": null,
+              "freeDeliveryAbove": null,
+              "includedDistanceKm": null,
+              "extraKmFee": null
+            }
+          },
+          "ordersMeta": {
+            "adf791d7-faaa-4877-8062-99cc499e1628": {
+              "pricingMode": "neighborhood",
+              "distanceKm": null,
+              "appliedRuleName": "Taxa Fixa Urbana",
+              "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+              "latitude": -7.1912,
+              "longitude": -48.2068,
+              "geocodeStatus": "geocoded"
+            },
+            "35e32162-9e6c-4580-a677-1351126534f2": {
+              "pricingMode": "neighborhood",
+              "distanceKm": null,
+              "appliedRuleName": "Taxa Fixa Urbana",
+              "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+              "latitude": -7.1935,
+              "longitude": -48.2055,
+              "geocodeStatus": "geocoded"
+            },
+            "d330290e-012a-4d95-a2ac-d19ab5799702": {
+              "pricingMode": "neighborhood",
+              "distanceKm": null,
+              "appliedRuleName": "Taxa Fixa Urbana",
+              "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+              "latitude": -7.182,
+              "longitude": -48.198,
+              "geocodeStatus": "geocoded"
+            },
+            "be2bb842-620c-4c7e-8787-d86d4880f5d9": {
+              "pricingMode": "neighborhood",
+              "distanceKm": null,
+              "appliedRuleName": "Taxa Fixa Urbana",
+              "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+              "latitude": -7.185,
+              "longitude": -48.1995,
+              "geocodeStatus": "manual"
+            }
+          }
+        }
+      },
+      "created_at": "2026-11-05T23:01:59.652Z",
+      "updated_at": "2026-11-05T23:02:01.190Z"
+    },
+    {
+      "id": "aae06cd4-e67c-4b10-bb22-eb2642f19863",
+      "tenant_id": "a757c53b-aa73-40e7-bfd8-dfe2724e1fc0",
+      "slug": "site-a757c53b",
+      "status": "draft",
+      "draft_data": {
+        "deliveryExtendedConfig": {
+          "pricingMode": "neighborhood",
+          "pricingModeExplicitlySet": true,
+          "originAddress": {
+            "cep": "77804090",
+            "street": "Avenida Cônego João Lima",
+            "number": "1000",
+            "complement": null,
+            "neighborhood": "Centro",
+            "city": "Araguaína",
+            "state": "TO",
+            "latitude": -7.192,
+            "longitude": -48.2075
+          },
+          "kmConfig": null,
+          "rulesMeta": {
+            "2acdfde1-b7a1-4d39-a24a-8051a800f077": {
+              "city": null,
+              "state": null,
+              "estimatedTime": null,
+              "freeDeliveryAbove": null,
+              "includedDistanceKm": null,
+              "extraKmFee": null
+            }
+          },
+          "ordersMeta": {
+            "32dd4d7e-bac2-4f4b-bb17-bab8f9d916f7": {
+              "pricingMode": "neighborhood",
+              "distanceKm": null,
+              "appliedRuleName": "Taxa Fixa Urbana",
+              "deliveryBreakdown": "Taxa fixa para o bairro Taxa Fixa Urbana: R$ 8,00",
+              "latitude": -7.191,
+              "longitude": -48.207,
+              "geocodeStatus": "geocoded"
+            }
+          }
+        }
+      },
+      "created_at": "2026-11-05T23:01:59.740Z",
+      "updated_at": "2026-11-05T23:02:01.154Z"
     }
   ],
   "site_sections": [
@@ -9770,6 +12242,356 @@
       "position": 4,
       "created_at": "2026-11-03T12:56:50.959Z",
       "updated_at": "2026-11-03T12:56:50.959Z"
+    },
+    {
+      "id": "8a96b3a1-c2ce-4b2e-b7cc-729fd5fb6424",
+      "tenant_id": "912a233f-e00b-4e31-95eb-1f9ca0ece244",
+      "type": "PIX",
+      "label": "PIX (pagamento direto)",
+      "is_active": true,
+      "position": 0,
+      "created_at": "2026-11-05T22:41:44.809Z",
+      "updated_at": "2026-11-05T22:41:44.809Z"
+    },
+    {
+      "id": "b1807562-9e09-4789-8bd6-907b2464d97c",
+      "tenant_id": "912a233f-e00b-4e31-95eb-1f9ca0ece244",
+      "type": "CASH",
+      "label": "Dinheiro",
+      "is_active": true,
+      "position": 1,
+      "created_at": "2026-11-05T22:41:44.809Z",
+      "updated_at": "2026-11-05T22:41:44.809Z"
+    },
+    {
+      "id": "b55aece6-3161-460b-aa7c-b18824763d27",
+      "tenant_id": "912a233f-e00b-4e31-95eb-1f9ca0ece244",
+      "type": "CREDIT_CARD_ON_DELIVERY",
+      "label": "Cartão de Crédito",
+      "is_active": true,
+      "position": 2,
+      "created_at": "2026-11-05T22:41:44.809Z",
+      "updated_at": "2026-11-05T22:41:44.809Z"
+    },
+    {
+      "id": "5dae51ce-5386-4efc-a436-f048ac1d1822",
+      "tenant_id": "912a233f-e00b-4e31-95eb-1f9ca0ece244",
+      "type": "DEBIT_CARD_ON_DELIVERY",
+      "label": "Cartão de Débito",
+      "is_active": true,
+      "position": 3,
+      "created_at": "2026-11-05T22:41:44.809Z",
+      "updated_at": "2026-11-05T22:41:44.809Z"
+    },
+    {
+      "id": "42560785-5185-43e9-bfc5-44dd85b38e63",
+      "tenant_id": "912a233f-e00b-4e31-95eb-1f9ca0ece244",
+      "type": "PAYMENT_ON_PICKUP",
+      "label": "Pagar no balcão",
+      "is_active": true,
+      "position": 4,
+      "created_at": "2026-11-05T22:41:44.809Z",
+      "updated_at": "2026-11-05T22:41:44.809Z"
+    },
+    {
+      "id": "e9f7f543-b20e-4c9c-9887-43976ff69593",
+      "tenant_id": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+      "type": "PIX",
+      "label": "PIX (pagamento direto)",
+      "is_active": true,
+      "position": 0,
+      "created_at": "2026-11-05T22:41:48.975Z",
+      "updated_at": "2026-11-05T22:41:48.975Z"
+    },
+    {
+      "id": "3510c223-2ef0-43f4-bbce-ff537c009a52",
+      "tenant_id": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+      "type": "CASH",
+      "label": "Dinheiro",
+      "is_active": true,
+      "position": 1,
+      "created_at": "2026-11-05T22:41:48.975Z",
+      "updated_at": "2026-11-05T22:41:48.975Z"
+    },
+    {
+      "id": "9a58fce7-2cb1-455d-bdd6-8266df282b53",
+      "tenant_id": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+      "type": "CREDIT_CARD_ON_DELIVERY",
+      "label": "Cartão de Crédito",
+      "is_active": true,
+      "position": 2,
+      "created_at": "2026-11-05T22:41:48.975Z",
+      "updated_at": "2026-11-05T22:41:48.975Z"
+    },
+    {
+      "id": "4253a054-d2f2-4335-b462-982b5e4845a2",
+      "tenant_id": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+      "type": "DEBIT_CARD_ON_DELIVERY",
+      "label": "Cartão de Débito",
+      "is_active": true,
+      "position": 3,
+      "created_at": "2026-11-05T22:41:48.975Z",
+      "updated_at": "2026-11-05T22:41:48.975Z"
+    },
+    {
+      "id": "54cf5a37-56ba-4d5c-a7ba-49e1939ef45d",
+      "tenant_id": "1691bdba-73ac-43fb-8002-9e4ec8435c13",
+      "type": "PAYMENT_ON_PICKUP",
+      "label": "Pagar no balcão",
+      "is_active": true,
+      "position": 4,
+      "created_at": "2026-11-05T22:41:48.975Z",
+      "updated_at": "2026-11-05T22:41:48.975Z"
+    },
+    {
+      "id": "dc182e0a-6075-4495-a824-4d9fc83cae58",
+      "tenant_id": "11ea735c-d90f-4129-b7e1-5c930fab89ce",
+      "type": "PIX",
+      "label": "PIX (pagamento direto)",
+      "is_active": true,
+      "position": 0,
+      "created_at": "2026-11-05T22:41:50.172Z",
+      "updated_at": "2026-11-05T22:41:50.172Z"
+    },
+    {
+      "id": "79db2d41-2258-4a24-8fa7-7ffaacc3f739",
+      "tenant_id": "11ea735c-d90f-4129-b7e1-5c930fab89ce",
+      "type": "CASH",
+      "label": "Dinheiro",
+      "is_active": true,
+      "position": 1,
+      "created_at": "2026-11-05T22:41:50.172Z",
+      "updated_at": "2026-11-05T22:41:50.172Z"
+    },
+    {
+      "id": "1ade8470-77cc-44e0-a64e-89111fa6ab57",
+      "tenant_id": "11ea735c-d90f-4129-b7e1-5c930fab89ce",
+      "type": "CREDIT_CARD_ON_DELIVERY",
+      "label": "Cartão de Crédito",
+      "is_active": true,
+      "position": 2,
+      "created_at": "2026-11-05T22:41:50.172Z",
+      "updated_at": "2026-11-05T22:41:50.172Z"
+    },
+    {
+      "id": "b6fe1683-f332-4336-b357-97c33ed502e8",
+      "tenant_id": "11ea735c-d90f-4129-b7e1-5c930fab89ce",
+      "type": "DEBIT_CARD_ON_DELIVERY",
+      "label": "Cartão de Débito",
+      "is_active": true,
+      "position": 3,
+      "created_at": "2026-11-05T22:41:50.172Z",
+      "updated_at": "2026-11-05T22:41:50.172Z"
+    },
+    {
+      "id": "1c5afac0-b676-4a03-ad6e-2abc1e15bd5b",
+      "tenant_id": "11ea735c-d90f-4129-b7e1-5c930fab89ce",
+      "type": "PAYMENT_ON_PICKUP",
+      "label": "Pagar no balcão",
+      "is_active": true,
+      "position": 4,
+      "created_at": "2026-11-05T22:41:50.172Z",
+      "updated_at": "2026-11-05T22:41:50.172Z"
+    },
+    {
+      "id": "b306c19f-7a83-464b-8b2c-2b8aef13de1c",
+      "tenant_id": "6bdf79dd-1f73-4848-a2ac-ab9909a93fbd",
+      "type": "PIX",
+      "label": "PIX (pagamento direto)",
+      "is_active": true,
+      "position": 0,
+      "created_at": "2026-11-05T23:01:00.427Z",
+      "updated_at": "2026-11-05T23:01:00.427Z"
+    },
+    {
+      "id": "85f9e83d-ae6a-4360-8fda-9a5abd9c8810",
+      "tenant_id": "6bdf79dd-1f73-4848-a2ac-ab9909a93fbd",
+      "type": "CASH",
+      "label": "Dinheiro",
+      "is_active": true,
+      "position": 1,
+      "created_at": "2026-11-05T23:01:00.427Z",
+      "updated_at": "2026-11-05T23:01:00.427Z"
+    },
+    {
+      "id": "12d52840-30c7-4338-aa35-c7e51d14db56",
+      "tenant_id": "6bdf79dd-1f73-4848-a2ac-ab9909a93fbd",
+      "type": "CREDIT_CARD_ON_DELIVERY",
+      "label": "Cartão de Crédito",
+      "is_active": true,
+      "position": 2,
+      "created_at": "2026-11-05T23:01:00.427Z",
+      "updated_at": "2026-11-05T23:01:00.427Z"
+    },
+    {
+      "id": "dae6991c-b150-467a-a9ed-fd930fdf1111",
+      "tenant_id": "6bdf79dd-1f73-4848-a2ac-ab9909a93fbd",
+      "type": "DEBIT_CARD_ON_DELIVERY",
+      "label": "Cartão de Débito",
+      "is_active": true,
+      "position": 3,
+      "created_at": "2026-11-05T23:01:00.427Z",
+      "updated_at": "2026-11-05T23:01:00.427Z"
+    },
+    {
+      "id": "5d377ab1-cb7c-4fdd-977a-400c73f8d166",
+      "tenant_id": "6bdf79dd-1f73-4848-a2ac-ab9909a93fbd",
+      "type": "PAYMENT_ON_PICKUP",
+      "label": "Pagar no balcão",
+      "is_active": true,
+      "position": 4,
+      "created_at": "2026-11-05T23:01:00.427Z",
+      "updated_at": "2026-11-05T23:01:00.427Z"
+    },
+    {
+      "id": "77e0a49a-2a14-4b53-842c-ee7f160f1fea",
+      "tenant_id": "4e59faf9-c08a-4868-8374-a8c4615ff617",
+      "type": "PIX",
+      "label": "PIX (pagamento direto)",
+      "is_active": true,
+      "position": 0,
+      "created_at": "2026-11-05T23:01:55.707Z",
+      "updated_at": "2026-11-05T23:01:55.707Z"
+    },
+    {
+      "id": "1e1c4a2e-cb44-4cb3-869f-ab8775709cf8",
+      "tenant_id": "4e59faf9-c08a-4868-8374-a8c4615ff617",
+      "type": "CASH",
+      "label": "Dinheiro",
+      "is_active": true,
+      "position": 1,
+      "created_at": "2026-11-05T23:01:55.707Z",
+      "updated_at": "2026-11-05T23:01:55.707Z"
+    },
+    {
+      "id": "84f132ae-0652-4b72-b438-5d30667733a0",
+      "tenant_id": "4e59faf9-c08a-4868-8374-a8c4615ff617",
+      "type": "CREDIT_CARD_ON_DELIVERY",
+      "label": "Cartão de Crédito",
+      "is_active": true,
+      "position": 2,
+      "created_at": "2026-11-05T23:01:55.707Z",
+      "updated_at": "2026-11-05T23:01:55.707Z"
+    },
+    {
+      "id": "067281b4-376f-488a-b830-c462451b1f94",
+      "tenant_id": "4e59faf9-c08a-4868-8374-a8c4615ff617",
+      "type": "DEBIT_CARD_ON_DELIVERY",
+      "label": "Cartão de Débito",
+      "is_active": true,
+      "position": 3,
+      "created_at": "2026-11-05T23:01:55.707Z",
+      "updated_at": "2026-11-05T23:01:55.707Z"
+    },
+    {
+      "id": "8045df4b-88fe-4283-bf41-42795b544e88",
+      "tenant_id": "4e59faf9-c08a-4868-8374-a8c4615ff617",
+      "type": "PAYMENT_ON_PICKUP",
+      "label": "Pagar no balcão",
+      "is_active": true,
+      "position": 4,
+      "created_at": "2026-11-05T23:01:55.707Z",
+      "updated_at": "2026-11-05T23:01:55.707Z"
+    },
+    {
+      "id": "eaf18e76-0b33-450a-a924-a031c65f406b",
+      "tenant_id": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+      "type": "PIX",
+      "label": "PIX (pagamento direto)",
+      "is_active": true,
+      "position": 0,
+      "created_at": "2026-11-05T23:01:59.982Z",
+      "updated_at": "2026-11-05T23:01:59.982Z"
+    },
+    {
+      "id": "3fca048d-4948-4e6e-8fdc-d1683d96d49a",
+      "tenant_id": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+      "type": "CASH",
+      "label": "Dinheiro",
+      "is_active": true,
+      "position": 1,
+      "created_at": "2026-11-05T23:01:59.982Z",
+      "updated_at": "2026-11-05T23:01:59.982Z"
+    },
+    {
+      "id": "807264de-25bc-400a-8fc4-750f8cfc1a1e",
+      "tenant_id": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+      "type": "CREDIT_CARD_ON_DELIVERY",
+      "label": "Cartão de Crédito",
+      "is_active": true,
+      "position": 2,
+      "created_at": "2026-11-05T23:01:59.982Z",
+      "updated_at": "2026-11-05T23:01:59.982Z"
+    },
+    {
+      "id": "ed8c2ab5-20b7-4cc8-8f8b-57df9a5a7049",
+      "tenant_id": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+      "type": "DEBIT_CARD_ON_DELIVERY",
+      "label": "Cartão de Débito",
+      "is_active": true,
+      "position": 3,
+      "created_at": "2026-11-05T23:01:59.982Z",
+      "updated_at": "2026-11-05T23:01:59.982Z"
+    },
+    {
+      "id": "98d0fcb1-a138-4e1c-84be-f7b72925522b",
+      "tenant_id": "934529e0-67b9-4ce5-aae4-68254ef6329d",
+      "type": "PAYMENT_ON_PICKUP",
+      "label": "Pagar no balcão",
+      "is_active": true,
+      "position": 4,
+      "created_at": "2026-11-05T23:01:59.982Z",
+      "updated_at": "2026-11-05T23:01:59.982Z"
+    },
+    {
+      "id": "3f0a00f1-6416-44b9-b2ae-802814343460",
+      "tenant_id": "a757c53b-aa73-40e7-bfd8-dfe2724e1fc0",
+      "type": "PIX",
+      "label": "PIX (pagamento direto)",
+      "is_active": true,
+      "position": 0,
+      "created_at": "2026-11-05T23:02:01.066Z",
+      "updated_at": "2026-11-05T23:02:01.066Z"
+    },
+    {
+      "id": "c3fe1b10-ae01-44be-9ff6-a2446cca04ab",
+      "tenant_id": "a757c53b-aa73-40e7-bfd8-dfe2724e1fc0",
+      "type": "CASH",
+      "label": "Dinheiro",
+      "is_active": true,
+      "position": 1,
+      "created_at": "2026-11-05T23:02:01.066Z",
+      "updated_at": "2026-11-05T23:02:01.066Z"
+    },
+    {
+      "id": "94c94a10-5720-4eb0-b130-bec975925459",
+      "tenant_id": "a757c53b-aa73-40e7-bfd8-dfe2724e1fc0",
+      "type": "CREDIT_CARD_ON_DELIVERY",
+      "label": "Cartão de Crédito",
+      "is_active": true,
+      "position": 2,
+      "created_at": "2026-11-05T23:02:01.066Z",
+      "updated_at": "2026-11-05T23:02:01.066Z"
+    },
+    {
+      "id": "3a59ddc5-b19d-4e21-ad59-5a5b2a8b3586",
+      "tenant_id": "a757c53b-aa73-40e7-bfd8-dfe2724e1fc0",
+      "type": "DEBIT_CARD_ON_DELIVERY",
+      "label": "Cartão de Débito",
+      "is_active": true,
+      "position": 3,
+      "created_at": "2026-11-05T23:02:01.066Z",
+      "updated_at": "2026-11-05T23:02:01.066Z"
+    },
+    {
+      "id": "ee035d67-a154-4e73-bc83-29471ae8d221",
+      "tenant_id": "a757c53b-aa73-40e7-bfd8-dfe2724e1fc0",
+      "type": "PAYMENT_ON_PICKUP",
+      "label": "Pagar no balcão",
+      "is_active": true,
+      "position": 4,
+      "created_at": "2026-11-05T23:02:01.066Z",
+      "updated_at": "2026-11-05T23:02:01.066Z"
     }
   ],
   "carts": [],
