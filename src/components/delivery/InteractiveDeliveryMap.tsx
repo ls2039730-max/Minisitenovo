@@ -30,6 +30,7 @@ import {
 } from '../../types/order';
 import {
   getBuildTimeGoogleMapsKey,
+  loadGoogleMapsScript,
   resolveFrontendGoogleMapsConfig,
 } from '../../utils/googleMapsConfig';
 
@@ -203,27 +204,34 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
     'checking' | 'configured' | 'not_configured' | 'auth_error'
   >(() => (getBuildTimeGoogleMapsKey() ? 'configured' : 'checking'));
 
-  // Resolve Google Maps configuration and handle any authentication/referrer error gracefully
+  // Resolve Google Maps configuration, load official Google Maps JS SDK if public key is available,
+  // and handle any authentication/referrer/billing error gracefully with automatic CARTO/OSM fallback
   useEffect(() => {
     let mounted = true;
-    const prevAuthFailure = (window as any).gm_authFailure;
-    (window as any).gm_authFailure = () => {
-      if (!mounted) return;
-      setGoogleMapsStatus('auth_error');
-      setTileStyle('voyager');
-      setMapLoadWarning(
-        'A chave pública do Google Maps apresentou restrição de domínio (HTTP Referrer) ou faturamento. O mapa alternou automaticamente para a camada viária de contingência (OpenStreetMap / CARTO).'
-      );
-      if (typeof prevAuthFailure === 'function') {
-        try {
-          prevAuthFailure();
-        } catch {}
-      }
-    };
 
-    resolveFrontendGoogleMapsConfig().then((cfg) => {
+    resolveFrontendGoogleMapsConfig().then(async (cfg) => {
       if (!mounted) return;
-      if (cfg.configured) {
+
+      if (cfg.apiKey) {
+        const scriptRes = await loadGoogleMapsScript(cfg.apiKey, (reason) => {
+          if (!mounted) return;
+          setGoogleMapsStatus('auth_error');
+          setTileStyle((curr) => (curr === 'google_roadmap' ? 'voyager' : curr));
+          setMapLoadWarning(reason);
+        });
+
+        if (!mounted) return;
+        if (scriptRes.loaded) {
+          setGoogleMapsStatus('configured');
+          setTileStyle('google_roadmap');
+        } else {
+          setGoogleMapsStatus(scriptRes.status === 'auth_error' ? 'auth_error' : 'not_configured');
+          setTileStyle((curr) => (curr === 'google_roadmap' ? 'voyager' : curr));
+          if (scriptRes.errorMessage) {
+            setMapLoadWarning(scriptRes.errorMessage);
+          }
+        }
+      } else if (cfg.configured) {
         setGoogleMapsStatus('configured');
       } else {
         setGoogleMapsStatus('not_configured');
@@ -232,7 +240,6 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
 
     return () => {
       mounted = false;
-      (window as any).gm_authFailure = prevAuthFailure;
     };
   }, []);
 
@@ -342,10 +349,11 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
     leafletMapRef.current?.zoomOut();
   }, []);
 
-  // Initialize Leaflet Interactive Street Map
+  // Initialize Leaflet Interactive Street Map (single instance, only after library & non-zero container are ready)
   useEffect(() => {
     const container = mapContainerRef.current;
     if (!container || leafletMapRef.current) return;
+    if (typeof L === 'undefined' || typeof L.map !== 'function') return;
 
     const initialCenter: [number, number] = validOrigin
       ? [validOrigin.lat, validOrigin.lng]
@@ -394,26 +402,39 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
     markersLayerRef.current = markersLayer;
     setMapReady(true);
 
+    // Force layout recalculation after mount & paint so container never renders with zero height
+    const rafId = window.requestAnimationFrame(() => {
+      map.invalidateSize({ animate: false });
+    });
+    const timerId = window.setTimeout(() => {
+      map.invalidateSize({ animate: false });
+    }, 180);
+
     // Ensure container size changes (responsive layout / tab switch) always trigger invalidateSize
     const resizeObserver = new ResizeObserver(() => {
-      map.invalidateSize();
+      if (container.clientWidth > 0 && container.clientHeight > 0) {
+        map.invalidateSize({ animate: false });
+      }
     });
     resizeObserver.observe(container);
 
     return () => {
+      window.cancelAnimationFrame(rafId);
+      window.clearTimeout(timerId);
       resizeObserver.disconnect();
       map.remove();
       leafletMapRef.current = null;
       tileLayerRef.current = null;
       routesLayerRef.current = null;
       markersLayerRef.current = null;
+      setMapReady(false);
     };
   }, []);
 
   // Switch tile style when user toggles layer (with automatic tileerror fallback so map never goes blank)
   useEffect(() => {
     const map = leafletMapRef.current;
-    if (!map) return;
+    if (!mapReady || !map) return;
 
     if (tileLayerRef.current) {
       map.removeLayer(tileLayerRef.current);
@@ -445,7 +466,8 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
 
     newTileLayer.addTo(map);
     tileLayerRef.current = newTileLayer;
-  }, [tileStyle]);
+    map.invalidateSize({ animate: false });
+  }, [mapReady, tileStyle]);
 
   // Fit bounds automatically the first time coordinates arrive
   useEffect(() => {
@@ -570,6 +592,7 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
       }
     }
   }, [
+    mapReady,
     routes,
     showRouteLines,
     validOrigin,
@@ -578,10 +601,10 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
     geocodedOrders,
   ]);
 
-  // Render Markers (Restaurant Origin, Live GPS Drivers, and Numbered Order Pins)
+  // Render Markers (Restaurant Origin, Live GPS Drivers, and Numbered Order Pins) after mapReady
   useEffect(() => {
     const markersLayer = markersLayerRef.current;
-    if (!markersLayer) return;
+    if (!mapReady || !markersLayer) return;
 
     markersLayer.clearLayers();
 
@@ -701,6 +724,7 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
       marker.addTo(markersLayer);
     }
   }, [
+    mapReady,
     validOrigin,
     activeDriversWithGps,
     geocodedOrders,
@@ -796,6 +820,30 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
             <span className="hidden xl:inline">Rotas Ativas</span>
           </button>
 
+          <div className="inline-flex items-center rounded-xl border border-slate-200 bg-white p-0.5 shadow-2xs">
+            {(
+              [
+                { id: 'google_roadmap', label: 'Google Maps' },
+                { id: 'voyager', label: 'CARTO' },
+                { id: 'osm', label: 'OSM' },
+              ] as const
+            ).map((layer) => (
+              <button
+                key={layer.id}
+                type="button"
+                onClick={() => setTileStyle(layer.id)}
+                className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-colors ${
+                  tileStyle === layer.id
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+                title={`Exibir camada ${TILE_LAYERS[layer.id].name}`}
+              >
+                {layer.label}
+              </button>
+            ))}
+          </div>
+
           <button
             type="button"
             onClick={() =>
@@ -815,12 +863,16 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
         </div>
       </div>
 
-      {/* Interactive Street Map Viewport */}
-      <div className="relative w-full flex-1 min-h-[460px] lg:min-h-[580px] bg-slate-100 overflow-hidden">
+      {/* Interactive Street Map Viewport with guaranteed non-zero dimensions */}
+      <div
+        className="relative w-full flex-1 h-[520px] lg:h-[600px] min-h-[520px] bg-slate-100 overflow-hidden"
+        style={{ minHeight: '520px' }}
+      >
         <div
           ref={mapContainerRef}
           data-testid="delivery-interactive-street-map"
-          className="w-full h-full min-h-[460px] lg:min-h-[580px]"
+          className="w-full h-full min-h-[520px] lg:min-h-[600px]"
+          style={{ minHeight: '520px', height: '100%', width: '100%' }}
         />
 
         {/* Clear Diagnostic Warning Banner if a tile layer or Google Maps auth encountered an issue */}

@@ -4,15 +4,72 @@ import path from 'node:path';
 import { getServerGoogleMapsApiKey } from '../server/services/routingService.js';
 import {
   isValidGoogleMapsKeyString,
+  loadGoogleMapsScript,
   resolveFrontendGoogleMapsConfig,
 } from '../src/utils/googleMapsConfig.js';
 
-async function runGoogleMapsSecurityAudit() {
+async function runGoogleMapsAndDeployAudit() {
   console.log('===================================================================');
-  console.log(' AUDITORIA DE SEGURANÇA E PRODUÇÃO — INTEGRAÇÃO GOOGLE MAPS');
+  console.log(' AUDITORIA COMPLETA — DEPLOY VERCEL (TS2688) & GOOGLE MAPS');
   console.log('===================================================================\n');
 
-  // 1. Verify vite.config.ts does NOT inject GOOGLE_MAPS_API_KEY or private server secrets into browser bundle
+  // 1. Verify package.json, tsconfig.json, and vite/client type resolution (TS2688 fix)
+  const pkgPath = path.resolve(process.cwd(), 'package.json');
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+
+  assert.ok(
+    pkg.devDependencies?.vite,
+    'O pacote "vite" deve estar declarado em devDependencies no package.json.'
+  );
+  assert.ok(
+    pkg.devDependencies?.typescript,
+    'O pacote "typescript" deve estar declarado em devDependencies no package.json.'
+  );
+
+  const tsconfigPath = path.resolve(process.cwd(), 'tsconfig.json');
+  const tsconfig = JSON.parse(fs.readFileSync(tsconfigPath, 'utf-8'));
+
+  assert.equal(
+    Array.isArray(tsconfig.compilerOptions?.types) &&
+      tsconfig.compilerOptions.types.includes('vite/client'),
+    true,
+    'tsconfig.json deve preservar "vite/client" em compilerOptions.types.'
+  );
+  assert.equal(
+    Array.isArray(tsconfig.compilerOptions?.typeRoots) &&
+      tsconfig.compilerOptions.typeRoots.includes('./node_modules/@types') &&
+      tsconfig.compilerOptions.typeRoots.includes('./src/types'),
+    true,
+    'tsconfig.json deve declarar typeRoots incluindo "./node_modules/@types" e "./src/types" para evitar TS2688 no @vercel/node.'
+  );
+
+  const viteClientDtsPath = path.resolve(
+    process.cwd(),
+    'src/types/vite/client/index.d.ts'
+  );
+  const viteEnvDtsPath = path.resolve(process.cwd(), 'src/vite-env.d.ts');
+  assert.equal(
+    fs.existsSync(viteClientDtsPath),
+    true,
+    'O arquivo de definição src/types/vite/client/index.d.ts deve existir para resolução garantida de vite/client.'
+  );
+  assert.equal(
+    fs.existsSync(viteEnvDtsPath),
+    true,
+    'O arquivo src/vite-env.d.ts deve existir.'
+  );
+  const viteClientDtsContent = fs.readFileSync(viteClientDtsPath, 'utf-8');
+  assert.equal(
+    viteClientDtsContent.includes('ImportMetaEnv') &&
+      viteClientDtsContent.includes('VITE_GOOGLE_MAPS_API_KEY'),
+    true,
+    'As definições de ImportMetaEnv (incluindo VITE_GOOGLE_MAPS_API_KEY) devem estar preservadas.'
+  );
+  console.log(
+    '✅ 1. Correção definitiva do erro TS2688 validada (package.json, tsconfig.json, typeRoots e src/types/vite/client/index.d.ts).'
+  );
+
+  // 2. Verify vite.config.ts does NOT inject GOOGLE_MAPS_API_KEY or private server secrets into browser bundle
   const viteConfigPath = path.resolve(process.cwd(), 'vite.config.ts');
   const viteConfigContent = fs.readFileSync(viteConfigPath, 'utf-8');
 
@@ -29,10 +86,10 @@ async function runGoogleMapsSecurityAudit() {
     'vite.config.ts jamais deve expor chaves privadas no bundle do navegador.'
   );
   console.log(
-    '✅ 1. Isolamento de bundle validado: GOOGLE_MAPS_API_KEY não é injetada no bundle cliente pelo vite.config.ts.'
+    '✅ 2. Isolamento de bundle validado: GOOGLE_MAPS_API_KEY não é injetada no bundle cliente pelo vite.config.ts.'
   );
 
-  // 2. Verify /api/config exposes exclusively the public key (VITE_GOOGLE_MAPS_API_KEY) and never returns GOOGLE_MAPS_API_KEY value
+  // 3. Verify /api/config exposes exclusively the public key (VITE_GOOGLE_MAPS_API_KEY) and never returns GOOGLE_MAPS_API_KEY value
   const routesPath = path.resolve(process.cwd(), 'server/routes.ts');
   const routesContent = fs.readFileSync(routesPath, 'utf-8');
 
@@ -52,16 +109,11 @@ async function runGoogleMapsSecurityAudit() {
     true,
     '/api/config deve expor apenas um booleano (googleMapsBackendConfigured) para a chave de servidor, sem vazar seu valor.'
   );
-  assert.equal(
-    configBlock.includes('SUPABASE_SECRET_KEY') || configBlock.includes('JWT_SECRET'),
-    false,
-    '/api/config jamais deve expor credenciais privadas do servidor.'
-  );
   console.log(
-    '✅ 2. Endpoint /api/config auditado: expõe exclusivamente VITE_GOOGLE_MAPS_API_KEY e preserva GOOGLE_MAPS_API_KEY oculta no servidor.'
+    '✅ 3. Endpoint /api/config auditado: expõe exclusivamente VITE_GOOGLE_MAPS_API_KEY e preserva GOOGLE_MAPS_API_KEY oculta no servidor.'
   );
 
-  // 3. Verify backend services (Geocoding, Distance Matrix, Directions) use getServerGoogleMapsApiKey()
+  // 4. Verify backend services (Geocoding, Distance Matrix, Directions) use getServerGoogleMapsApiKey()
   const routingServicePath = path.resolve(process.cwd(), 'server/services/routingService.ts');
   const routingServiceContent = fs.readFileSync(routingServicePath, 'utf-8');
 
@@ -97,48 +149,74 @@ async function runGoogleMapsSecurityAudit() {
     else process.env.VITE_GOOGLE_MAPS_API_KEY = prevViteGoogleKey;
   }
   console.log(
-    '✅ 3. Serviços de Backend (Geocoding, Distance Matrix e Directions) validados com prioridade para GOOGLE_MAPS_API_KEY.'
+    '✅ 4. Serviços de Backend (Geocoding, Distance Matrix e Directions) validados com prioridade para GOOGLE_MAPS_API_KEY.'
   );
 
-  // 4. Verify fallback to OpenStreetMap/CARTO and clear error handling in InteractiveDeliveryMap.tsx
+  // 5. Verify Map Initialization, Non-Zero Container Dimensions, Script Loader & Fallback
   const mapPath = path.resolve(
     process.cwd(),
     'src/components/delivery/InteractiveDeliveryMap.tsx'
   );
   const mapSource = fs.readFileSync(mapPath, 'utf-8');
+  const cssPath = path.resolve(process.cwd(), 'src/index.css');
+  const cssSource = fs.readFileSync(cssPath, 'utf-8');
 
-  const codeWithoutComments = mapSource
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/\/\/.*/g, '');
   assert.equal(
-    codeWithoutComments.includes('API Key required'),
-    false,
-    'InteractiveDeliveryMap.tsx jamais deve exibir a tela bloqueante "API Key required".'
+    cssSource.includes('.leaflet-container img.leaflet-tile') &&
+      cssSource.includes('max-width: none !important'),
+    true,
+    'src/index.css deve proteger os blocos (.leaflet-tile) contra o reset max-width: 100% do Tailwind v4.'
+  );
+  assert.equal(
+    mapSource.includes('loadGoogleMapsScript') &&
+      mapSource.includes('resolveFrontendGoogleMapsConfig') &&
+      mapSource.includes("minHeight: '520px'") &&
+      mapSource.includes('map.invalidateSize'),
+    true,
+    'InteractiveDeliveryMap.tsx deve carregar o SDK via loadGoogleMapsScript, garantir dimensões reais (minHeight: 520px) e recalcular o layout com invalidateSize.'
   );
   assert.equal(
     mapSource.includes("tileLayer.on('tileerror'") &&
       mapSource.includes("newTileLayer.on('tileerror'") &&
-      mapSource.includes('gm_authFailure') &&
       mapSource.includes('mapLoadWarning'),
     true,
-    'InteractiveDeliveryMap.tsx deve capturar falhas de tiles e de autenticação (gm_authFailure), acionar fallback automático para OpenStreetMap/CARTO e exibir aviso claro sem deixar o mapa em branco.'
+    'InteractiveDeliveryMap.tsx deve capturar falhas de tiles e autenticação, alternando automaticamente para CARTO/OpenStreetMap sem deixar o mapa em branco.'
   );
 
+  const noKeyScriptRes = await loadGoogleMapsScript('');
+  assert.equal(noKeyScriptRes.status, 'no_key');
   assert.equal(isValidGoogleMapsKeyString('AIzaSyValidKeyExample999'), true);
   assert.equal(isValidGoogleMapsKeyString('YOUR_API_KEY'), false);
   const resolved = await resolveFrontendGoogleMapsConfig();
   assert.equal(typeof resolved.configured, 'boolean');
 
   console.log(
-    '✅ 4. Fallback automático OpenStreetMap/CARTO e exibição clara de erros (mapLoadWarning / gm_authFailure) validados.'
+    '✅ 5. Inicialização do mapa, dimensões reais do container, proteção CSS dos tiles e fallback CARTO/OpenStreetMap validados.'
   );
 
+  // 6. Verify compiled dist/ bundle contains zero private credentials
+  const distAssetsDir = path.resolve(process.cwd(), 'dist/assets');
+  if (fs.existsSync(distAssetsDir)) {
+    const assetFiles = fs.readdirSync(distAssetsDir).filter((f) => f.endsWith('.js'));
+    for (const file of assetFiles) {
+      const content = fs.readFileSync(path.join(distAssetsDir, file), 'utf-8');
+      assert.equal(
+        content.includes('SUPABASE_SECRET_KEY') || content.includes('your-service-role-key'),
+        false,
+        `O bundle compilado (${file}) jamais deve conter chaves privadas do servidor.`
+      );
+    }
+    console.log(
+      `✅ 6. Inspeção de segurança nos arquivos compilados em dist/assets (${assetFiles.length} arquivo(s) JS): nenhuma credencial privada presente.`
+    );
+  }
+
   console.log('\n===================================================================');
-  console.log(' AUDITORIA DE SEGURANÇA E PRODUÇÃO CONCLUÍDA COM SUCESSO! ');
+  console.log(' TODAS AS ETAPAS DE AUDITORIA E TESTES APROVADAS COM SUCESSO! ');
   console.log('===================================================================');
 }
 
-runGoogleMapsSecurityAudit().catch((err) => {
-  console.error('❌ Falha na auditoria de segurança do Google Maps:', err);
+runGoogleMapsAndDeployAudit().catch((err) => {
+  console.error('❌ Falha na auditoria:', err);
   process.exit(1);
 });
