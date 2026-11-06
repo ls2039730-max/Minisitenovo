@@ -35,6 +35,22 @@ const routeCache = new Map<string, { timestamp: number; data: RouteDistanceResul
 const cepCache = new Map<string, { timestamp: number; data: CepLookupResult }>();
 const CACHE_TTL_MS = 1000 * 60 * 30; // 30 minutes
 
+/**
+ * Resolves the Google Maps API key on the server from either GOOGLE_MAPS_API_KEY
+ * or VITE_GOOGLE_MAPS_API_KEY, ignoring empty strings or placeholder values.
+ */
+export function getServerGoogleMapsApiKey(): string {
+  const raw = (
+    process.env.GOOGLE_MAPS_API_KEY ||
+    process.env.VITE_GOOGLE_MAPS_API_KEY ||
+    ''
+  ).trim();
+  if (!raw || raw === 'YOUR_API_KEY' || raw.toLowerCase().includes('your-')) {
+    return '';
+  }
+  return raw;
+}
+
 const STATE_NAMES_BR: Record<string, string> = {
   ac: 'acre',
   al: 'alagoas',
@@ -295,9 +311,9 @@ export async function geocodeAddressServer(
     return geoResult;
   }
 
-  // 2. Try Google Maps Geocoding API if GOOGLE_MAPS_API_KEY is available
-  const googleApiKey = process.env.GOOGLE_MAPS_API_KEY;
-  if (googleApiKey && googleApiKey.trim()) {
+  // 2. Try Google Maps Geocoding API if GOOGLE_MAPS_API_KEY or VITE_GOOGLE_MAPS_API_KEY is available
+  const googleApiKey = getServerGoogleMapsApiKey();
+  if (googleApiKey) {
     try {
       const fullQuery = [
         street ? `${street}${number ? `, ${number}` : ''}` : '',
@@ -482,9 +498,9 @@ export async function calculateRouteDistanceServer(
     return cached.data;
   }
 
-  // 1. Try Google Distance Matrix API if GOOGLE_MAPS_API_KEY is configured
-  const googleApiKey = process.env.GOOGLE_MAPS_API_KEY;
-  if (googleApiKey && googleApiKey.trim()) {
+  // 1. Try Google Distance Matrix API if GOOGLE_MAPS_API_KEY or VITE_GOOGLE_MAPS_API_KEY is configured
+  const googleApiKey = getServerGoogleMapsApiKey();
+  if (googleApiKey) {
     try {
       const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${origin.latitude},${origin.longitude}&destinations=${destination.latitude},${destination.longitude}&mode=driving&language=pt-BR&key=${encodeURIComponent(
         googleApiKey.trim()
@@ -675,13 +691,9 @@ export async function calculateMultiStopRoadRouteServer(
     return cached.data;
   }
 
-  // 1. Try Google Directions API if GOOGLE_MAPS_API_KEY is configured
-  const googleApiKey = (
-    process.env.GOOGLE_MAPS_API_KEY ||
-    process.env.VITE_GOOGLE_MAPS_API_KEY ||
-    ''
-  ).trim();
-  if (googleApiKey && googleApiKey !== 'YOUR_API_KEY' && !googleApiKey.includes('your-')) {
+  // 1. Try Google Directions API if GOOGLE_MAPS_API_KEY or VITE_GOOGLE_MAPS_API_KEY is configured
+  const googleApiKey = getServerGoogleMapsApiKey();
+  if (googleApiKey) {
     try {
       const origin = `${validPoints[0].latitude},${validPoints[0].longitude}`;
       const destination = `${validPoints[validPoints.length - 1].latitude},${

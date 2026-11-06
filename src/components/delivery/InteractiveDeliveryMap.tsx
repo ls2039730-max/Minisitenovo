@@ -28,6 +28,10 @@ import {
   DeliveryOriginAddress,
   OrderDispatchStatus,
 } from '../../types/order';
+import {
+  getBuildTimeGoogleMapsKey,
+  resolveFrontendGoogleMapsConfig,
+} from '../../utils/googleMapsConfig';
 
 interface InteractiveDeliveryMapProps {
   originAddress: DeliveryOriginAddress | null;
@@ -135,6 +139,11 @@ const TILE_LAYERS = {
     attribution:
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
   },
+  google_roadmap: {
+    name: 'Google Maps (Ruas & Avenidas)',
+    url: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&hl=pt-BR',
+    attribution: '&copy; Google Maps',
+  },
   osm: {
     name: 'OpenStreetMap Padrão',
     url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -187,33 +196,24 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
 
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [showRouteLines, setShowRouteLines] = useState<boolean>(true);
-  const [tileStyle, setTileStyle] = useState<'voyager' | 'osm'>('voyager');
+  const [tileStyle, setTileStyle] = useState<'voyager' | 'google_roadmap' | 'osm'>('voyager');
   const [mapReady, setMapReady] = useState<boolean>(false);
   const [googleMapsStatus, setGoogleMapsStatus] = useState<
     'checking' | 'configured' | 'not_configured' | 'auth_error'
-  >('checking');
+  >(() => (getBuildTimeGoogleMapsKey() ? 'configured' : 'checking'));
 
-  // Check backend/frontend Google Maps API key availability for diagnostics & transparency
+  // Resolve Google Maps API key from build-time VITE_GOOGLE_MAPS_API_KEY (or bridged GOOGLE_MAPS_API_KEY)
+  // and fallback to runtime /api/config so the map never displays "API Key required".
   useEffect(() => {
     let mounted = true;
-    const envKey = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY;
-    if (envKey && typeof envKey === 'string' && envKey.trim() && envKey !== 'YOUR_API_KEY') {
-      setGoogleMapsStatus('configured');
-      return;
-    }
-    fetch('/api/config')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (!mounted) return;
-        if (data?.googleMapsConfigured && data?.googleMapsApiKey) {
-          setGoogleMapsStatus('configured');
-        } else {
-          setGoogleMapsStatus('not_configured');
-        }
-      })
-      .catch(() => {
-        if (mounted) setGoogleMapsStatus('not_configured');
-      });
+    resolveFrontendGoogleMapsConfig().then((cfg) => {
+      if (!mounted) return;
+      if (cfg.configured && cfg.apiKey) {
+        setGoogleMapsStatus('configured');
+      } else {
+        setGoogleMapsStatus('not_configured');
+      }
+    });
     return () => {
       mounted = false;
     };
@@ -753,11 +753,17 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
 
           <button
             type="button"
-            onClick={() => setTileStyle((s) => (s === 'voyager' ? 'osm' : 'voyager'))}
+            onClick={() =>
+              setTileStyle((s) =>
+                s === 'voyager'
+                  ? 'google_roadmap'
+                  : s === 'google_roadmap'
+                  ? 'osm'
+                  : 'voyager'
+              )
+            }
             className="p-1.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 transition-colors shadow-2xs"
-            title={`Alternar estilo de mapa (${
-              tileStyle === 'voyager' ? 'OpenStreetMap Padrão' : 'Mapa Logístico Detalhado'
-            })`}
+            title={`Alternar estilo de mapa (Atual: ${TILE_LAYERS[tileStyle].name})`}
           >
             <Layers className="w-3.5 h-3.5" />
           </button>
