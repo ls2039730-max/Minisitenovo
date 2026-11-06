@@ -270,21 +270,25 @@ export function requireFeature(featureKey: FeatureKey) {
 // ==========================================
 
 apiRouter.get('/config', (_req: Request, res: Response) => {
-  const rawMapsKey = (
-    process.env.VITE_GOOGLE_MAPS_API_KEY ||
-    process.env.GOOGLE_MAPS_API_KEY ||
-    ''
-  ).trim();
-  const isPlaceholder =
-    !rawMapsKey ||
-    rawMapsKey === 'YOUR_API_KEY' ||
-    rawMapsKey.toLowerCase().includes('your-');
+  const rawPublicMapsKey = (process.env.VITE_GOOGLE_MAPS_API_KEY || '').trim();
+  const isPublicKeyValid =
+    Boolean(rawPublicMapsKey) &&
+    rawPublicMapsKey !== 'YOUR_API_KEY' &&
+    !rawPublicMapsKey.toLowerCase().includes('your-');
+
+  const rawBackendMapsKey = (process.env.GOOGLE_MAPS_API_KEY || '').trim();
+  const isBackendKeyValid =
+    Boolean(rawBackendMapsKey) &&
+    rawBackendMapsKey !== 'YOUR_API_KEY' &&
+    !rawBackendMapsKey.toLowerCase().includes('your-');
+
   return res.json({
     success: true,
     isDevelopment: process.env.NODE_ENV !== 'production',
     baseDomain: getServerBaseDomain(),
-    googleMapsConfigured: !isPlaceholder,
-    googleMapsApiKey: !isPlaceholder ? rawMapsKey : null,
+    googleMapsConfigured: isPublicKeyValid || isBackendKeyValid,
+    googleMapsBackendConfigured: isBackendKeyValid,
+    googleMapsApiKey: isPublicKeyValid ? rawPublicMapsKey : null,
   });
 });
 

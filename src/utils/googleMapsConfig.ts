@@ -1,17 +1,18 @@
 /**
- * Frontend & Shared Google Maps API Key Resolution Utility
+ * Frontend Google Maps Configuration & Security Utility
  *
- * Ensures that whether the administrator configures `VITE_GOOGLE_MAPS_API_KEY` (Vite frontend prefix)
- * or `GOOGLE_MAPS_API_KEY` (standard backend/Vercel variable), the frontend map component
- * can always resolve the public browser key without ever displaying "API Key required".
- *
- * Never exposes or reads private credentials (such as SUPABASE_SECRET_KEY or JWT_SECRET).
+ * Security & Separation of Concerns:
+ * - `VITE_GOOGLE_MAPS_API_KEY`: Public key intended for browser rendering (must be restricted by HTTP Referrer).
+ * - `GOOGLE_MAPS_API_KEY`: Private server-side key used exclusively by backend Web Services
+ *   (Geocoding API, Distance Matrix API, Directions API). Its value is NEVER exposed in the browser bundle
+ *   or returned by `/api/config` — only a boolean `googleMapsBackendConfigured` is reported.
  */
 
 export interface ResolvedGoogleMapsConfig {
   configured: boolean;
+  backendConfigured: boolean;
   apiKey: string | null;
-  source: 'vite_env' | 'runtime_api_config' | 'none';
+  source: 'vite_env' | 'runtime_api_config' | 'backend_only' | 'none';
 }
 
 export function isValidGoogleMapsKeyString(raw: unknown): raw is string {
@@ -24,14 +25,13 @@ export function isValidGoogleMapsKeyString(raw: unknown): raw is string {
 }
 
 /**
- * Synchronously checks build-time Vite environment variables (`VITE_GOOGLE_MAPS_API_KEY`).
- * Note: `vite.config.ts` bridges `GOOGLE_MAPS_API_KEY` into `import.meta.env.VITE_GOOGLE_MAPS_API_KEY`
- * at build time if `VITE_GOOGLE_MAPS_API_KEY` is not explicitly set.
+ * Synchronously checks the public build-time Vite environment variable (`VITE_GOOGLE_MAPS_API_KEY`).
+ * Never reads or exposes private backend variables.
  */
 export function getBuildTimeGoogleMapsKey(): string | null {
   try {
     const env = (import.meta as any)?.env;
-    const candidate = env?.VITE_GOOGLE_MAPS_API_KEY || env?.GOOGLE_MAPS_API_KEY;
+    const candidate = env?.VITE_GOOGLE_MAPS_API_KEY;
     if (isValidGoogleMapsKeyString(candidate)) {
       return candidate.trim();
     }
@@ -42,27 +42,36 @@ export function getBuildTimeGoogleMapsKey(): string | null {
 }
 
 /**
- * Resolves the Google Maps API key from either build-time Vite env or runtime `/api/config` endpoint.
+ * Resolves the Google Maps configuration from build-time `VITE_GOOGLE_MAPS_API_KEY`
+ * and runtime `/api/config` (which exposes only the public key + a boolean for backend routing).
  */
 export async function resolveFrontendGoogleMapsConfig(): Promise<ResolvedGoogleMapsConfig> {
   const buildKey = getBuildTimeGoogleMapsKey();
-  if (buildKey) {
-    return {
-      configured: true,
-      apiKey: buildKey,
-      source: 'vite_env',
-    };
-  }
 
   try {
     const res = await fetch('/api/config');
     if (res.ok) {
       const data = await res.json();
-      if (data?.googleMapsConfigured && isValidGoogleMapsKeyString(data?.googleMapsApiKey)) {
+      const publicKey = isValidGoogleMapsKeyString(data?.googleMapsApiKey)
+        ? data.googleMapsApiKey.trim()
+        : buildKey;
+      const backendConfigured = Boolean(data?.googleMapsBackendConfigured);
+
+      if (publicKey) {
         return {
           configured: true,
-          apiKey: data.googleMapsApiKey.trim(),
-          source: 'runtime_api_config',
+          backendConfigured,
+          apiKey: publicKey,
+          source: buildKey ? 'vite_env' : 'runtime_api_config',
+        };
+      }
+
+      if (backendConfigured || Boolean(data?.googleMapsConfigured)) {
+        return {
+          configured: true,
+          backendConfigured: true,
+          apiKey: null,
+          source: 'backend_only',
         };
       }
     }
@@ -70,8 +79,18 @@ export async function resolveFrontendGoogleMapsConfig(): Promise<ResolvedGoogleM
     // Network or offline fallback
   }
 
+  if (buildKey) {
+    return {
+      configured: true,
+      backendConfigured: false,
+      apiKey: buildKey,
+      source: 'vite_env',
+    };
+  }
+
   return {
     configured: false,
+    backendConfigured: false,
     apiKey: null,
     source: 'none',
   };

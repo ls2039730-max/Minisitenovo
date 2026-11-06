@@ -198,24 +198,41 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
   const [showRouteLines, setShowRouteLines] = useState<boolean>(true);
   const [tileStyle, setTileStyle] = useState<'voyager' | 'google_roadmap' | 'osm'>('voyager');
   const [mapReady, setMapReady] = useState<boolean>(false);
+  const [mapLoadWarning, setMapLoadWarning] = useState<string | null>(null);
   const [googleMapsStatus, setGoogleMapsStatus] = useState<
     'checking' | 'configured' | 'not_configured' | 'auth_error'
   >(() => (getBuildTimeGoogleMapsKey() ? 'configured' : 'checking'));
 
-  // Resolve Google Maps API key from build-time VITE_GOOGLE_MAPS_API_KEY (or bridged GOOGLE_MAPS_API_KEY)
-  // and fallback to runtime /api/config so the map never displays "API Key required".
+  // Resolve Google Maps configuration and handle any authentication/referrer error gracefully
   useEffect(() => {
     let mounted = true;
+    const prevAuthFailure = (window as any).gm_authFailure;
+    (window as any).gm_authFailure = () => {
+      if (!mounted) return;
+      setGoogleMapsStatus('auth_error');
+      setTileStyle('voyager');
+      setMapLoadWarning(
+        'A chave pública do Google Maps apresentou restrição de domínio (HTTP Referrer) ou faturamento. O mapa alternou automaticamente para a camada viária de contingência (OpenStreetMap / CARTO).'
+      );
+      if (typeof prevAuthFailure === 'function') {
+        try {
+          prevAuthFailure();
+        } catch {}
+      }
+    };
+
     resolveFrontendGoogleMapsConfig().then((cfg) => {
       if (!mounted) return;
-      if (cfg.configured && cfg.apiKey) {
+      if (cfg.configured) {
         setGoogleMapsStatus('configured');
       } else {
         setGoogleMapsStatus('not_configured');
       }
     });
+
     return () => {
       mounted = false;
+      (window as any).gm_authFailure = prevAuthFailure;
     };
   }, []);
 
@@ -350,11 +367,20 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
       subdomains: 'abcd',
     });
 
-    // Automatic fallback to standard OpenStreetMap if CARTO tile server errors
+    // Automatic fallback to standard OpenStreetMap if primary tile server fails
     tileLayer.on('tileerror', () => {
-      if (tileStyle === 'voyager') {
-        setTileStyle('osm');
-      }
+      setTileStyle((current) => {
+        if (current === 'google_roadmap') {
+          setMapLoadWarning(
+            'Não foi possível carregar os blocos do Google Maps no momento. Exibindo mapa viário OpenStreetMap / CARTO automaticamente.'
+          );
+          return 'voyager';
+        }
+        if (current === 'voyager') {
+          return 'osm';
+        }
+        return current;
+      });
     });
 
     tileLayer.addTo(map);
@@ -384,7 +410,7 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
     };
   }, []);
 
-  // Switch tile style when user toggles layer
+  // Switch tile style when user toggles layer (with automatic tileerror fallback so map never goes blank)
   useEffect(() => {
     const map = leafletMapRef.current;
     if (!map) return;
@@ -398,6 +424,25 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
       attribution: tileCfg.attribution,
       maxZoom: 19,
     });
+
+    newTileLayer.on('tileerror', () => {
+      setTileStyle((current) => {
+        if (current === 'google_roadmap') {
+          setMapLoadWarning(
+            'Não foi possível carregar a camada Google Maps neste momento. Alternado automaticamente para OpenStreetMap / CARTO.'
+          );
+          return 'voyager';
+        }
+        if (current === 'voyager') {
+          setMapLoadWarning(
+            'Servidor CARTO indisponível no momento. Alternado automaticamente para OpenStreetMap Padrão.'
+          );
+          return 'osm';
+        }
+        return current;
+      });
+    });
+
     newTileLayer.addTo(map);
     tileLayerRef.current = newTileLayer;
   }, [tileStyle]);
@@ -777,6 +822,22 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
           data-testid="delivery-interactive-street-map"
           className="w-full h-full min-h-[460px] lg:min-h-[580px]"
         />
+
+        {/* Clear Diagnostic Warning Banner if a tile layer or Google Maps auth encountered an issue */}
+        {mapLoadWarning && (
+          <div className="absolute top-3 right-3 z-[410] max-w-sm bg-amber-50/95 backdrop-blur-xs border border-amber-300 text-amber-900 rounded-xl px-3.5 py-2.5 shadow-lg flex items-start gap-2.5 text-xs">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="flex-1 leading-snug">{mapLoadWarning}</div>
+            <button
+              type="button"
+              onClick={() => setMapLoadWarning(null)}
+              className="p-0.5 rounded-md text-amber-700 hover:bg-amber-200/60"
+              title="Fechar aviso"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* Live Selected Multi-Order Route HUD Banner (when 2+ orders are selected) */}
         {selectedOrderIds.length >= 2 && (

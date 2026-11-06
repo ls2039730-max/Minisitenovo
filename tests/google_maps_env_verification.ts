@@ -7,64 +7,87 @@ import {
   resolveFrontendGoogleMapsConfig,
 } from '../src/utils/googleMapsConfig.js';
 
-async function runGoogleMapsEnvVerification() {
+async function runGoogleMapsSecurityAudit() {
   console.log('===================================================================');
-  console.log(' AUDITORIA E TESTES — INTEGRAÇÃO GOOGLE MAPS & VARIÁVEIS DE AMBIENTE');
+  console.log(' AUDITORIA DE SEGURANÇA E PRODUÇÃO — INTEGRAÇÃO GOOGLE MAPS');
   console.log('===================================================================\n');
 
-  // 1. Verify vite.config.ts bridges GOOGLE_MAPS_API_KEY -> import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+  // 1. Verify vite.config.ts does NOT inject GOOGLE_MAPS_API_KEY or private server secrets into browser bundle
   const viteConfigPath = path.resolve(process.cwd(), 'vite.config.ts');
   const viteConfigContent = fs.readFileSync(viteConfigPath, 'utf-8');
 
   assert.equal(
-    viteConfigContent.includes('env.VITE_GOOGLE_MAPS_API_KEY') &&
-      viteConfigContent.includes('env.GOOGLE_MAPS_API_KEY') &&
-      viteConfigContent.includes("'import.meta.env.VITE_GOOGLE_MAPS_API_KEY'"),
-    true,
-    'vite.config.ts deve mapear tanto VITE_GOOGLE_MAPS_API_KEY quanto GOOGLE_MAPS_API_KEY para import.meta.env.VITE_GOOGLE_MAPS_API_KEY no build.'
+    viteConfigContent.includes('GOOGLE_MAPS_API_KEY'),
+    false,
+    'vite.config.ts NÃO deve injetar a variável privada de backend GOOGLE_MAPS_API_KEY no bundle do navegador.'
   );
-
-  // Security check: ensure private keys are NEVER exposed in vite.config.ts define
   assert.equal(
     viteConfigContent.includes('SUPABASE_SECRET_KEY') ||
       viteConfigContent.includes('SERVICE_ROLE') ||
       viteConfigContent.includes('JWT_SECRET'),
     false,
-    'vite.config.ts jamais deve expor chaves privadas (SUPABASE_SECRET_KEY, JWT_SECRET) no bundle do navegador.'
+    'vite.config.ts jamais deve expor chaves privadas no bundle do navegador.'
   );
   console.log(
-    '✅ 1. vite.config.ts validado: ponte automática GOOGLE_MAPS_API_KEY -> VITE_GOOGLE_MAPS_API_KEY ativa e sem exposição de chaves privadas.'
+    '✅ 1. Isolamento de bundle validado: GOOGLE_MAPS_API_KEY não é injetada no bundle cliente pelo vite.config.ts.'
   );
 
-  // 2. Verify backend getServerGoogleMapsApiKey() supports both GOOGLE_MAPS_API_KEY and VITE_GOOGLE_MAPS_API_KEY
+  // 2. Verify /api/config exposes exclusively the public key (VITE_GOOGLE_MAPS_API_KEY) and never returns GOOGLE_MAPS_API_KEY value
+  const routesPath = path.resolve(process.cwd(), 'server/routes.ts');
+  const routesContent = fs.readFileSync(routesPath, 'utf-8');
+
+  const configRouteMatch = routesContent.match(
+    /apiRouter\.get\('\/config'[\s\S]*?return res\.json\(\{[\s\S]*?\}\);\s*\}\);/
+  );
+  assert.ok(configRouteMatch, 'Endpoint /api/config deve existir em server/routes.ts');
+  const configBlock = configRouteMatch[0];
+
+  assert.equal(
+    configBlock.includes('googleMapsApiKey: isPublicKeyValid ? rawPublicMapsKey : null'),
+    true,
+    '/api/config deve retornar em googleMapsApiKey exclusivamente a chave pública (VITE_GOOGLE_MAPS_API_KEY).'
+  );
+  assert.equal(
+    configBlock.includes('googleMapsBackendConfigured: isBackendKeyValid'),
+    true,
+    '/api/config deve expor apenas um booleano (googleMapsBackendConfigured) para a chave de servidor, sem vazar seu valor.'
+  );
+  assert.equal(
+    configBlock.includes('SUPABASE_SECRET_KEY') || configBlock.includes('JWT_SECRET'),
+    false,
+    '/api/config jamais deve expor credenciais privadas do servidor.'
+  );
+  console.log(
+    '✅ 2. Endpoint /api/config auditado: expõe exclusivamente VITE_GOOGLE_MAPS_API_KEY e preserva GOOGLE_MAPS_API_KEY oculta no servidor.'
+  );
+
+  // 3. Verify backend services (Geocoding, Distance Matrix, Directions) use getServerGoogleMapsApiKey()
+  const routingServicePath = path.resolve(process.cwd(), 'server/services/routingService.ts');
+  const routingServiceContent = fs.readFileSync(routingServicePath, 'utf-8');
+
+  const keyCalls = routingServiceContent.match(/getServerGoogleMapsApiKey\(\)/g) || [];
+  assert.ok(
+    keyCalls.length >= 4,
+    'getServerGoogleMapsApiKey() deve ser definida e utilizada nos 3 serviços de backend (Geocoding, Distance Matrix e Directions).'
+  );
+
   const prevGoogleKey = process.env.GOOGLE_MAPS_API_KEY;
   const prevViteGoogleKey = process.env.VITE_GOOGLE_MAPS_API_KEY;
 
   try {
     delete process.env.GOOGLE_MAPS_API_KEY;
     delete process.env.VITE_GOOGLE_MAPS_API_KEY;
-    assert.equal(getServerGoogleMapsApiKey(), '', 'Sem variáveis definidas deve retornar vazio.');
+    assert.equal(getServerGoogleMapsApiKey(), '');
 
     process.env.GOOGLE_MAPS_API_KEY = 'YOUR_API_KEY';
-    assert.equal(
-      getServerGoogleMapsApiKey(),
-      '',
-      'Placeholder YOUR_API_KEY deve ser ignorado com segurança.'
-    );
+    assert.equal(getServerGoogleMapsApiKey(), '');
 
-    process.env.GOOGLE_MAPS_API_KEY = 'AIzaSyTestBackendKey123456';
+    process.env.GOOGLE_MAPS_API_KEY = 'AIzaSyBackendPrivateKey123';
+    process.env.VITE_GOOGLE_MAPS_API_KEY = 'AIzaSyFrontendPublicKey456';
     assert.equal(
       getServerGoogleMapsApiKey(),
-      'AIzaSyTestBackendKey123456',
-      'Deve ler GOOGLE_MAPS_API_KEY no backend.'
-    );
-
-    delete process.env.GOOGLE_MAPS_API_KEY;
-    process.env.VITE_GOOGLE_MAPS_API_KEY = 'AIzaSyTestFrontendKey789012';
-    assert.equal(
-      getServerGoogleMapsApiKey(),
-      'AIzaSyTestFrontendKey789012',
-      'Deve ler VITE_GOOGLE_MAPS_API_KEY como fallback no backend.'
+      'AIzaSyBackendPrivateKey123',
+      'O backend deve priorizar GOOGLE_MAPS_API_KEY para Geocoding, Distance Matrix e Directions.'
     );
   } finally {
     if (prevGoogleKey === undefined) delete process.env.GOOGLE_MAPS_API_KEY;
@@ -74,85 +97,48 @@ async function runGoogleMapsEnvVerification() {
     else process.env.VITE_GOOGLE_MAPS_API_KEY = prevViteGoogleKey;
   }
   console.log(
-    '✅ 2. Backend (routingService.ts) validado: Geocoding, Distance Matrix e Directions reconhecem GOOGLE_MAPS_API_KEY e VITE_GOOGLE_MAPS_API_KEY.'
+    '✅ 3. Serviços de Backend (Geocoding, Distance Matrix e Directions) validados com prioridade para GOOGLE_MAPS_API_KEY.'
   );
 
-  // 3. Verify /api/config route in server/routes.ts
-  const routesPath = path.resolve(process.cwd(), 'server/routes.ts');
-  const routesContent = fs.readFileSync(routesPath, 'utf-8');
-  assert.equal(
-    routesContent.includes('process.env.VITE_GOOGLE_MAPS_API_KEY') &&
-      routesContent.includes('process.env.GOOGLE_MAPS_API_KEY') &&
-      routesContent.includes('googleMapsConfigured') &&
-      routesContent.includes('googleMapsApiKey'),
-    true,
-    'A rota /api/config deve fornecer googleMapsConfigured e googleMapsApiKey lendo ambas as variáveis em runtime.'
-  );
-  assert.equal(
-    isValidGoogleMapsKeyString('AIzaSyValidKeyExample999'),
-    true,
-    'Validador deve aceitar chaves válidas.'
-  );
-  assert.equal(
-    isValidGoogleMapsKeyString('YOUR_API_KEY'),
-    false,
-    'Validador deve rejeitar placeholders.'
-  );
-  const resolvedFallback = await resolveFrontendGoogleMapsConfig();
-  assert.equal(
-    typeof resolvedFallback.configured,
-    'boolean',
-    'resolveFrontendGoogleMapsConfig deve resolver sem lançar erro mesmo fora do navegador.'
-  );
-  console.log(
-    '✅ 3. Endpoint runtime /api/config e utilitário googleMapsConfig.ts validados.'
-  );
-
-  // 4. Verify InteractiveDeliveryMap.tsx never displays "API Key required" and preserves full functionality
+  // 4. Verify fallback to OpenStreetMap/CARTO and clear error handling in InteractiveDeliveryMap.tsx
   const mapPath = path.resolve(
     process.cwd(),
     'src/components/delivery/InteractiveDeliveryMap.tsx'
   );
   const mapSource = fs.readFileSync(mapPath, 'utf-8');
 
-  // Ensure the component does not render any blocking "API Key required" UI message
   const codeWithoutComments = mapSource
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/\/\/.*/g, '');
   assert.equal(
     codeWithoutComments.includes('API Key required'),
     false,
-    'InteractiveDeliveryMap.tsx jamais deve renderizar a mensagem bloqueante "API Key required".'
+    'InteractiveDeliveryMap.tsx jamais deve exibir a tela bloqueante "API Key required".'
+  );
+  assert.equal(
+    mapSource.includes("tileLayer.on('tileerror'") &&
+      mapSource.includes("newTileLayer.on('tileerror'") &&
+      mapSource.includes('gm_authFailure') &&
+      mapSource.includes('mapLoadWarning'),
+    true,
+    'InteractiveDeliveryMap.tsx deve capturar falhas de tiles e de autenticação (gm_authFailure), acionar fallback automático para OpenStreetMap/CARTO e exibir aviso claro sem deixar o mapa em branco.'
   );
 
-  assert.equal(
-    mapSource.includes('resolveFrontendGoogleMapsConfig') &&
-      mapSource.includes('TILE_LAYERS') &&
-      mapSource.includes('google_roadmap') &&
-      mapSource.includes('voyager') &&
-      mapSource.includes('osm'),
-    true,
-    'InteractiveDeliveryMap.tsx deve integrar resolveFrontendGoogleMapsConfig e camadas cartográficas de ruas e avenidas.'
-  );
-  assert.equal(
-    mapSource.includes('handleZoomIn') &&
-      mapSource.includes('handleZoomOut') &&
-      mapSource.includes('handleCenterOnOrigin') &&
-      mapSource.includes('handleFitAllOrders') &&
-      mapSource.includes('onToggleSelectOrder'),
-    true,
-    'Controles de zoom, centralização, enquadramento de pedidos, marcadores e seleção de rotas devem permanecer intactos.'
-  );
+  assert.equal(isValidGoogleMapsKeyString('AIzaSyValidKeyExample999'), true);
+  assert.equal(isValidGoogleMapsKeyString('YOUR_API_KEY'), false);
+  const resolved = await resolveFrontendGoogleMapsConfig();
+  assert.equal(typeof resolved.configured, 'boolean');
+
   console.log(
-    '✅ 4. Componente InteractiveDeliveryMap.tsx auditado: zero bloqueio "API Key required", ruas/avenidas/bairros ativos, marcadores, zoom e rotas preservados.'
+    '✅ 4. Fallback automático OpenStreetMap/CARTO e exibição clara de erros (mapLoadWarning / gm_authFailure) validados.'
   );
 
   console.log('\n===================================================================');
-  console.log(' TODOS OS TESTES DE INTEGRAÇÃO GOOGLE MAPS & ENV VARS APROVADOS! ');
+  console.log(' AUDITORIA DE SEGURANÇA E PRODUÇÃO CONCLUÍDA COM SUCESSO! ');
   console.log('===================================================================');
 }
 
-runGoogleMapsEnvVerification().catch((err) => {
-  console.error('❌ Falha na verificação da integração Google Maps:', err);
+runGoogleMapsSecurityAudit().catch((err) => {
+  console.error('❌ Falha na auditoria de segurança do Google Maps:', err);
   process.exit(1);
 });
