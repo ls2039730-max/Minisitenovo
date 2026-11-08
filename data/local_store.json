@@ -650,6 +650,60 @@
       "status": "active",
       "created_at": "2026-11-03T12:21:57.497Z",
       "updated_at": "2026-11-03T12:21:57.497Z"
+    },
+    {
+      "id": "11dd1d39-73bc-4181-ad97-68d813ef73a3",
+      "tenant_id": "6febd809-62fc-4665-a795-179beba133b2",
+      "user_id": "414481ce-6162-43f6-8cbc-c53c9bc9f2ce",
+      "role": "CLIENT_ADMIN",
+      "status": "active",
+      "created_at": "2026-11-08T19:36:52.999Z",
+      "updated_at": "2026-11-08T19:36:52.999Z"
+    },
+    {
+      "id": "89b8c05c-bb22-4458-8a62-1a27b60191a9",
+      "tenant_id": "bb5fb8c1-2e00-4158-84df-77fcca810699",
+      "user_id": "3578be2f-c66b-4268-b0bd-c8f9590909ee",
+      "role": "CLIENT_ADMIN",
+      "status": "active",
+      "created_at": "2026-11-08T19:36:53.048Z",
+      "updated_at": "2026-11-08T19:36:53.048Z"
+    },
+    {
+      "id": "dda62648-899b-46f9-9723-c0e8b36d044f",
+      "tenant_id": "ac137062-f9a8-4856-bbb9-f430e6454cf2",
+      "user_id": "414481ce-6162-43f6-8cbc-c53c9bc9f2ce",
+      "role": "CLIENT_ADMIN",
+      "status": "active",
+      "created_at": "2026-11-08T19:37:30.005Z",
+      "updated_at": "2026-11-08T19:37:30.005Z"
+    },
+    {
+      "id": "8251eb39-0300-4319-a26a-45a4d8625af1",
+      "tenant_id": "d5f7624c-8b57-43ce-899e-da78d7b4e545",
+      "user_id": "3578be2f-c66b-4268-b0bd-c8f9590909ee",
+      "role": "CLIENT_ADMIN",
+      "status": "active",
+      "created_at": "2026-11-08T19:37:30.052Z",
+      "updated_at": "2026-11-08T19:37:30.052Z"
+    },
+    {
+      "id": "5b1e892c-5407-4fd1-a365-4598c738a40c",
+      "tenant_id": "5c89da93-8eeb-45e2-b9c0-dc4317808b14",
+      "user_id": "414481ce-6162-43f6-8cbc-c53c9bc9f2ce",
+      "role": "CLIENT_ADMIN",
+      "status": "active",
+      "created_at": "2026-11-08T19:39:51.596Z",
+      "updated_at": "2026-11-08T19:39:51.596Z"
+    },
+    {
+      "id": "748f5f41-1b2f-4e48-863b-721e8bd479aa",
+      "tenant_id": "d9e704a8-1702-4ffe-8206-8fe96224f699",
+      "user_id": "3578be2f-c66b-4268-b0bd-c8f9590909ee",
+      "role": "CLIENT_ADMIN",
+      "status": "active",
+      "created_at": "2026-11-08T19:39:51.666Z",
+      "updated_at": "2026-11-08T19:39:51.666Z"
     }
   ],
   "audit_logs": [
@@ -8728,6 +8782,378 @@
       },
       "created_at": "2026-11-06T21:55:49.475Z",
       "updated_at": "2026-11-06T21:55:49.475Z"
+    },
+    {
+      "id": "a0478911-2be8-4e2c-b70d-4c4c11776c39",
+      "actor_user_id": "audit-super-admin",
+      "actor_user_name": "Auditoria Técnica",
+      "tenant_id": "6febd809-62fc-4665-a795-179beba133b2",
+      "action": "USER_CREATE",
+      "entity": "tenant_users",
+      "entity_id": "414481ce-6162-43f6-8cbc-c53c9bc9f2ce",
+      "metadata": {
+        "email": "gestor.mania@audit.local",
+        "role": "CLIENT_ADMIN",
+        "status": "active"
+      },
+      "created_at": "2026-11-08T19:36:53.005Z",
+      "updated_at": "2026-11-08T19:36:53.005Z"
+    },
+    {
+      "id": "611b831c-bf46-4d9e-98bf-bd414826ff69",
+      "actor_user_id": "audit-super-admin",
+      "actor_user_name": "Auditoria Técnica",
+      "tenant_id": "6febd809-62fc-4665-a795-179beba133b2",
+      "action": "TENANT_CREATE",
+      "entity": "tenants",
+      "entity_id": "6febd809-62fc-4665-a795-179beba133b2",
+      "metadata": {
+        "name": "Mania de Costela",
+        "slug": "mania-de-costela-audit",
+        "planId": "11111111-1111-4111-8111-111111111111"
+      },
+      "created_at": "2026-11-08T19:36:53.011Z",
+      "updated_at": "2026-11-08T19:36:53.011Z"
+    },
+    {
+      "id": "364f7c22-5839-4d61-a563-c4def704dde5",
+      "actor_user_id": "audit-super-admin",
+      "actor_user_name": "Auditoria Técnica",
+      "tenant_id": "6febd809-62fc-4665-a795-179beba133b2",
+      "action": "TENANT_UPDATE",
+      "entity": "tenants",
+      "entity_id": "6febd809-62fc-4665-a795-179beba133b2",
+      "metadata": {
+        "cep": "28929519",
+        "street": "Avenida Independência",
+        "number": "5019",
+        "complement": "",
+        "neighborhood": "Centro",
+        "city": "Rio das Ostras",
+        "state": "RJ"
+      },
+      "created_at": "2026-11-08T19:36:53.024Z",
+      "updated_at": "2026-11-08T19:36:53.024Z"
+    },
+    {
+      "id": "e56b1833-a81e-47d3-b00f-5302f9946afe",
+      "actor_user_id": "audit-super-admin",
+      "actor_user_name": "Auditoria Técnica",
+      "tenant_id": "bb5fb8c1-2e00-4158-84df-77fcca810699",
+      "action": "USER_CREATE",
+      "entity": "tenant_users",
+      "entity_id": "3578be2f-c66b-4268-b0bd-c8f9590909ee",
+      "metadata": {
+        "email": "gestor.una@audit.local",
+        "role": "CLIENT_ADMIN",
+        "status": "active"
+      },
+      "created_at": "2026-11-08T19:36:53.054Z",
+      "updated_at": "2026-11-08T19:36:53.054Z"
+    },
+    {
+      "id": "7e188d69-08b7-4faf-94f6-9ec3ae281a25",
+      "actor_user_id": "audit-super-admin",
+      "actor_user_name": "Auditoria Técnica",
+      "tenant_id": "bb5fb8c1-2e00-4158-84df-77fcca810699",
+      "action": "TENANT_CREATE",
+      "entity": "tenants",
+      "entity_id": "bb5fb8c1-2e00-4158-84df-77fcca810699",
+      "metadata": {
+        "name": "Una Ótica",
+        "slug": "una-otica-audit",
+        "planId": "11111111-1111-4111-8111-111111111111"
+      },
+      "created_at": "2026-11-08T19:36:53.059Z",
+      "updated_at": "2026-11-08T19:36:53.059Z"
+    },
+    {
+      "id": "160a232b-d60e-48b0-802c-05664673f952",
+      "actor_user_id": "audit-super-admin",
+      "actor_user_name": "Auditoria Técnica",
+      "tenant_id": "bb5fb8c1-2e00-4158-84df-77fcca810699",
+      "action": "TENANT_UPDATE",
+      "entity": "tenants",
+      "entity_id": "bb5fb8c1-2e00-4158-84df-77fcca810699",
+      "metadata": {
+        "cep": "28928506",
+        "street": "Avenida Independência",
+        "number": "103",
+        "complement": "Loja 2",
+        "neighborhood": "Unamar",
+        "city": "Cabo Frio",
+        "state": "RJ"
+      },
+      "created_at": "2026-11-08T19:36:53.071Z",
+      "updated_at": "2026-11-08T19:36:53.071Z"
+    },
+    {
+      "id": "c2021ee5-0dcb-4fc3-bb16-b83696dd4aca",
+      "actor_user_id": "audit-super-admin",
+      "actor_user_name": "Auditoria Técnica",
+      "tenant_id": "6febd809-62fc-4665-a795-179beba133b2",
+      "action": "TENANT_UPDATE",
+      "entity": "tenants",
+      "entity_id": "6febd809-62fc-4665-a795-179beba133b2",
+      "metadata": {
+        "cep": "28928-000",
+        "street": "Avenida Independência",
+        "number": "5019",
+        "complement": "Loja 1",
+        "neighborhood": "Unamar (Tamoios)",
+        "city": "Cabo Frio",
+        "state": "RJ"
+      },
+      "created_at": "2026-11-08T19:36:55.274Z",
+      "updated_at": "2026-11-08T19:36:55.274Z"
+    },
+    {
+      "id": "fd58bf8d-2813-4bf6-a229-9e3f7543f0db",
+      "actor_user_id": "audit-super-admin",
+      "actor_user_name": "Auditoria Técnica",
+      "tenant_id": "ac137062-f9a8-4856-bbb9-f430e6454cf2",
+      "action": "USER_CREATE",
+      "entity": "tenant_users",
+      "entity_id": "414481ce-6162-43f6-8cbc-c53c9bc9f2ce",
+      "metadata": {
+        "email": "gestor.mania@audit.local",
+        "role": "CLIENT_ADMIN",
+        "status": "active"
+      },
+      "created_at": "2026-11-08T19:37:30.014Z",
+      "updated_at": "2026-11-08T19:37:30.014Z"
+    },
+    {
+      "id": "0fb9966a-b85a-475c-b72c-725d2694d782",
+      "actor_user_id": "audit-super-admin",
+      "actor_user_name": "Auditoria Técnica",
+      "tenant_id": "ac137062-f9a8-4856-bbb9-f430e6454cf2",
+      "action": "TENANT_CREATE",
+      "entity": "tenants",
+      "entity_id": "ac137062-f9a8-4856-bbb9-f430e6454cf2",
+      "metadata": {
+        "name": "Mania de Costela",
+        "slug": "mania-de-costela-audit",
+        "planId": "11111111-1111-4111-8111-111111111111"
+      },
+      "created_at": "2026-11-08T19:37:30.021Z",
+      "updated_at": "2026-11-08T19:37:30.021Z"
+    },
+    {
+      "id": "1bed7e2e-5c82-4c8a-beb4-e715f8471b17",
+      "actor_user_id": "audit-super-admin",
+      "actor_user_name": "Auditoria Técnica",
+      "tenant_id": "ac137062-f9a8-4856-bbb9-f430e6454cf2",
+      "action": "TENANT_UPDATE",
+      "entity": "tenants",
+      "entity_id": "ac137062-f9a8-4856-bbb9-f430e6454cf2",
+      "metadata": {
+        "cep": "28929519",
+        "street": "Avenida Independência",
+        "number": "5019",
+        "complement": "",
+        "neighborhood": "Centro",
+        "city": "Rio das Ostras",
+        "state": "RJ"
+      },
+      "created_at": "2026-11-08T19:37:30.033Z",
+      "updated_at": "2026-11-08T19:37:30.033Z"
+    },
+    {
+      "id": "8dcf33b6-06cf-4fde-a90b-4a3555734834",
+      "actor_user_id": "audit-super-admin",
+      "actor_user_name": "Auditoria Técnica",
+      "tenant_id": "d5f7624c-8b57-43ce-899e-da78d7b4e545",
+      "action": "USER_CREATE",
+      "entity": "tenant_users",
+      "entity_id": "3578be2f-c66b-4268-b0bd-c8f9590909ee",
+      "metadata": {
+        "email": "gestor.una@audit.local",
+        "role": "CLIENT_ADMIN",
+        "status": "active"
+      },
+      "created_at": "2026-11-08T19:37:30.060Z",
+      "updated_at": "2026-11-08T19:37:30.060Z"
+    },
+    {
+      "id": "50f9f5e4-a9b2-4a11-99a0-a85f78303e2a",
+      "actor_user_id": "audit-super-admin",
+      "actor_user_name": "Auditoria Técnica",
+      "tenant_id": "d5f7624c-8b57-43ce-899e-da78d7b4e545",
+      "action": "TENANT_CREATE",
+      "entity": "tenants",
+      "entity_id": "d5f7624c-8b57-43ce-899e-da78d7b4e545",
+      "metadata": {
+        "name": "Una Ótica",
+        "slug": "una-otica-audit",
+        "planId": "11111111-1111-4111-8111-111111111111"
+      },
+      "created_at": "2026-11-08T19:37:30.065Z",
+      "updated_at": "2026-11-08T19:37:30.065Z"
+    },
+    {
+      "id": "7fb64eac-e76e-4a60-b0fb-ea6d26f644d6",
+      "actor_user_id": "audit-super-admin",
+      "actor_user_name": "Auditoria Técnica",
+      "tenant_id": "d5f7624c-8b57-43ce-899e-da78d7b4e545",
+      "action": "TENANT_UPDATE",
+      "entity": "tenants",
+      "entity_id": "d5f7624c-8b57-43ce-899e-da78d7b4e545",
+      "metadata": {
+        "cep": "28928506",
+        "street": "Avenida Independência",
+        "number": "103",
+        "complement": "Loja 2",
+        "neighborhood": "Unamar",
+        "city": "Cabo Frio",
+        "state": "RJ"
+      },
+      "created_at": "2026-11-08T19:37:30.078Z",
+      "updated_at": "2026-11-08T19:37:30.078Z"
+    },
+    {
+      "id": "dc5c37bf-b6e4-4dcf-b8b7-cf2a6a87b81f",
+      "actor_user_id": "audit-super-admin",
+      "actor_user_name": "Auditoria Técnica",
+      "tenant_id": "ac137062-f9a8-4856-bbb9-f430e6454cf2",
+      "action": "TENANT_UPDATE",
+      "entity": "tenants",
+      "entity_id": "ac137062-f9a8-4856-bbb9-f430e6454cf2",
+      "metadata": {
+        "cep": "28928-000",
+        "street": "Avenida Independência",
+        "number": "5019",
+        "complement": "Loja 1",
+        "neighborhood": "Unamar (Tamoios)",
+        "city": "Cabo Frio",
+        "state": "RJ"
+      },
+      "created_at": "2026-11-08T19:37:32.346Z",
+      "updated_at": "2026-11-08T19:37:32.346Z"
+    },
+    {
+      "id": "3b860a69-2203-4cf9-8a3f-96b5bf9d12bb",
+      "actor_user_id": "audit-super-admin",
+      "actor_user_name": "Auditoria Técnica",
+      "tenant_id": "5c89da93-8eeb-45e2-b9c0-dc4317808b14",
+      "action": "USER_CREATE",
+      "entity": "tenant_users",
+      "entity_id": "414481ce-6162-43f6-8cbc-c53c9bc9f2ce",
+      "metadata": {
+        "email": "gestor.mania@audit.local",
+        "role": "CLIENT_ADMIN",
+        "status": "active"
+      },
+      "created_at": "2026-11-08T19:39:51.604Z",
+      "updated_at": "2026-11-08T19:39:51.604Z"
+    },
+    {
+      "id": "d746d26f-c888-48c6-8b95-78e3a3937c95",
+      "actor_user_id": "audit-super-admin",
+      "actor_user_name": "Auditoria Técnica",
+      "tenant_id": "5c89da93-8eeb-45e2-b9c0-dc4317808b14",
+      "action": "TENANT_CREATE",
+      "entity": "tenants",
+      "entity_id": "5c89da93-8eeb-45e2-b9c0-dc4317808b14",
+      "metadata": {
+        "name": "Mania de Costela",
+        "slug": "mania-de-costela-audit",
+        "planId": "11111111-1111-4111-8111-111111111111"
+      },
+      "created_at": "2026-11-08T19:39:51.616Z",
+      "updated_at": "2026-11-08T19:39:51.616Z"
+    },
+    {
+      "id": "6594d4bf-bd4a-4265-9bc8-6837296c292b",
+      "actor_user_id": "audit-super-admin",
+      "actor_user_name": "Auditoria Técnica",
+      "tenant_id": "5c89da93-8eeb-45e2-b9c0-dc4317808b14",
+      "action": "TENANT_UPDATE",
+      "entity": "tenants",
+      "entity_id": "5c89da93-8eeb-45e2-b9c0-dc4317808b14",
+      "metadata": {
+        "cep": "28929519",
+        "street": "Avenida Independência",
+        "number": "5019",
+        "complement": "",
+        "neighborhood": "Centro",
+        "city": "Rio das Ostras",
+        "state": "RJ"
+      },
+      "created_at": "2026-11-08T19:39:51.643Z",
+      "updated_at": "2026-11-08T19:39:51.643Z"
+    },
+    {
+      "id": "0f5a54d8-d323-4c67-ad90-1ed708362986",
+      "actor_user_id": "audit-super-admin",
+      "actor_user_name": "Auditoria Técnica",
+      "tenant_id": "d9e704a8-1702-4ffe-8206-8fe96224f699",
+      "action": "USER_CREATE",
+      "entity": "tenant_users",
+      "entity_id": "3578be2f-c66b-4268-b0bd-c8f9590909ee",
+      "metadata": {
+        "email": "gestor.una@audit.local",
+        "role": "CLIENT_ADMIN",
+        "status": "active"
+      },
+      "created_at": "2026-11-08T19:39:51.673Z",
+      "updated_at": "2026-11-08T19:39:51.673Z"
+    },
+    {
+      "id": "89cb3e93-30b1-4cb8-9ab3-1f75949b6940",
+      "actor_user_id": "audit-super-admin",
+      "actor_user_name": "Auditoria Técnica",
+      "tenant_id": "d9e704a8-1702-4ffe-8206-8fe96224f699",
+      "action": "TENANT_CREATE",
+      "entity": "tenants",
+      "entity_id": "d9e704a8-1702-4ffe-8206-8fe96224f699",
+      "metadata": {
+        "name": "Una Ótica",
+        "slug": "una-otica-audit",
+        "planId": "11111111-1111-4111-8111-111111111111"
+      },
+      "created_at": "2026-11-08T19:39:51.682Z",
+      "updated_at": "2026-11-08T19:39:51.682Z"
+    },
+    {
+      "id": "4d477aa1-53c6-4e38-9aee-ca07991f56dc",
+      "actor_user_id": "audit-super-admin",
+      "actor_user_name": "Auditoria Técnica",
+      "tenant_id": "d9e704a8-1702-4ffe-8206-8fe96224f699",
+      "action": "TENANT_UPDATE",
+      "entity": "tenants",
+      "entity_id": "d9e704a8-1702-4ffe-8206-8fe96224f699",
+      "metadata": {
+        "cep": "28928506",
+        "street": "Avenida Independência",
+        "number": "103",
+        "complement": "Loja 2",
+        "neighborhood": "Unamar",
+        "city": "Cabo Frio",
+        "state": "RJ"
+      },
+      "created_at": "2026-11-08T19:39:51.696Z",
+      "updated_at": "2026-11-08T19:39:51.696Z"
+    },
+    {
+      "id": "bab437c1-a503-43ec-8ffe-97f3725b06e4",
+      "actor_user_id": "audit-super-admin",
+      "actor_user_name": "Auditoria Técnica",
+      "tenant_id": "5c89da93-8eeb-45e2-b9c0-dc4317808b14",
+      "action": "TENANT_UPDATE",
+      "entity": "tenants",
+      "entity_id": "5c89da93-8eeb-45e2-b9c0-dc4317808b14",
+      "metadata": {
+        "cep": "28928-000",
+        "street": "Avenida Independência",
+        "number": "5019",
+        "complement": "Loja 1",
+        "neighborhood": "Unamar (Tamoios)",
+        "city": "Cabo Frio",
+        "state": "RJ"
+      },
+      "created_at": "2026-11-08T19:39:54.564Z",
+      "updated_at": "2026-11-08T19:39:54.564Z"
     }
   ],
   "auth_users": [
@@ -8790,6 +9216,26 @@
         "phone": "(11) 98111-2233"
       },
       "created_at": "2026-11-03T12:21:57.501Z"
+    },
+    {
+      "id": "414481ce-6162-43f6-8cbc-c53c9bc9f2ce",
+      "email": "gestor.mania@audit.local",
+      "password": "cliente123",
+      "user_metadata": {
+        "name": "Gestor Mania",
+        "phone": "22999990001"
+      },
+      "created_at": "2026-11-08T19:36:52.991Z"
+    },
+    {
+      "id": "3578be2f-c66b-4268-b0bd-c8f9590909ee",
+      "email": "gestor.una@audit.local",
+      "password": "cliente123",
+      "user_metadata": {
+        "name": "Gestor Una",
+        "phone": "22999990002"
+      },
+      "created_at": "2026-11-08T19:36:53.043Z"
     }
   ],
   "sites": [
@@ -12218,6 +12664,210 @@
       },
       "created_at": "2026-11-06T21:55:49.175Z",
       "updated_at": "2026-11-06T21:55:49.469Z"
+    },
+    {
+      "id": "c87c2d83-adc7-45cb-a564-74f31d4387da",
+      "tenant_id": "bb5fb8c1-2e00-4158-84df-77fcca810699",
+      "slug": "site-bb5fb8c1",
+      "status": "draft",
+      "draft_data": {
+        "deliveryExtendedConfig": {
+          "rulesMeta": {},
+          "ordersMeta": {},
+          "originAddress": {
+            "cep": "28928506",
+            "street": "Avenida Independência",
+            "number": "103",
+            "complement": "Loja 2",
+            "neighborhood": "Unamar",
+            "city": "Cabo Frio",
+            "state": "RJ",
+            "country": "Brasil",
+            "latitude": -22.630984,
+            "longitude": -42.001668,
+            "geocodeStatus": "manual",
+            "geocodePrecision": "manual",
+            "placeId": null,
+            "geocodedAt": "2026-11-08T19:36:53.078Z",
+            "formattedAddress": "Avenida Independência, 103, Loja 2, Unamar, Cabo Frio - RJ, CEP 28928-506",
+            "isApproximate": false,
+            "addressFingerprint": "28928506|avenida independencia|103|unamar|cabo frio|rj"
+          }
+        }
+      },
+      "created_at": "2026-11-08T19:36:53.079Z",
+      "updated_at": "2026-11-08T19:36:53.079Z"
+    },
+    {
+      "id": "67008e23-d585-4d95-b73c-f5ac7294085b",
+      "tenant_id": "6febd809-62fc-4665-a795-179beba133b2",
+      "slug": "site-6febd809",
+      "status": "draft",
+      "draft_data": {
+        "deliveryExtendedConfig": {
+          "pricingModeExplicitlySet": false,
+          "originAddress": {
+            "cep": "28928000",
+            "street": "Avenida Independência",
+            "number": "5019",
+            "complement": "Loja 1",
+            "neighborhood": "Unamar (Tamoios)",
+            "city": "Cabo Frio",
+            "state": "RJ",
+            "country": "Brasil",
+            "latitude": -22.63485,
+            "longitude": -42.00812,
+            "geocodeStatus": "manual",
+            "geocodePrecision": "manual",
+            "placeId": null,
+            "geocodedAt": "2026-11-08T19:36:56.460Z",
+            "formattedAddress": "Avenida Independência, 5019, Loja 1, Unamar (Tamoios), Cabo Frio - RJ, CEP 28928-000",
+            "isApproximate": false,
+            "addressFingerprint": "28928000|avenida independencia|5019|unamar tamoios|cabo frio|rj"
+          },
+          "kmConfig": null,
+          "rulesMeta": {},
+          "ordersMeta": {}
+        }
+      },
+      "created_at": "2026-11-08T19:36:54.712Z",
+      "updated_at": "2026-11-08T19:36:56.460Z"
+    },
+    {
+      "id": "fe2d9828-da1d-473c-8575-66dfcd044d6a",
+      "tenant_id": "d5f7624c-8b57-43ce-899e-da78d7b4e545",
+      "slug": "site-d5f7624c",
+      "status": "draft",
+      "draft_data": {
+        "deliveryExtendedConfig": {
+          "rulesMeta": {},
+          "ordersMeta": {},
+          "originAddress": {
+            "cep": "28928506",
+            "street": "Avenida Independência",
+            "number": "103",
+            "complement": "Loja 2",
+            "neighborhood": "Unamar",
+            "city": "Cabo Frio",
+            "state": "RJ",
+            "country": "Brasil",
+            "latitude": -22.630984,
+            "longitude": -42.001668,
+            "geocodeStatus": "manual",
+            "geocodePrecision": "manual",
+            "placeId": null,
+            "geocodedAt": "2026-11-08T19:37:30.085Z",
+            "formattedAddress": "Avenida Independência, 103, Loja 2, Unamar, Cabo Frio - RJ, CEP 28928-506",
+            "isApproximate": false,
+            "addressFingerprint": "28928506|avenida independencia|103|unamar|cabo frio|rj"
+          }
+        }
+      },
+      "created_at": "2026-11-08T19:37:30.085Z",
+      "updated_at": "2026-11-08T19:37:30.085Z"
+    },
+    {
+      "id": "98a631f0-c274-478d-9c73-3828e011c195",
+      "tenant_id": "ac137062-f9a8-4856-bbb9-f430e6454cf2",
+      "slug": "site-ac137062",
+      "status": "draft",
+      "draft_data": {
+        "deliveryExtendedConfig": {
+          "pricingModeExplicitlySet": false,
+          "originAddress": {
+            "cep": "28928000",
+            "street": "Avenida Independência",
+            "number": "5019",
+            "complement": "Loja 1",
+            "neighborhood": "Unamar (Tamoios)",
+            "city": "Cabo Frio",
+            "state": "RJ",
+            "country": "Brasil",
+            "latitude": -22.63485,
+            "longitude": -42.00812,
+            "geocodeStatus": "manual",
+            "geocodePrecision": "manual",
+            "placeId": null,
+            "geocodedAt": "2026-11-08T19:37:32.728Z",
+            "formattedAddress": "Avenida Independência, 5019, Loja 1, Unamar (Tamoios), Cabo Frio - RJ, CEP 28928-000",
+            "isApproximate": false,
+            "addressFingerprint": "28928000|avenida independencia|5019|unamar tamoios|cabo frio|rj"
+          },
+          "kmConfig": null,
+          "rulesMeta": {},
+          "ordersMeta": {}
+        }
+      },
+      "created_at": "2026-11-08T19:37:31.897Z",
+      "updated_at": "2026-11-08T19:37:32.728Z"
+    },
+    {
+      "id": "407c7921-7c19-442a-9f0a-a30263e0445e",
+      "tenant_id": "d9e704a8-1702-4ffe-8206-8fe96224f699",
+      "slug": "site-d9e704a8",
+      "status": "draft",
+      "draft_data": {
+        "deliveryExtendedConfig": {
+          "rulesMeta": {},
+          "ordersMeta": {},
+          "originAddress": {
+            "cep": "28928506",
+            "street": "Avenida Independência",
+            "number": "103",
+            "complement": "Loja 2",
+            "neighborhood": "Unamar",
+            "city": "Cabo Frio",
+            "state": "RJ",
+            "country": "Brasil",
+            "latitude": -22.630984,
+            "longitude": -42.001668,
+            "geocodeStatus": "manual",
+            "geocodePrecision": "manual",
+            "placeId": null,
+            "geocodedAt": "2026-11-08T19:39:51.706Z",
+            "formattedAddress": "Avenida Independência, 103, Loja 2, Unamar, Cabo Frio - RJ, CEP 28928-506",
+            "isApproximate": false,
+            "addressFingerprint": "28928506|avenida independencia|103|unamar|cabo frio|rj"
+          }
+        }
+      },
+      "created_at": "2026-11-08T19:39:51.707Z",
+      "updated_at": "2026-11-08T19:39:51.707Z"
+    },
+    {
+      "id": "623738ba-5773-4bb4-9f10-4a678b030dd3",
+      "tenant_id": "5c89da93-8eeb-45e2-b9c0-dc4317808b14",
+      "slug": "site-5c89da93",
+      "status": "draft",
+      "draft_data": {
+        "deliveryExtendedConfig": {
+          "pricingModeExplicitlySet": false,
+          "originAddress": {
+            "cep": "28928000",
+            "street": "Avenida Independência",
+            "number": "5019",
+            "complement": "Loja 1",
+            "neighborhood": "Unamar (Tamoios)",
+            "city": "Cabo Frio",
+            "state": "RJ",
+            "country": "Brasil",
+            "latitude": -22.63485,
+            "longitude": -42.00812,
+            "geocodeStatus": "manual",
+            "geocodePrecision": "manual",
+            "placeId": null,
+            "geocodedAt": "2026-11-08T19:39:54.842Z",
+            "formattedAddress": "Avenida Independência, 5019, Loja 1, Unamar (Tamoios), Cabo Frio - RJ, CEP 28928-000",
+            "isApproximate": false,
+            "addressFingerprint": "28928000|avenida independencia|5019|unamar tamoios|cabo frio|rj"
+          },
+          "kmConfig": null,
+          "rulesMeta": {},
+          "ordersMeta": {}
+        }
+      },
+      "created_at": "2026-11-08T19:39:54.147Z",
+      "updated_at": "2026-11-08T19:39:54.842Z"
     }
   ],
   "site_sections": [
@@ -12741,6 +13391,51 @@
       "order_whatsapp_number": "11987654321",
       "created_at": "2026-10-13T08:37:44.402Z",
       "updated_at": "2026-10-13T08:37:44.402Z"
+    },
+    {
+      "id": "eb7db915-43ef-462c-adae-2b1c770e13c0",
+      "tenant_id": "6febd809-62fc-4665-a795-179beba133b2",
+      "orders_enabled": true,
+      "accept_orders_when_closed": true,
+      "pickup_enabled": true,
+      "delivery_enabled": true,
+      "minimum_order": 0,
+      "free_delivery_above": null,
+      "pickup_instructions": "Retire no balcão apresentando o número do pedido.",
+      "delivery_estimate_text": "40 a 60 minutos",
+      "order_whatsapp_number": null,
+      "created_at": "2026-11-08T19:36:56.318Z",
+      "updated_at": "2026-11-08T19:36:56.318Z"
+    },
+    {
+      "id": "803c3958-a529-4523-9961-5d78bdf14a35",
+      "tenant_id": "ac137062-f9a8-4856-bbb9-f430e6454cf2",
+      "orders_enabled": true,
+      "accept_orders_when_closed": true,
+      "pickup_enabled": true,
+      "delivery_enabled": true,
+      "minimum_order": 0,
+      "free_delivery_above": null,
+      "pickup_instructions": "Retire no balcão apresentando o número do pedido.",
+      "delivery_estimate_text": "40 a 60 minutos",
+      "order_whatsapp_number": null,
+      "created_at": "2026-11-08T19:37:32.519Z",
+      "updated_at": "2026-11-08T19:37:32.519Z"
+    },
+    {
+      "id": "5ac3c8a6-26f2-4535-961c-e04821a53e0b",
+      "tenant_id": "5c89da93-8eeb-45e2-b9c0-dc4317808b14",
+      "orders_enabled": true,
+      "accept_orders_when_closed": true,
+      "pickup_enabled": true,
+      "delivery_enabled": true,
+      "minimum_order": 0,
+      "free_delivery_above": null,
+      "pickup_instructions": "Retire no balcão apresentando o número do pedido.",
+      "delivery_estimate_text": "40 a 60 minutos",
+      "order_whatsapp_number": null,
+      "created_at": "2026-11-08T19:39:54.705Z",
+      "updated_at": "2026-11-08T19:39:54.705Z"
     }
   ],
   "delivery_rules": [
@@ -14924,6 +15619,139 @@
   "delivery_drivers": [],
   "delivery_routes": [],
   "delivery_route_stops": [],
-  "delivery_events": [],
+  "delivery_events": [
+    {
+      "id": "a408f3a0-ea20-4d18-8952-89f8202c9dd0",
+      "tenant_id": "6febd809-62fc-4665-a795-179beba133b2",
+      "route_id": "d22cfc44-b67f-4302-9f5a-fffc2b983b35",
+      "stop_id": null,
+      "order_id": null,
+      "driver_id": null,
+      "actor_user_id": "audit-super-admin",
+      "actor_name": "Auditoria Técnica",
+      "event_type": "ROUTE_CREATED",
+      "previous_status": null,
+      "new_status": "created",
+      "metadata": {
+        "routeCode": "RT-101",
+        "totalStops": 2,
+        "orderIds": [
+          "00000000-0000-4000-8000-000000001002",
+          "00000000-0000-4000-8000-000000001003"
+        ],
+        "driverName": null
+      },
+      "created_at": "2026-11-08T19:36:55.240Z",
+      "updated_at": "2026-11-08T19:36:55.240Z"
+    },
+    {
+      "id": "f030083b-499f-4bae-83bb-fa620bb12063",
+      "tenant_id": "6febd809-62fc-4665-a795-179beba133b2",
+      "route_id": "d22cfc44-b67f-4302-9f5a-fffc2b983b35",
+      "stop_id": null,
+      "order_id": null,
+      "driver_id": null,
+      "actor_user_id": "audit-system",
+      "actor_name": "Auditoria Automática",
+      "event_type": "ROUTE_REORDERED",
+      "previous_status": "created",
+      "new_status": "created",
+      "metadata": {
+        "action": "ROUTE_RECALCULATED",
+        "totalDistanceKm": 3.95,
+        "estimatedDurationMin": 14
+      },
+      "created_at": "2026-11-08T19:36:56.624Z",
+      "updated_at": "2026-11-08T19:36:56.624Z"
+    },
+    {
+      "id": "1e75a77b-827c-4c0c-9caf-5f289fa18a5a",
+      "tenant_id": "ac137062-f9a8-4856-bbb9-f430e6454cf2",
+      "route_id": "81b6d23e-50a1-4aba-a665-9da3af50aee2",
+      "stop_id": null,
+      "order_id": null,
+      "driver_id": null,
+      "actor_user_id": "audit-super-admin",
+      "actor_name": "Auditoria Técnica",
+      "event_type": "ROUTE_CREATED",
+      "previous_status": null,
+      "new_status": "created",
+      "metadata": {
+        "routeCode": "RT-101",
+        "totalStops": 2,
+        "orderIds": [
+          "00000000-0000-4000-8000-000000001002",
+          "00000000-0000-4000-8000-000000001003"
+        ],
+        "driverName": null
+      },
+      "created_at": "2026-11-08T19:37:32.300Z",
+      "updated_at": "2026-11-08T19:37:32.300Z"
+    },
+    {
+      "id": "2bf9cc50-784e-422a-85d8-5cd3f5c030e9",
+      "tenant_id": "ac137062-f9a8-4856-bbb9-f430e6454cf2",
+      "route_id": "81b6d23e-50a1-4aba-a665-9da3af50aee2",
+      "stop_id": null,
+      "order_id": null,
+      "driver_id": null,
+      "actor_user_id": "audit-system",
+      "actor_name": "Auditoria Automática",
+      "event_type": "ROUTE_REORDERED",
+      "previous_status": "created",
+      "new_status": "created",
+      "metadata": {
+        "action": "ROUTE_RECALCULATED",
+        "totalDistanceKm": 3.95,
+        "estimatedDurationMin": 14
+      },
+      "created_at": "2026-11-08T19:37:32.892Z",
+      "updated_at": "2026-11-08T19:37:32.892Z"
+    },
+    {
+      "id": "f1139a16-8ac4-405e-9e8e-0c8a0bff135d",
+      "tenant_id": "5c89da93-8eeb-45e2-b9c0-dc4317808b14",
+      "route_id": "a942c6c3-64ed-41a5-a4df-0b2b986f5f24",
+      "stop_id": null,
+      "order_id": null,
+      "driver_id": null,
+      "actor_user_id": "audit-super-admin",
+      "actor_name": "Auditoria Técnica",
+      "event_type": "ROUTE_CREATED",
+      "previous_status": null,
+      "new_status": "created",
+      "metadata": {
+        "routeCode": "RT-101",
+        "totalStops": 2,
+        "orderIds": [
+          "00000000-0000-4000-8000-000000001002",
+          "00000000-0000-4000-8000-000000001003"
+        ],
+        "driverName": null
+      },
+      "created_at": "2026-11-08T19:39:54.529Z",
+      "updated_at": "2026-11-08T19:39:54.529Z"
+    },
+    {
+      "id": "6401cb2f-1b1a-4caa-8a69-15f39bedfcca",
+      "tenant_id": "5c89da93-8eeb-45e2-b9c0-dc4317808b14",
+      "route_id": "a942c6c3-64ed-41a5-a4df-0b2b986f5f24",
+      "stop_id": null,
+      "order_id": null,
+      "driver_id": null,
+      "actor_user_id": "audit-system",
+      "actor_name": "Auditoria Automática",
+      "event_type": "ROUTE_REORDERED",
+      "previous_status": "created",
+      "new_status": "created",
+      "metadata": {
+        "action": "ROUTE_RECALCULATED",
+        "totalDistanceKm": 3.95,
+        "estimatedDurationMin": 14
+      },
+      "created_at": "2026-11-08T19:39:55.015Z",
+      "updated_at": "2026-11-08T19:39:55.015Z"
+    }
+  ],
   "delivery_notifications": []
 }

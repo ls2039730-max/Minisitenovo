@@ -1831,10 +1831,26 @@ export function getLocalTableBuilder(tableName: string): any {
 function createAdminClient(): ISupabaseAdminClient {
   if (isRealSupabaseConfigured) {
     console.log('[SUPABASE] Connected to real remote Supabase project:', SUPABASE_URL);
+    const boundedFetch: typeof fetch = async (input, init) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      try {
+        return await fetch(input, {
+          ...init,
+          signal: init?.signal || controller.signal,
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+
     const remoteClient = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
+      },
+      global: {
+        fetch: boundedFetch,
       },
     });
 

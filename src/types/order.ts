@@ -55,6 +55,17 @@ export type DeliveryPricingMode = 'km' | 'neighborhood' | 'neighborhood_km';
 
 export type DistanceCalculationMethod = 'road_route' | 'straight_line';
 
+export type GeocodePrecision =
+  | 'rooftop'
+  | 'range_interpolated'
+  | 'geometric_center'
+  | 'approximate'
+  | 'street'
+  | 'neighborhood'
+  | 'cep'
+  | 'city'
+  | 'manual';
+
 export interface DeliveryOriginAddress {
   cep: string;
   street: string;
@@ -63,8 +74,16 @@ export interface DeliveryOriginAddress {
   neighborhood: string;
   city: string;
   state: string;
+  country?: string;
   latitude?: number | null;
   longitude?: number | null;
+  geocodeStatus?: GeocodeStatus | null;
+  geocodePrecision?: GeocodePrecision | null;
+  placeId?: string | null;
+  geocodedAt?: string | null;
+  formattedAddress?: string | null;
+  isApproximate?: boolean;
+  addressFingerprint?: string | null;
 }
 
 export interface DeliveryKmConfig {
@@ -258,6 +277,7 @@ export interface OrderDeliveryAddress {
   neighborhood: string;
   city: string;
   state: string;
+  country?: string;
   reference?: string | null;
   deliveryRuleId?: string | null;
   pricingMode?: DeliveryPricingMode | null;
@@ -267,6 +287,11 @@ export interface OrderDeliveryAddress {
   latitude?: number | null;
   longitude?: number | null;
   geocodeStatus?: GeocodeStatus | null;
+  geocodePrecision?: GeocodePrecision | null;
+  placeId?: string | null;
+  geocodedAt?: string | null;
+  formattedAddress?: string | null;
+  isApproximate?: boolean;
 }
 
 export interface OrderItem {

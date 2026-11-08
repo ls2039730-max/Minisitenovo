@@ -2,6 +2,7 @@ import {
   CepLookupResult,
   DeliveryOriginAddress,
   DistanceCalculationMethod,
+  GeocodePrecision,
 } from '../../src/types/order.js';
 import {
   calculateStraightLineDistanceKm,
@@ -9,15 +10,29 @@ import {
   normalizeCep,
   normalizeDeliveryText,
 } from '../../src/utils/deliveryFeeCalculator.js';
+import {
+  buildFullGeocodingQuery,
+  computeAddressFingerprint,
+  validateAndNormalizeCoordinates,
+} from '../../src/utils/addressCoordinateValidator.js';
 
 export interface GeocodeResult {
   success: boolean;
   latitude?: number;
   longitude?: number;
   formattedAddress?: string;
-  precision?: 'rooftop' | 'street' | 'neighborhood' | 'cep' | 'city';
-  provider?: 'google' | 'nominatim' | 'brasilapi';
+  precision?: GeocodePrecision;
+  locationType?: 'ROOFTOP' | 'RANGE_INTERPOLATED' | 'GEOMETRIC_CENTER' | 'APPROXIMATE';
+  placeId?: string | null;
+  isApproximate?: boolean;
+  provider?: 'google' | 'arcgis' | 'nominatim' | 'brasilapi' | 'manual';
+  geocodedAt?: string;
+  addressFingerprint?: string;
   error?: string;
+}
+
+export interface GeocodeOptions {
+  forceRefresh?: boolean;
 }
 
 export interface RouteDistanceResult {
@@ -34,6 +49,29 @@ const geocodeCache = new Map<string, { timestamp: number; data: GeocodeResult }>
 const routeCache = new Map<string, { timestamp: number; data: RouteDistanceResult }>();
 const cepCache = new Map<string, { timestamp: number; data: CepLookupResult }>();
 const CACHE_TTL_MS = 1000 * 60 * 30; // 30 minutes
+
+/**
+ * Invalidates cached geocoding and route entries when an address is modified.
+ */
+export function invalidateGeocodeCache(address?: Partial<DeliveryOriginAddress> | null): void {
+  if (!address) {
+    geocodeCache.clear();
+    routeCache.clear();
+    return;
+  }
+  const fp = computeAddressFingerprint(address);
+  if (fp) {
+    geocodeCache.delete(fp);
+  }
+  const cleanCep = normalizeCep(address.cep);
+  const street = normalizeDeliveryText(address.street);
+  for (const key of Array.from(geocodeCache.keys())) {
+    if ((cleanCep && key.includes(cleanCep)) || (street && key.includes(street))) {
+      geocodeCache.delete(key);
+    }
+  }
+  routeCache.clear();
+}
 
 /**
  * Resolves the Google Maps API key on the server from either GOOGLE_MAPS_API_KEY
@@ -143,12 +181,13 @@ export async function lookupPostalCodeServer(rawCep: string): Promise<CepLookupR
     }, 4500);
     if (res.ok) {
       const data = await res.json();
-      const lat = data?.location?.coordinates?.latitude
+      const rawLat = data?.location?.coordinates?.latitude
         ? Number(data.location.coordinates.latitude)
         : null;
-      const lng = data?.location?.coordinates?.longitude
+      const rawLng = data?.location?.coordinates?.longitude
         ? Number(data.location.coordinates.longitude)
         : null;
+      const coordCheck = validateAndNormalizeCoordinates(rawLat, rawLng);
 
       if (!result) {
         result = {
@@ -158,17 +197,17 @@ export async function lookupPostalCodeServer(rawCep: string): Promise<CepLookupR
           city: data.city || '',
           state: (data.state || '').toUpperCase(),
           found: true,
-          latitude: Number.isFinite(lat) ? lat : null,
-          longitude: Number.isFinite(lng) ? lng : null,
+          latitude: coordCheck.valid ? coordCheck.latitude : null,
+          longitude: coordCheck.valid ? coordCheck.longitude : null,
         };
       } else {
         if (!result.street && data.street) result.street = data.street;
         if (!result.neighborhood && data.neighborhood) result.neighborhood = data.neighborhood;
         if (!result.city && data.city) result.city = data.city;
         if (!result.state && data.state) result.state = data.state.toUpperCase();
-        if (lat && lng && Number.isFinite(lat) && Number.isFinite(lng)) {
-          result.latitude = lat;
-          result.longitude = lng;
+        if (coordCheck.valid) {
+          result.latitude = coordCheck.latitude;
+          result.longitude = coordCheck.longitude;
         }
       }
     }
@@ -193,17 +232,15 @@ export async function lookupPostalCodeServer(rawCep: string): Promise<CepLookupR
 }
 
 /**
- * Checks if a Nominatim display_name matches the target state/city reasonably well.
+ * Checks if a formatted display string matches the target state and city.
  */
-function matchesCityOrState(displayName: string, city?: string, state?: string): boolean {
+export function matchesCityOrState(displayName: string, city?: string, state?: string): boolean {
   const normDisplay = normalizeDeliveryText(displayName);
   if (state) {
     const normState = normalizeDeliveryText(state);
     const fullStateName = STATE_NAMES_BR[normState] || normState;
-    if (
-      !normDisplay.includes(fullStateName) &&
-      !normDisplay.split(' ').includes(normState)
-    ) {
+    const tokens = normDisplay.split(' ');
+    if (!normDisplay.includes(fullStateName) && !tokens.includes(normState)) {
       return false;
     }
   }
@@ -216,25 +253,152 @@ function matchesCityOrState(displayName: string, city?: string, state?: string):
   return true;
 }
 
+/**
+ * Validates that a Google Geocoding result belongs to the requested city and state,
+ * preventing homonymous streets/neighborhoods in other cities from being accepted.
+ */
+function matchesGoogleResultCityAndState(
+  result: any,
+  targetCity?: string,
+  targetState?: string
+): boolean {
+  const formatted = String(result?.formatted_address || '');
+  const components: any[] = Array.isArray(result?.address_components)
+    ? result.address_components
+    : [];
+
+  if (targetState) {
+    const normState = normalizeDeliveryText(targetState);
+    const fullState = STATE_NAMES_BR[normState] || normState;
+    const stateComp = components.find(
+      (c) => Array.isArray(c.types) && c.types.includes('administrative_area_level_1')
+    );
+    if (stateComp) {
+      const shortState = normalizeDeliveryText(stateComp.short_name);
+      const longState = normalizeDeliveryText(stateComp.long_name);
+      if (shortState !== normState && longState !== fullState && !longState.includes(fullState)) {
+        return false;
+      }
+    } else if (!matchesCityOrState(formatted, undefined, targetState)) {
+      return false;
+    }
+  }
+
+  if (targetCity) {
+    const normCity = normalizeDeliveryText(targetCity);
+    const cityComps = components.filter(
+      (c) =>
+        Array.isArray(c.types) &&
+        (c.types.includes('administrative_area_level_2') ||
+          c.types.includes('locality') ||
+          c.types.includes('sublocality_level_1'))
+    );
+    if (cityComps.length > 0) {
+      const anyMatch = cityComps.some((c) => {
+        const s = normalizeDeliveryText(c.short_name);
+        const l = normalizeDeliveryText(c.long_name);
+        return s === normCity || l === normCity || l.includes(normCity) || normCity.includes(l);
+      });
+      if (!anyMatch && !matchesCityOrState(formatted, targetCity, undefined)) {
+        return false;
+      }
+    } else if (!matchesCityOrState(formatted, targetCity, undefined)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Validates that a Nominatim result belongs to the requested city and state.
+ */
+function matchesNominatimResultCityAndState(
+  result: any,
+  targetCity?: string,
+  targetState?: string
+): boolean {
+  const addr = result?.address || {};
+  const display = String(result?.display_name || '');
+
+  if (targetState) {
+    const normState = normalizeDeliveryText(targetState);
+    const fullState = STATE_NAMES_BR[normState] || normState;
+    const isoLvl4 = normalizeDeliveryText(addr['ISO3166-2-lvl4'] || '');
+    const addrState = normalizeDeliveryText(addr.state || '');
+    const stateMatches =
+      isoLvl4 === `br ${normState}` ||
+      isoLvl4.endsWith(` ${normState}`) ||
+      addrState === normState ||
+      addrState === fullState ||
+      matchesCityOrState(display, undefined, targetState);
+    if (!stateMatches) return false;
+  }
+
+  if (targetCity) {
+    const normCity = normalizeDeliveryText(targetCity);
+    const candidateCities = [
+      addr.city,
+      addr.town,
+      addr.municipality,
+      addr.village,
+      addr.county,
+    ]
+      .filter(Boolean)
+      .map((c) => normalizeDeliveryText(c));
+
+    if (candidateCities.length > 0) {
+      const cityMatch = candidateCities.some(
+        (c) => c === normCity || c.includes(normCity) || normCity.includes(c)
+      );
+      if (!cityMatch && !matchesCityOrState(display, targetCity, undefined)) {
+        return false;
+      }
+    } else if (!matchesCityOrState(display, targetCity, undefined)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 // Circuit breaker for Nominatim if blocked (403/429) to avoid wasting seconds
 let nominatimBlockedUntil = 0;
 
 /**
  * Geocodes a structured Brazilian address into (latitude, longitude).
- * Never invents coordinates if geocoding fails.
+ * Queries complete structured address: "Rua + número + bairro + cidade + estado + CEP + Brasil".
+ * Validates city/state consistency, classifies precision (ROOFTOP, RANGE_INTERPOLATED, etc.),
+ * never copies the restaurant's coordinates onto a customer's address, and never invents coordinates.
  */
 export async function geocodeAddressServer(
   address: Partial<DeliveryOriginAddress>,
-  referenceOrigin?: DeliveryOriginAddress | null
+  _referenceOrigin?: DeliveryOriginAddress | null,
+  options?: GeocodeOptions
 ): Promise<GeocodeResult> {
-  // If valid coordinates are already provided on the object, validate and return them
-  if (hasValidCoordinates(address)) {
-    return {
-      success: true,
-      latitude: Number(address.latitude),
-      longitude: Number(address.longitude),
-      precision: 'rooftop',
-    };
+  const nowIso = new Date().toISOString();
+  const fingerprint = computeAddressFingerprint(address);
+
+  // If valid coordinates are already provided on the object and forceRefresh is not requested,
+  // validate & normalize them (correcting inverted lat/lng if detected).
+  if (!options?.forceRefresh && address.latitude !== null && address.latitude !== undefined && address.longitude !== null && address.longitude !== undefined) {
+    const coordCheck = validateAndNormalizeCoordinates(address.latitude, address.longitude);
+    if (coordCheck.valid && coordCheck.latitude !== null && coordCheck.longitude !== null) {
+      const isManual = address.geocodeStatus === 'manual' || address.geocodePrecision === 'manual';
+      return {
+        success: true,
+        latitude: coordCheck.latitude,
+        longitude: coordCheck.longitude,
+        formattedAddress: address.formattedAddress || buildFullGeocodingQuery(address),
+        precision: isManual ? 'manual' : address.geocodePrecision || 'rooftop',
+        locationType: 'ROOFTOP',
+        placeId: address.placeId || null,
+        isApproximate: Boolean(address.isApproximate),
+        provider: isManual ? 'manual' : 'google',
+        geocodedAt: address.geocodedAt || nowIso,
+        addressFingerprint: fingerprint,
+      };
+    }
   }
 
   const cleanCep = normalizeCep(address.cep);
@@ -244,150 +408,307 @@ export async function geocodeAddressServer(
   let city = (address.city || '').trim();
   let state = (address.state || '').trim().toUpperCase();
 
-  // If customer is on the exact same street and city as reference store origin:
-  if (
-    referenceOrigin &&
-    hasValidCoordinates(referenceOrigin) &&
-    street &&
-    normalizeDeliveryText(street) === normalizeDeliveryText(referenceOrigin.street) &&
-    city &&
-    normalizeDeliveryText(city) === normalizeDeliveryText(referenceOrigin.city)
-  ) {
-    return {
-      success: true,
-      latitude: referenceOrigin.latitude,
-      longitude: referenceOrigin.longitude,
-      formattedAddress: `${street}, ${number || 'S/N'}, ${neighborhood || referenceOrigin.neighborhood}, ${city} - ${state}`,
-      precision: 'street',
-      provider: 'google',
-    };
-  }
-
-  // Enrich from CEP if city/state/street are missing or to obtain fast coordinates
+  // Enrich missing fields from CEP, while detecting any city/state conflict
   let cepLookupData: CepLookupResult | null = null;
+  let cepCityStateMismatch = false;
+
   if (cleanCep.length === 8) {
     cepLookupData = await lookupPostalCodeServer(cleanCep);
     if (cepLookupData.found) {
-      if (!street && cepLookupData.street) street = cepLookupData.street;
-      if (!neighborhood && cepLookupData.neighborhood) neighborhood = cepLookupData.neighborhood;
-      if (!city && cepLookupData.city) city = cepLookupData.city;
-      if (!state && cepLookupData.state) state = cepLookupData.state;
+      const cepState = (cepLookupData.state || '').trim().toUpperCase();
+      const cepCity = (cepLookupData.city || '').trim();
+
+      if (state && cepState && state !== cepState) {
+        cepCityStateMismatch = true;
+      } else if (
+        city &&
+        cepCity &&
+        normalizeDeliveryText(city) !== normalizeDeliveryText(cepCity)
+      ) {
+        cepCityStateMismatch = true;
+      }
+
+      if (!cepCityStateMismatch) {
+        if (!street && cepLookupData.street) street = cepLookupData.street;
+        if (!neighborhood && cepLookupData.neighborhood) neighborhood = cepLookupData.neighborhood;
+        if (!city && cepLookupData.city) city = cepLookupData.city;
+        if (!state && cepLookupData.state) state = cepLookupData.state;
+      }
     }
   }
 
   if (!city && !state && cleanCep.length !== 8) {
     return {
       success: false,
-      error: 'Endereço insuficiente para geocodificação. Informe cidade, UF e logradouro ou CEP válido.',
+      error:
+        'Endereço insuficiente para geocodificação. Informe cidade, UF e logradouro ou CEP válido.',
+    };
+  }
+
+  if (!street && !neighborhood && (cleanCep.length !== 8 || !cepLookupData?.found)) {
+    return {
+      success: false,
+      error:
+        'Endereço incompleto para geocodificação. Informe o logradouro, número e bairro ou um CEP válido.',
     };
   }
 
   const cacheKey = normalizeDeliveryText(
     `${cleanCep}|${street}|${number}|${neighborhood}|${city}|${state}`
   );
-  const cached = geocodeCache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-    return cached.data;
+
+  if (options?.forceRefresh) {
+    geocodeCache.delete(cacheKey);
+  } else {
+    const cached = geocodeCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      return cached.data;
+    }
   }
 
-  // 1. Fast check: If CEP lookup already gave us valid coordinates, use them!
-  if (
-    cepLookupData &&
-    cepLookupData.found &&
-    typeof cepLookupData.latitude === 'number' &&
-    typeof cepLookupData.longitude === 'number' &&
-    Number.isFinite(cepLookupData.latitude) &&
-    Number.isFinite(cepLookupData.longitude)
-  ) {
-    const geoResult: GeocodeResult = {
-      success: true,
-      latitude: cepLookupData.latitude,
-      longitude: cepLookupData.longitude,
-      formattedAddress: `${street || cepLookupData.street || ''}, ${neighborhood || cepLookupData.neighborhood || ''}, ${city || cepLookupData.city} - ${state || cepLookupData.state}`,
-      precision: 'cep',
-      provider: 'brasilapi',
-    };
-    geocodeCache.set(cacheKey, { timestamp: Date.now(), data: geoResult });
-    return geoResult;
-  }
+  const fullFormattedQuery = buildFullGeocodingQuery({
+    cep: cleanCep,
+    street,
+    number,
+    neighborhood,
+    city,
+    state,
+    country: 'Brasil',
+  });
 
-  // 2. Try Google Maps Geocoding API if GOOGLE_MAPS_API_KEY or VITE_GOOGLE_MAPS_API_KEY is available
+  let googleApproximateFallback: GeocodeResult | null = null;
+
+  // 1. PRIORITY 1: Google Maps Geocoding API with full structured query + components validation
   const googleApiKey = getServerGoogleMapsApiKey();
   if (googleApiKey) {
     try {
-      const fullQuery = [
-        street ? `${street}${number ? `, ${number}` : ''}` : '',
-        neighborhood,
-        city,
-        state,
-        cleanCep,
-        'Brasil',
-      ]
-        .filter(Boolean)
-        .join(', ');
+      const componentParts: string[] = ['country:BR'];
+      if (state) componentParts.push(`administrative_area:${state}`);
+      if (cleanCep.length === 8 && !cepCityStateMismatch) {
+        componentParts.push(`postal_code:${cleanCep}`);
+      }
+      const componentsParam = componentParts.join('|');
       const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
-        fullQuery
+        fullFormattedQuery
+      )}&components=${encodeURIComponent(
+        componentsParam
       )}&region=br&language=pt-BR&key=${encodeURIComponent(googleApiKey.trim())}`;
-      const res = await fetchWithTimeout(url, {}, 3500);
+
+      const res = await fetchWithTimeout(url, {}, 4000);
       if (res.ok) {
         const data = await res.json();
         if (data.status === 'OK' && Array.isArray(data.results) && data.results.length > 0) {
-          const loc = data.results[0]?.geometry?.location;
-          if (loc && typeof loc.lat === 'number' && typeof loc.lng === 'number') {
+          // Filter results that strictly match the requested city and state
+          const matchingResults = data.results.filter((r: any) =>
+            matchesGoogleResultCityAndState(r, city, state)
+          );
+
+          // Rank results by location_type accuracy
+          const locationTypeRank: Record<string, number> = {
+            ROOFTOP: 4,
+            RANGE_INTERPOLATED: 3,
+            GEOMETRIC_CENTER: 2,
+            APPROXIMATE: 1,
+          };
+
+          matchingResults.sort(
+            (a: any, b: any) =>
+              (locationTypeRank[b?.geometry?.location_type] || 0) -
+              (locationTypeRank[a?.geometry?.location_type] || 0)
+          );
+
+          const chosen = matchingResults[0];
+          const loc = chosen?.geometry?.location;
+          const coordCheck = validateAndNormalizeCoordinates(loc?.lat, loc?.lng);
+
+          if (chosen && coordCheck.valid && coordCheck.latitude !== null && coordCheck.longitude !== null) {
+            const locType = (chosen.geometry?.location_type || 'APPROXIMATE') as
+              | 'ROOFTOP'
+              | 'RANGE_INTERPOLATED'
+              | 'GEOMETRIC_CENTER'
+              | 'APPROXIMATE';
+
+            const precisionMap: Record<string, GeocodePrecision> = {
+              ROOFTOP: 'rooftop',
+              RANGE_INTERPOLATED: 'range_interpolated',
+              GEOMETRIC_CENTER: 'geometric_center',
+              APPROXIMATE: 'approximate',
+            };
+
+            const mappedPrecision = precisionMap[locType] || 'approximate';
+            const isApproximate = locType === 'APPROXIMATE' || locType === 'GEOMETRIC_CENTER';
+
             const result: GeocodeResult = {
               success: true,
-              latitude: loc.lat,
-              longitude: loc.lng,
-              formattedAddress: data.results[0].formatted_address,
-              precision: 'rooftop',
+              latitude: coordCheck.latitude,
+              longitude: coordCheck.longitude,
+              formattedAddress: chosen.formatted_address || fullFormattedQuery,
+              precision: mappedPrecision,
+              locationType: locType,
+              placeId: chosen.place_id || null,
+              isApproximate,
               provider: 'google',
+              geocodedAt: nowIso,
+              addressFingerprint: cacheKey,
             };
-            geocodeCache.set(cacheKey, { timestamp: Date.now(), data: result });
-            return result;
+
+            if (!isApproximate) {
+              geocodeCache.set(cacheKey, { timestamp: Date.now(), data: result });
+              return result;
+            }
+            // Hold APPROXIMATE result in case Nominatim or CEP has a more specific street/CEP location
+            googleApproximateFallback = result;
           }
         }
       }
     } catch {
-      // Fallback below
+      // Fallback to ArcGIS / Nominatim below
     }
   }
 
-  // 3. Try OpenStreetMap Nominatim with progressive queries (if not circuit-broken)
-  if (Date.now() > nominatimBlockedUntil) {
-    const queries: Array<{ q: string; precision: GeocodeResult['precision'] }> = [];
+  const cleanNeighborhoodForQuery = neighborhood
+    .replace(/\(([^)]+)\)/g, ', $1')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const primaryNeighborhood = neighborhood.replace(/\([^)]*\)/g, '').trim() || neighborhood;
 
-    if (street && number && number.toLowerCase() !== 's/n' && neighborhood && city && state) {
+  // 2. PRIORITY 2: ArcGIS World Geocoder for high-precision street/rooftop resolution in Brazilian cities & districts
+  if (street && city && state) {
+    try {
+      const arcgisParts = [
+        number && number.toLowerCase() !== 's/n' ? `${street}, ${number}` : street,
+        cleanNeighborhoodForQuery,
+        city,
+        state,
+        !cepCityStateMismatch && cleanCep.length === 8 ? cleanCep : '',
+        'Brasil',
+      ].filter(Boolean);
+      const singleLine = arcgisParts.join(', ');
+      const arcgisUrl = `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&singleLine=${encodeURIComponent(
+        singleLine
+      )}&countryCode=BRA&outFields=Addr_type,Match_addr,City,Subregion,Region,RegionAbbr,Postal,StName,AddNum,Nbrhd,District&maxLocations=5`;
+
+      const res = await fetchWithTimeout(arcgisUrl, {}, 3500);
+      if (res.ok) {
+        const data = await res.json();
+        const candidates = Array.isArray(data?.candidates) ? data.candidates : [];
+        const streetTokens = normalizeDeliveryText(street)
+          .split(' ')
+          .filter((t) => t.length >= 3 && !['rua', 'avenida', 'estrada', 'travessa', 'alameda', 'rodovia', 'praca'].includes(t));
+
+        const validCandidate = candidates.find((c: any) => {
+          const score = Number(c?.score || 0);
+          const addrType = String(c?.attributes?.Addr_type || '');
+          if (score < 82) return false;
+          if (!['PointAddress', 'Subaddress', 'StreetAddress', 'StreetName'].includes(addrType)) {
+            return false;
+          }
+          const attr = c?.attributes || {};
+          const matchText = `${c?.address || ''} ${attr.Match_addr || ''} ${attr.City || ''} ${attr.Subregion || ''} ${attr.District || ''} ${attr.Region || ''} ${attr.RegionAbbr || ''}`;
+          if (!matchesCityOrState(matchText, city, state)) {
+            return false;
+          }
+          if (streetTokens.length > 0) {
+            const candidateStreetNorm = normalizeDeliveryText(
+              `${attr.StName || ''} ${c?.address || ''} ${attr.Match_addr || ''}`
+            );
+            const hasStreetToken = streetTokens.some((tok) => candidateStreetNorm.includes(tok));
+            if (!hasStreetToken) return false;
+          }
+          return true;
+        });
+
+        if (validCandidate) {
+          const coordCheck = validateAndNormalizeCoordinates(
+            validCandidate?.location?.y,
+            validCandidate?.location?.x
+          );
+          if (coordCheck.valid && coordCheck.latitude !== null && coordCheck.longitude !== null) {
+            const addrType = String(validCandidate?.attributes?.Addr_type || '');
+            const precision: GeocodePrecision =
+              addrType === 'PointAddress' || addrType === 'Subaddress'
+                ? 'rooftop'
+                : addrType === 'StreetAddress'
+                ? 'range_interpolated'
+                : 'street';
+            const locationType =
+              precision === 'rooftop'
+                ? 'ROOFTOP'
+                : precision === 'range_interpolated'
+                ? 'RANGE_INTERPOLATED'
+                : 'GEOMETRIC_CENTER';
+
+            const geoResult: GeocodeResult = {
+              success: true,
+              latitude: coordCheck.latitude,
+              longitude: coordCheck.longitude,
+              formattedAddress:
+                validCandidate?.attributes?.Match_addr ||
+                validCandidate?.address ||
+                fullFormattedQuery,
+              precision,
+              locationType,
+              placeId: null,
+              isApproximate: precision === 'street',
+              provider: 'arcgis',
+              geocodedAt: nowIso,
+              addressFingerprint: cacheKey,
+            };
+            geocodeCache.set(cacheKey, { timestamp: Date.now(), data: geoResult });
+            return geoResult;
+          }
+        }
+      }
+    } catch {
+      // Fallback to Nominatim below
+    }
+  }
+
+  // 3. PRIORITY 3: OpenStreetMap Nominatim with progressive rooftop -> street -> neighborhood queries
+  if (Date.now() > nominatimBlockedUntil) {
+    const queries: Array<{
+      q: string;
+      precision: GeocodePrecision;
+      isApproximate: boolean;
+    }> = [];
+
+    if (street && number && number.toLowerCase() !== 's/n' && city && state) {
       queries.push({
-        q: `${street}, ${number}, ${neighborhood}, ${city}, ${state}, Brasil`,
+        q: [street, number, primaryNeighborhood, city, state, 'Brasil'].filter(Boolean).join(', '),
         precision: 'rooftop',
+        isApproximate: false,
       });
     }
-    if (street && neighborhood && city && state) {
+    if (street && city && state) {
       queries.push({
-        q: `${street}, ${neighborhood}, ${city}, ${state}, Brasil`,
+        q: [street, primaryNeighborhood, city, state, 'Brasil'].filter(Boolean).join(', '),
         precision: 'street',
+        isApproximate: true,
       });
-    } else if (neighborhood && city && state) {
+    }
+    if (primaryNeighborhood && city && state) {
       queries.push({
-        q: `${neighborhood}, ${city}, ${state}, Brasil`,
+        q: `${primaryNeighborhood}, ${city}, ${state}, Brasil`,
         precision: 'neighborhood',
+        isApproximate: true,
       });
     }
 
     for (const item of queries) {
       try {
-        const url = `https://nominatim.openstreetmap.org/search?format=json&limit=2&countrycodes=br&addressdetails=1&q=${encodeURIComponent(
+        const url = `https://nominatim.openstreetmap.org/search?format=json&limit=4&countrycodes=br&addressdetails=1&q=${encodeURIComponent(
           item.q
         )}`;
         const res = await fetchWithTimeout(
           url,
           {
             headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
               'Accept-Language': 'pt-BR,pt;q=0.9',
             },
           },
-          2500
+          3000
         );
 
         if (res.status === 403 || res.status === 429) {
@@ -399,27 +720,32 @@ export async function geocodeAddressServer(
           const results = await res.json();
           if (Array.isArray(results) && results.length > 0) {
             const validMatch = results.find((r: any) =>
-              matchesCityOrState(r.display_name || '', city, state)
+              matchesNominatimResultCityAndState(r, city, state)
             );
-            const chosen = validMatch || results[0];
-            const lat = parseFloat(chosen.lat);
-            const lon = parseFloat(chosen.lon);
-
-            if (
-              Number.isFinite(lat) &&
-              Number.isFinite(lon) &&
-              matchesCityOrState(chosen.display_name || '', city, state)
-            ) {
-              const geoResult: GeocodeResult = {
-                success: true,
-                latitude: lat,
-                longitude: lon,
-                formattedAddress: chosen.display_name,
-                precision: item.precision,
-                provider: 'nominatim',
-              };
-              geocodeCache.set(cacheKey, { timestamp: Date.now(), data: geoResult });
-              return geoResult;
+            if (validMatch) {
+              const coordCheck = validateAndNormalizeCoordinates(validMatch.lat, validMatch.lon);
+              if (coordCheck.valid && coordCheck.latitude !== null && coordCheck.longitude !== null) {
+                const geoResult: GeocodeResult = {
+                  success: true,
+                  latitude: coordCheck.latitude,
+                  longitude: coordCheck.longitude,
+                  formattedAddress: validMatch.display_name || fullFormattedQuery,
+                  precision: item.precision,
+                  locationType:
+                    item.precision === 'rooftop'
+                      ? 'ROOFTOP'
+                      : item.precision === 'street'
+                      ? 'GEOMETRIC_CENTER'
+                      : 'APPROXIMATE',
+                  placeId: validMatch.place_id ? String(validMatch.place_id) : null,
+                  isApproximate: item.isApproximate,
+                  provider: 'nominatim',
+                  geocodedAt: nowIso,
+                  addressFingerprint: cacheKey,
+                };
+                geocodeCache.set(cacheKey, { timestamp: Date.now(), data: geoResult });
+                return geoResult;
+              }
             }
           }
         }
@@ -429,33 +755,45 @@ export async function geocodeAddressServer(
     }
   }
 
-  // 4. Fallback to BrasilAPI CEP coordinates if available
-  if (cleanCep.length === 8) {
+  // 3. PRIORITY 3: Fallback to BrasilAPI CEP coordinates ONLY when rooftop/street failed
+  // and ONLY if the CEP matches the target city/state.
+  if (cleanCep.length === 8 && !cepCityStateMismatch) {
     const cepInfo = cepLookupData || (await lookupPostalCodeServer(cleanCep));
-    if (
-      cepInfo.found &&
-      typeof cepInfo.latitude === 'number' &&
-      typeof cepInfo.longitude === 'number' &&
-      Number.isFinite(cepInfo.latitude) &&
-      Number.isFinite(cepInfo.longitude)
-    ) {
-      const geoResult: GeocodeResult = {
-        success: true,
-        latitude: cepInfo.latitude,
-        longitude: cepInfo.longitude,
-        formattedAddress: `${cepInfo.street || ''}, ${cepInfo.neighborhood || ''}, ${cepInfo.city} - ${cepInfo.state}`,
-        precision: 'cep',
-        provider: 'brasilapi',
-      };
-      geocodeCache.set(cacheKey, { timestamp: Date.now(), data: geoResult });
-      return geoResult;
+    if (cepInfo.found && matchesCityOrState(`${cepInfo.city} ${cepInfo.state}`, city, state)) {
+      const coordCheck = validateAndNormalizeCoordinates(cepInfo.latitude, cepInfo.longitude);
+      if (coordCheck.valid && coordCheck.latitude !== null && coordCheck.longitude !== null) {
+        const geoResult: GeocodeResult = {
+          success: true,
+          latitude: coordCheck.latitude,
+          longitude: coordCheck.longitude,
+          formattedAddress:
+            fullFormattedQuery ||
+            `${cepInfo.street || street || ''}, ${cepInfo.neighborhood || neighborhood || ''}, ${cepInfo.city} - ${cepInfo.state}`,
+          precision: 'cep',
+          locationType: 'APPROXIMATE',
+          placeId: null,
+          isApproximate: true,
+          provider: 'brasilapi',
+          geocodedAt: nowIso,
+          addressFingerprint: cacheKey,
+        };
+        geocodeCache.set(cacheKey, { timestamp: Date.now(), data: geoResult });
+        return geoResult;
+      }
     }
+  }
+
+  // 4. If Google returned a city/neighborhood-matched APPROXIMATE candidate and nothing more specific was found
+  if (googleApproximateFallback) {
+    geocodeCache.set(cacheKey, { timestamp: Date.now(), data: googleApproximateFallback });
+    return googleApproximateFallback;
   }
 
   return {
     success: false,
-    error:
-      'Não foi possível localizar as coordenadas geográficas deste endereço. Verifique se o CEP, logradouro, bairro, cidade e UF estão corretos.',
+    error: cepCityStateMismatch
+      ? `Conflito de endereço: o CEP ${cleanCep} pertence a ${cepLookupData?.city || ''} - ${cepLookupData?.state || ''}, diferente de ${city} - ${state}.`
+      : 'Não foi possível localizar as coordenadas geográficas deste endereço. Verifique se o CEP, logradouro, número, bairro, cidade e UF estão corretos.',
   };
 }
 

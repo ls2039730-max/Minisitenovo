@@ -44,6 +44,7 @@ interface InteractiveDeliveryMapProps {
   onSelectClusterOrders?: (orderIds: string[]) => void;
   onRequestManualGeocode?: (order: DispatchOrderItem) => void;
   focusedOrderId?: string | null;
+  focusRequestSeq?: number;
   onFocusOrder?: (orderId: string | null) => void;
   liveRoutePreview?: RoutePreviewResult | null;
   liveRouteLoading?: boolean;
@@ -183,6 +184,7 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
   onToggleSelectOrder,
   onRequestManualGeocode,
   focusedOrderId,
+  focusRequestSeq = 0,
   onFocusOrder,
   liveRoutePreview,
   liveRouteLoading,
@@ -194,8 +196,10 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const routesLayerRef = useRef<L.LayerGroup | null>(null);
   const hasInitializedBoundsRef = useRef(false);
+  const prevOriginCoordKeyRef = useRef<string>('');
 
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
+  const [isOriginFocused, setIsOriginFocused] = useState<boolean>(false);
   const [showRouteLines, setShowRouteLines] = useState<boolean>(true);
   const [tileStyle, setTileStyle] = useState<'voyager' | 'google_roadmap' | 'osm'>('voyager');
   const [mapReady, setMapReady] = useState<boolean>(false);
@@ -245,10 +249,26 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
 
   const validOrigin = useMemo(() => {
     if (originAddress && isValidCoord(originAddress.latitude, originAddress.longitude)) {
+      const fullAddress = [
+        originAddress.street
+          ? `${originAddress.street}, ${originAddress.number || 'S/N'}${
+              originAddress.complement ? ` (${originAddress.complement})` : ''
+            }`
+          : '',
+        originAddress.neighborhood,
+        [originAddress.city, originAddress.state].filter(Boolean).join(' - '),
+        originAddress.cep ? `CEP ${originAddress.cep}` : '',
+      ]
+        .filter(Boolean)
+        .join(' • ');
       return {
         lat: Number(originAddress.latitude),
         lng: Number(originAddress.longitude),
-        label: `${originAddress.street}, ${originAddress.number} — ${originAddress.neighborhood}`,
+        label: `${originAddress.street}, ${originAddress.number || 'S/N'} — ${
+          originAddress.neighborhood || originAddress.city
+        }`,
+        fullAddress,
+        raw: originAddress,
       };
     }
     return null;
@@ -329,17 +349,22 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
     });
   }, [validOrigin, geocodedOrders, activeDriversWithGps]);
 
-  // Center on restaurant origin
+  // Center on restaurant origin (never reusing an order's coordinates)
   const handleCenterOnOrigin = useCallback(() => {
     const map = leafletMapRef.current;
     if (!map) return;
 
+    setActiveOrderId(null);
+    if (onFocusOrder) onFocusOrder(null);
+
     if (validOrigin) {
-      map.setView([validOrigin.lat, validOrigin.lng], 15, { animate: true });
+      setIsOriginFocused(true);
+      map.invalidateSize({ animate: false });
+      map.setView([validOrigin.lat, validOrigin.lng], 17, { animate: true });
     } else {
       handleFitAllOrders();
     }
-  }, [validOrigin, handleFitAllOrders]);
+  }, [validOrigin, handleFitAllOrders, onFocusOrder]);
 
   const handleZoomIn = useCallback(() => {
     leafletMapRef.current?.zoomIn();
@@ -469,31 +494,54 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
     map.invalidateSize({ animate: false });
   }, [mapReady, tileStyle]);
 
-  // Fit bounds automatically the first time coordinates arrive
+  // Fit bounds automatically the first time coordinates arrive or when company originAddress changes
   useEffect(() => {
-    if (!mapReady || hasInitializedBoundsRef.current) return;
-    if (validOrigin || geocodedOrders.length > 0) {
+    if (!mapReady) return;
+    const currentOriginKey = validOrigin
+      ? `${validOrigin.lat.toFixed(6)},${validOrigin.lng.toFixed(6)}`
+      : '';
+    const originChanged =
+      Boolean(currentOriginKey) && currentOriginKey !== prevOriginCoordKeyRef.current;
+
+    if (currentOriginKey) {
+      prevOriginCoordKeyRef.current = currentOriginKey;
+    }
+
+    if (!hasInitializedBoundsRef.current && (validOrigin || geocodedOrders.length > 0)) {
       hasInitializedBoundsRef.current = true;
       handleFitAllOrders();
+    } else if (originChanged && !focusedOrderId) {
+      handleFitAllOrders();
     }
-  }, [mapReady, validOrigin, geocodedOrders.length, handleFitAllOrders]);
+  }, [mapReady, validOrigin, geocodedOrders.length, focusedOrderId, handleFitAllOrders]);
 
-  // Synchronize external focus request (clicking an order in the side list)
+  // Synchronize external focus request (clicking an order or "Visualizar no mapa" in the side list)
   useEffect(() => {
-    if (!focusedOrderId || !leafletMapRef.current) return;
-    const targetOrder = orders.find((o) => o.id === focusedOrderId);
-    if (!targetOrder) return;
+    if (!focusedOrderId) {
+      setActiveOrderId(null);
+      return;
+    }
+    const map = leafletMapRef.current;
+    if (!map) return;
 
+    const targetOrder = orders.find((o) => o.id === focusedOrderId);
+    if (!targetOrder) {
+      setActiveOrderId(null);
+      return;
+    }
+
+    setIsOriginFocused(false);
     setActiveOrderId(targetOrder.id);
 
     if (isValidCoord(targetOrder.latitude, targetOrder.longitude)) {
-      leafletMapRef.current.setView(
+      map.invalidateSize({ animate: false });
+      map.setView(
         [Number(targetOrder.latitude), Number(targetOrder.longitude)],
-        Math.max(leafletMapRef.current.getZoom(), 16),
+        Math.max(map.getZoom(), 17),
         { animate: true }
       );
     }
-  }, [focusedOrderId, orders]);
+  }, [focusedOrderId, focusRequestSeq, orders]);
 
   // Render Route Polylines (Active Routes + Live Selected Multi-Order Route Preview)
   useEffect(() => {
@@ -631,9 +679,15 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
         icon: originIcon,
         zIndexOffset: 900,
       });
-      marker.bindTooltip(`Restaurante: ${escapeHtml(validOrigin.label)}`, {
+      marker.bindTooltip(`Empresa (Origem): ${escapeHtml(validOrigin.label)}`, {
         direction: 'top',
         offset: [0, -34],
+      });
+      marker.on('click', () => {
+        setActiveOrderId(null);
+        if (onFocusOrder) onFocusOrder(null);
+        setIsOriginFocused(true);
+        leafletMapRef.current?.setView([validOrigin.lat, validOrigin.lng], 17, { animate: true });
       });
       marker.addTo(markersLayer);
     }
@@ -715,10 +769,16 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
       });
 
       marker.on('click', () => {
+        setIsOriginFocused(false);
         setActiveOrderId(order.id);
         if (onFocusOrder) {
           onFocusOrder(order.id);
         }
+        leafletMapRef.current?.setView(
+          [Number(order.latitude), Number(order.longitude)],
+          Math.max(leafletMapRef.current?.getZoom() || 16, 17),
+          { animate: true }
+        );
       });
 
       marker.addTo(markersLayer);
@@ -986,6 +1046,41 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
           </div>
         )}
 
+        {/* Focused Company Official Origin Address Card Overlay on Map */}
+        {isOriginFocused && validOrigin && !activeOrder && (
+          <div className="absolute bottom-3 left-3 right-3 sm:left-auto sm:right-3 sm:w-96 z-[400] bg-slate-900/98 backdrop-blur-md border border-slate-700 text-white rounded-2xl p-4 shadow-2xl space-y-2.5">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-sky-400 shrink-0" />
+                <span className="text-xs font-black uppercase tracking-wider text-sky-300">
+                  Endereço Oficial da Empresa (Origem)
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsOriginFocused(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                title="Fechar card da empresa"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-xs font-semibold text-slate-100 leading-relaxed">
+              {validOrigin.fullAddress}
+            </p>
+            <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 pt-1 border-t border-slate-800">
+              <span>
+                Lat: {validOrigin.lat.toFixed(6)} • Lng: {validOrigin.lng.toFixed(6)}
+              </span>
+              {validOrigin.raw.geocodeStatus === 'manual' && (
+                <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 font-sans font-bold text-[10px]">
+                  Ponto manual
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Selected / Focused Order Summary Card Overlay on Map */}
         {activeOrder && (
           <div className="absolute bottom-3 left-3 right-3 sm:left-auto sm:right-3 sm:w-96 z-[400] bg-white/98 backdrop-blur-md border border-slate-200 rounded-2xl p-4 shadow-2xl space-y-3">
@@ -1031,13 +1126,31 @@ export const InteractiveDeliveryMap: React.FC<InteractiveDeliveryMapProps> = ({
             </div>
 
             <div className="text-xs text-slate-600 bg-slate-50 rounded-xl p-2.5 border border-slate-100 space-y-1">
-              <div className="font-bold text-slate-800 flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                <span>Bairro: {activeOrder.neighborhood}</span>
+              <div className="font-bold text-slate-800 flex items-center justify-between gap-1.5">
+                <span className="flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                  <span>Bairro: {activeOrder.neighborhood}</span>
+                </span>
+                {activeOrder.isApproximate && (
+                  <span className="px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[10px] font-bold">
+                    Aproximado
+                  </span>
+                )}
               </div>
-              <div className="text-[11px] text-slate-600 leading-snug pl-5">
+              <div className="text-[11px] text-slate-700 font-medium leading-snug pl-5">
                 {activeOrder.addressSummary}
               </div>
+              {activeOrder.deliveryAddress?.reference && (
+                <div className="text-[11px] text-slate-500 italic pl-5">
+                  Ref: {activeOrder.deliveryAddress.reference}
+                </div>
+              )}
+              {isValidCoord(activeOrder.latitude, activeOrder.longitude) && (
+                <div className="text-[10px] font-mono text-slate-400 pl-5 pt-0.5">
+                  Lat: {Number(activeOrder.latitude).toFixed(6)} • Lng:{' '}
+                  {Number(activeOrder.longitude).toFixed(6)}
+                </div>
+              )}
               {activeOrder.assignedDriverName && (
                 <div className="text-[11px] font-bold text-indigo-700 pt-1 pl-5 flex items-center gap-1">
                   <Bike className="w-3.5 h-3.5 shrink-0" />

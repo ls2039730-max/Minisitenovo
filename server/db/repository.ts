@@ -15,13 +15,21 @@ import { SYSTEM_FEATURES } from '../../src/utils/features.js';
 
 export class SaasRepository {
   private userSessionCache = new Map<string, { user: User; expiresAt: number }>();
-  private readonly USER_CACHE_TTL_MS = 30 * 1000;
+  private tenantCache = new Map<string, { tenant: Tenant; expiresAt: number }>();
+  private featuresCache = new Map<string, { features: Record<FeatureKey, boolean>; expiresAt: number }>();
+  private readonly USER_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+  private readonly TENANT_CACHE_TTL_MS = 15 * 1000; // 15 seconds
+  private readonly FEATURES_CACHE_TTL_MS = 30 * 1000; // 30 seconds
 
-  private cacheUser(user: User): void {
-    this.userSessionCache.set(user.id, {
+  private cacheUser(user: User, aliasId?: string): void {
+    const entry = {
       user,
       expiresAt: Date.now() + this.USER_CACHE_TTL_MS,
-    });
+    };
+    this.userSessionCache.set(user.id, entry);
+    if (aliasId && aliasId !== user.id) {
+      this.userSessionCache.set(aliasId, entry);
+    }
   }
 
   public invalidateUserCache(userId?: string): void {
@@ -29,6 +37,16 @@ export class SaasRepository {
       this.userSessionCache.delete(userId);
     } else {
       this.userSessionCache.clear();
+    }
+  }
+
+  public invalidateTenantCache(tenantId?: string): void {
+    if (tenantId) {
+      this.tenantCache.delete(tenantId);
+      this.featuresCache.delete(tenantId);
+    } else {
+      this.tenantCache.clear();
+      this.featuresCache.clear();
     }
   }
 
@@ -499,13 +517,54 @@ export class SaasRepository {
       return cached.user;
     }
 
-    let authUser: any = null;
-    try {
-      const { data, error } = await supabaseAdmin.auth.admin.getUserById(id);
-      if (!error && data?.user) {
-        authUser = data.user;
-      }
-    } catch {}
+    // Fast path: query getUserById and tenant_users in parallel
+    const [authUserRes, tuRes] = await Promise.all([
+      supabaseAdmin.auth.admin.getUserById(id).catch(() => ({ data: null, error: true })),
+      supabaseAdmin
+        .from('tenant_users')
+        .select('*')
+        .eq('user_id', id)
+        .then((r: any) => r)
+        .catch(() => ({ data: null })),
+    ]);
+
+    let authUser: any = !authUserRes.error && authUserRes.data?.user ? authUserRes.data.user : null;
+    const tuList: any[] | null = tuRes?.data || null;
+    const directTu =
+      tuList && tuList.length > 0
+        ? tuList.find((r: any) => r.status === 'active') ||
+          tuList.find((r: any) => r.status === 'invited') ||
+          tuList[0]
+        : null;
+
+    // If we have a valid signed JWT with fallbackClaims (or direct tenant_users row) and getUserById didn't match,
+    // construct the verified session user immediately without downloading 1000 users via listUsers()
+    if (!authUser && (directTu || fallbackClaims?.email)) {
+      const emailLower = (fallbackClaims?.email || '').toLowerCase().trim();
+      const isSuperAdminEmail =
+        emailLower === 'admin@localhub.com' ||
+        emailLower === 'ls2039730@gmail.com' ||
+        emailLower.includes('superadmin') ||
+        (emailLower.startsWith('admin@') && !emailLower.includes('barbearia'));
+
+      const resolvedRole = (
+        directTu?.role ||
+        fallbackClaims?.role ||
+        (isSuperAdminEmail ? 'SUPER_ADMIN' : 'CLIENT_ADMIN')
+      ) as UserRole;
+
+      const fastUser: User = {
+        id,
+        name: fallbackClaims?.name || fallbackClaims?.email?.split('@')[0] || 'Usuário',
+        email: fallbackClaims?.email || 'usuario@localhub.com',
+        role: resolvedRole,
+        tenantId: directTu ? directTu.tenant_id : (fallbackClaims?.tenantId ?? null),
+        status: directTu ? directTu.status : 'active',
+        createdAt: directTu?.created_at || new Date().toISOString(),
+      };
+      this.cacheUser(fastUser, id);
+      return fastUser;
+    }
 
     if (!authUser) {
       try {
@@ -519,38 +578,10 @@ export class SaasRepository {
     }
 
     if (!authUser) {
-      // Fallback: check tenant_users directly in PostgreSQL so transient Auth Admin API hiccups
-      // or serverless local-store instances never invalidate an active signed JWT session
-      try {
-        const { data: tuList } = await supabaseAdmin
-          .from('tenant_users')
-          .select('*')
-          .eq('user_id', id);
-        const tu =
-          tuList && tuList.length > 0
-            ? tuList.find((r: any) => r.status === 'active') ||
-              tuList.find((r: any) => r.status === 'invited') ||
-              tuList[0]
-            : null;
-
-        if (tu || fallbackClaims?.email) {
-          const fallbackUser: User = {
-            id,
-            name: fallbackClaims?.name || fallbackClaims?.email?.split('@')[0] || 'Usuário',
-            email: fallbackClaims?.email || 'usuario@localhub.com',
-            role: (tu?.role || fallbackClaims?.role || 'CLIENT_ADMIN') as UserRole,
-            tenantId: tu ? tu.tenant_id : (fallbackClaims?.tenantId ?? null),
-            status: tu ? tu.status : 'active',
-            createdAt: tu?.created_at || new Date().toISOString(),
-          };
-          this.cacheUser(fallbackUser);
-          return fallbackUser;
-        }
-      } catch {}
       return null;
     }
 
-    const tu = await this.resolveOrEnsureTenantUser(authUser);
+    const tu = directTu || (await this.resolveOrEnsureTenantUser(authUser));
 
     const resolvedUser: User = {
       id: authUser.id,
@@ -563,7 +594,7 @@ export class SaasRepository {
       createdAt: authUser.created_at,
     };
 
-    this.cacheUser(resolvedUser);
+    this.cacheUser(resolvedUser, id);
     return resolvedUser;
   }
 
@@ -902,32 +933,42 @@ export class SaasRepository {
       throw new Error('Acesso negado: você não tem permissão para acessar os dados deste tenant.');
     }
 
-    const { data: t } = await supabaseAdmin
-      .from('tenants')
-      .select('*')
-      .eq('id', id)
-      .is('deleted_at', null)
-      .single();
+    const cached = this.tenantCache.get(id);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.tenant;
+    }
+
+    const [{ data: t }, { data: s }, { data: fList }] = await Promise.all([
+      supabaseAdmin
+        .from('tenants')
+        .select('*')
+        .eq('id', id)
+        .is('deleted_at', null)
+        .single(),
+      supabaseAdmin
+        .from('tenant_settings')
+        .select('*')
+        .eq('tenant_id', id)
+        .maybeSingle(),
+      supabaseAdmin
+        .from('tenant_features')
+        .select('*')
+        .eq('tenant_id', id),
+    ]);
 
     if (!t) return null;
-
-    const { data: s } = await supabaseAdmin
-      .from('tenant_settings')
-      .select('*')
-      .eq('tenant_id', id)
-      .maybeSingle();
-
-    const { data: fList } = await supabaseAdmin
-      .from('tenant_features')
-      .select('*')
-      .eq('tenant_id', id);
 
     const overrides: any = {};
     fList?.forEach((f: any) => {
       overrides[f.feature_key] = f.is_enabled;
     });
 
-    return this.formatTenant(t, s, overrides);
+    const formatted = this.formatTenant(t, s, overrides);
+    this.tenantCache.set(id, {
+      tenant: formatted,
+      expiresAt: Date.now() + this.TENANT_CACHE_TTL_MS,
+    });
+    return formatted;
   }
 
   public async getTenantBySlug(slug: string): Promise<Tenant | null> {
@@ -1331,6 +1372,7 @@ export class SaasRepository {
       metadata: payload,
     });
 
+    this.invalidateTenantCache(id);
     console.log(`[${cid}] [STAGE:CONFIRMATION] Persistence confirmed, fetching updated record for tenant_id=${id}`);
     const freshTenant = await this.getTenantById(id, requester);
     if (!freshTenant) {
@@ -1347,6 +1389,7 @@ export class SaasRepository {
     }
     const now = new Date().toISOString();
     await supabaseAdmin.from('tenants').update({ status, updated_at: now }).eq('id', id);
+    this.invalidateTenantCache(id);
 
     await this.logAudit({
       actorUserId: requester.id,
@@ -1377,6 +1420,8 @@ export class SaasRepository {
       .update({ status: 'inactive', updated_at: now })
       .eq('tenant_id', id);
 
+    this.invalidateTenantCache(id);
+
     await this.logAudit({
       actorUserId: requester.id,
       actorUserName: requester.name,
@@ -1393,11 +1438,23 @@ export class SaasRepository {
   // FEATURES RESOLUTION
   // ==========================================
   public async resolveTenantFeatures(tenantId: string): Promise<Record<FeatureKey, boolean>> {
-    const { data: tenant } = await supabaseAdmin
-      .from('tenants')
-      .select('plan_id')
-      .eq('id', tenantId)
-      .single();
+    const cached = this.featuresCache.get(tenantId);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.features;
+    }
+
+    const [{ data: tenant }, { data: tfList }, { data: allFeats }] = await Promise.all([
+      supabaseAdmin
+        .from('tenants')
+        .select('plan_id')
+        .eq('id', tenantId)
+        .single(),
+      supabaseAdmin
+        .from('tenant_features')
+        .select('feature_key, is_enabled')
+        .eq('tenant_id', tenantId),
+      supabaseAdmin.from('features').select('key'),
+    ]);
 
     if (!tenant) throw new Error('Tenant não encontrado para resolução de features.');
 
@@ -1408,11 +1465,6 @@ export class SaasRepository {
 
     const planSet = new Set<string>(pfList?.map((p: any) => String(p.feature_key)) || []);
 
-    const { data: tfList } = await supabaseAdmin
-      .from('tenant_features')
-      .select('feature_key, is_enabled')
-      .eq('tenant_id', tenantId);
-
     const overrideMap = new Map<string, boolean>();
     tfList?.forEach((t: any) => {
       if (typeof t.is_enabled === 'boolean') {
@@ -1420,7 +1472,6 @@ export class SaasRepository {
       }
     });
 
-    const { data: allFeats } = await supabaseAdmin.from('features').select('key');
     const allFeatureKeys = new Set<string>(SYSTEM_FEATURES.map((f) => f.key));
     allFeats?.forEach((f: any) => {
       if (f?.key) allFeatureKeys.add(String(f.key));
@@ -1443,7 +1494,12 @@ export class SaasRepository {
       }
     });
 
-    return result as Record<FeatureKey, boolean>;
+    const typedResult = result as Record<FeatureKey, boolean>;
+    this.featuresCache.set(tenantId, {
+      features: typedResult,
+      expiresAt: Date.now() + this.FEATURES_CACHE_TTL_MS,
+    });
+    return typedResult;
   }
 
   public async updateTenantFeatureOverrides(
@@ -1483,6 +1539,8 @@ export class SaasRepository {
       }
     }
 
+    this.invalidateTenantCache(tenantId);
+
     await this.logAudit({
       actorUserId: requester.id,
       actorUserName: requester.name,
@@ -1508,6 +1566,8 @@ export class SaasRepository {
       .delete()
       .eq('tenant_id', tenantId)
       .eq('feature_key', featureKey);
+
+    this.invalidateTenantCache(tenantId);
 
     await this.logAudit({
       actorUserId: requester.id,

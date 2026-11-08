@@ -19,6 +19,7 @@ import {
   ChevronDown,
   Edit2,
   Trash2,
+  RefreshCw,
 } from 'lucide-react';
 import {
   Order,
@@ -29,6 +30,7 @@ import {
 } from '../../types/order';
 import { OrderEditModal } from './OrderEditModal';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { AddressVerificationMapCard } from '../common/AddressVerificationMapCard';
 import { api } from '../../services/api';
 
 interface OrderDetailModalProps {
@@ -56,6 +58,9 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showOrderMap, setShowOrderMap] = useState(false);
+  const [geocodingOrderMap, setGeocodingOrderMap] = useState(false);
+  const [orderMapError, setOrderMapError] = useState<string | null>(null);
 
   const statusList: OrderStatus[] = [
     'NEW',
@@ -247,7 +252,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
 
             {/* Delivery Address (if applicable) */}
             {order.fulfillmentType === 'delivery' && order.deliveryAddress && (
-              <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-2 text-xs">
+              <div className="p-4 rounded-2xl bg-white border border-slate-200 space-y-2.5 text-xs">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2 text-indigo-600 font-bold">
                     <MapPin className="w-4 h-4" />
@@ -265,6 +270,81 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                         Regra: {order.deliveryAddress.appliedRuleName}
                       </span>
                     )}
+                    <button
+                      type="button"
+                      disabled={geocodingOrderMap}
+                      onClick={async () => {
+                        setGeocodingOrderMap(true);
+                        setOrderMapError(null);
+                        setShowOrderMap(true);
+                        try {
+                          const res = await api.retryOrderGeocode(order.id);
+                          if (res.order) {
+                            onOrderUpdated(res.order);
+                          }
+                          if (!res.geocoded) {
+                            setOrderMapError(
+                              res.message ||
+                                'Não foi possível localizar coordenadas exatas para este endereço.'
+                            );
+                          }
+                        } catch (err: any) {
+                          setOrderMapError(
+                            err.message || 'Erro ao recalcular coordenadas do endereço.'
+                          );
+                        } finally {
+                          setGeocodingOrderMap(false);
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[11px] inline-flex items-center gap-1 transition cursor-pointer"
+                      title="Executar nova geocodificação do endereço ignorando coordenadas antigas e sincronizando paradas de rota"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${geocodingOrderMap ? 'animate-spin' : ''}`} />
+                      {geocodingOrderMap ? 'Recalculando...' : 'Recalcular do endereço'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={geocodingOrderMap}
+                      onClick={async () => {
+                        const nextShow = !showOrderMap;
+                        setShowOrderMap(nextShow);
+                        setOrderMapError(null);
+                        if (
+                          nextShow &&
+                          (order.deliveryAddress?.latitude === null ||
+                            order.deliveryAddress?.latitude === undefined ||
+                            order.deliveryAddress?.longitude === null ||
+                            order.deliveryAddress?.longitude === undefined)
+                        ) {
+                          setGeocodingOrderMap(true);
+                          try {
+                            const res = await api.retryOrderGeocode(order.id);
+                            if (res.geocoded && res.order) {
+                              onOrderUpdated(res.order);
+                            } else {
+                              setOrderMapError(
+                                res.message ||
+                                  'Não foi possível localizar coordenadas exatas para este endereço.'
+                              );
+                            }
+                          } catch (err: any) {
+                            setOrderMapError(
+                              err.message || 'Erro ao geocodificar endereço do pedido.'
+                            );
+                          } finally {
+                            setGeocodingOrderMap(false);
+                          }
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] inline-flex items-center gap-1 transition cursor-pointer"
+                    >
+                      <MapPin className="w-3 h-3" />
+                      {geocodingOrderMap
+                        ? 'Localizando...'
+                        : showOrderMap
+                        ? 'Ocultar mapa'
+                        : 'Visualizar no mapa'}
+                    </button>
                   </div>
                 </div>
                 <p className="text-slate-700">
@@ -282,6 +362,55 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                   <p className="text-[11px] text-indigo-600 font-medium pt-1 border-t border-slate-100">
                     Cálculo do frete: {order.deliveryAddress.deliveryBreakdown}
                   </p>
+                )}
+                {orderMapError && (
+                  <p className="text-[11px] text-rose-600 font-semibold">{orderMapError}</p>
+                )}
+                {showOrderMap && (
+                  <div className="pt-2">
+                    <AddressVerificationMapCard
+                      title={`Destino do Pedido #${order.orderNumber} (${order.customerName})`}
+                      formattedAddress={`${order.deliveryAddress.street}, nº ${order.deliveryAddress.number}${
+                        order.deliveryAddress.complement ? ` (${order.deliveryAddress.complement})` : ''
+                      } — ${order.deliveryAddress.neighborhood}, ${order.deliveryAddress.city} / ${
+                        order.deliveryAddress.state
+                      } — CEP: ${order.deliveryAddress.cep}`}
+                      latitude={order.deliveryAddress.latitude}
+                      longitude={order.deliveryAddress.longitude}
+                      geocodeStatus={order.deliveryAddress.geocodeStatus || null}
+                      geocodePrecision={order.deliveryAddress.geocodePrecision || null}
+                      isApproximate={order.deliveryAddress.isApproximate}
+                      markerType="order"
+                      markerLabel={`#${order.orderNumber}`}
+                      isGeocoding={geocodingOrderMap}
+                      onGeocodeNow={async () => {
+                        setGeocodingOrderMap(true);
+                        setOrderMapError(null);
+                        try {
+                          const res = await api.retryOrderGeocode(order.id);
+                          if (res.order) {
+                            onOrderUpdated(res.order);
+                          }
+                          if (!res.geocoded) {
+                            setOrderMapError(
+                              res.message || 'Não foi possível localizar coordenadas exatas.'
+                            );
+                          }
+                        } catch (err: any) {
+                          setOrderMapError(err.message || 'Erro ao geocodificar endereço.');
+                        } finally {
+                          setGeocodingOrderMap(false);
+                        }
+                      }}
+                      onSaveManualCoordinates={async (latitude: number, longitude: number) => {
+                        const updated = await api.updateOrderManualLocation(order.id, {
+                          latitude,
+                          longitude,
+                        });
+                        onOrderUpdated(updated);
+                      }}
+                    />
+                  </div>
                 )}
               </div>
             )}

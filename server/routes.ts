@@ -390,39 +390,26 @@ apiRouter.post('/auth/login', async (req: Request, res: Response) => {
 
 apiRouter.get('/auth/me', authenticate, async (req: AuthenticatedRequest, res: Response) => {
   const user = req.user!;
-  let tenant: Tenant | null = null;
   const isImpersonating = !!req.sessionPayload?.isImpersonating;
 
   const targetTenantId = isImpersonating
     ? req.sessionPayload!.impersonatedTenantId
     : user.tenantId;
 
-  if (targetTenantId) {
-    try {
-      tenant = await repo.getTenantById(targetTenantId, user);
-    } catch {
-      tenant = null;
-    }
-  }
-
-  let resolvedFeatures: Record<FeatureKey, boolean> | null = null;
-  if (targetTenantId) {
-    try {
-      resolvedFeatures = await repo.resolveTenantFeatures(targetTenantId);
-    } catch {
-      resolvedFeatures = null;
-    }
-  }
-
-  let linkedProfessional: Professional | null = null;
-  if (user.role === 'PROFESSIONAL' && targetTenantId) {
-    linkedProfessional = await serviceRepo.getProfessionalByUserId(user.id, targetTenantId);
-  }
-
-  let linkedDriver: DeliveryDriver | null = null;
-  if (user.role === 'DELIVERY_DRIVER' && targetTenantId) {
-    linkedDriver = await deliveryHubRepo.getDriverByUserId(targetTenantId, user.id, user.email);
-  }
+  const [tenant, resolvedFeatures, linkedProfessional, linkedDriver] = await Promise.all([
+    targetTenantId
+      ? repo.getTenantById(targetTenantId, user).catch(() => null)
+      : Promise.resolve(null),
+    targetTenantId
+      ? repo.resolveTenantFeatures(targetTenantId).catch(() => null)
+      : Promise.resolve(null),
+    user.role === 'PROFESSIONAL' && targetTenantId
+      ? serviceRepo.getProfessionalByUserId(user.id, targetTenantId).catch(() => null)
+      : Promise.resolve(null),
+    user.role === 'DELIVERY_DRIVER' && targetTenantId
+      ? deliveryHubRepo.getDriverByUserId(targetTenantId, user.id, user.email).catch(() => null)
+      : Promise.resolve(null),
+  ]);
 
   return res.json({
     success: true,
@@ -711,6 +698,17 @@ apiRouter.get('/tenants/:id', authenticate, requireTenantAccess('id'), async (re
     if (!tenant) {
       return res.status(404).json({ success: false, error: 'Empresa não encontrada.' });
     }
+    const origin = await orderRepo.resolveTenantOriginAddress(req.params.id);
+    if (origin) {
+      tenant.latitude = origin.latitude ?? null;
+      tenant.longitude = origin.longitude ?? null;
+      tenant.geocodeStatus = origin.geocodeStatus ?? (origin.latitude ? 'geocoded' : 'pending');
+      tenant.geocodePrecision = origin.geocodePrecision ?? null;
+      tenant.placeId = origin.placeId ?? null;
+      tenant.geocodedAt = origin.geocodedAt ?? null;
+      (tenant as any).isApproximate = Boolean(origin.isApproximate);
+      (tenant as any).formattedAddress = origin.formattedAddress ?? null;
+    }
     return res.json({ success: true, data: tenant });
   } catch (err: any) {
     return res.status(403).json({ success: false, error: err.message });
@@ -722,6 +720,46 @@ apiRouter.put('/tenants/:id', authenticate, requireTenantAccess('id'), requireNo
   try {
     console.log(`[${correlationId}] [STAGE:ROUTE] [ROUTE:PUT /tenants/:id] Received update request for tenant_id=${req.params.id}. HasAppearance=${!!req.body?.appearance}`);
     const updated = await repo.updateTenant(req.params.id, req.body, req.user!, correlationId);
+
+    const hasAddressOrCoords =
+      req.body?.cep !== undefined ||
+      req.body?.street !== undefined ||
+      req.body?.number !== undefined ||
+      req.body?.complement !== undefined ||
+      req.body?.neighborhood !== undefined ||
+      req.body?.city !== undefined ||
+      req.body?.state !== undefined ||
+      req.body?.latitude !== undefined ||
+      req.body?.longitude !== undefined ||
+      req.body?.geocodeStatus !== undefined;
+
+    const syncedOrigin = hasAddressOrCoords
+      ? await orderRepo.syncOriginAddressFromTenantProfile(req.params.id, req.body)
+      : await orderRepo.resolveTenantOriginAddress(req.params.id);
+
+    let routeSyncResult = { updatedRoutesCount: 0, skippedUnconfirmed: false };
+    if (hasAddressOrCoords && syncedOrigin) {
+      routeSyncResult = await deliveryHubRepo.syncActiveRoutesWithCompanyOrigin(
+        req.params.id,
+        syncedOrigin,
+        req.user!
+      );
+    }
+
+    if (syncedOrigin) {
+      updated.latitude = syncedOrigin.latitude ?? null;
+      updated.longitude = syncedOrigin.longitude ?? null;
+      updated.geocodeStatus =
+        syncedOrigin.geocodeStatus ?? (syncedOrigin.latitude ? 'geocoded' : 'pending');
+      updated.geocodePrecision = syncedOrigin.geocodePrecision ?? null;
+      updated.placeId = syncedOrigin.placeId ?? null;
+      updated.geocodedAt = syncedOrigin.geocodedAt ?? null;
+      (updated as any).isApproximate = Boolean(syncedOrigin.isApproximate);
+      (updated as any).formattedAddress = syncedOrigin.formattedAddress ?? null;
+      (updated as any).activeRoutesUpdated = routeSyncResult.updatedRoutesCount;
+      (updated as any).skippedUnconfirmedRoutes = routeSyncResult.skippedUnconfirmed;
+    }
+
     console.log(`[${correlationId}] [STAGE:RESPONSE] Success response (HTTP 200) dispatched after persistence confirmation for tenant_id=${req.params.id}`);
     return res.json({ success: true, data: updated });
   } catch (err: any) {
@@ -1522,6 +1560,13 @@ apiRouter.put('/delivery/settings', authenticate, requireFeature('shopping_cart'
   try {
     const tenantId = getEffectiveTenantId(req);
     const updated = await orderRepo.updateDeliverySettings(tenantId, req.body, req.user!);
+    if (req.body?.originAddress || req.body?.extendedConfig?.originAddress) {
+      await deliveryHubRepo.syncActiveRoutesWithCompanyOrigin(
+        tenantId,
+        updated.originAddress || null,
+        req.user!
+      );
+    }
     return res.json({ success: true, data: updated, message: 'Configurações de entrega salvas com sucesso!' });
   } catch (err: any) {
     return res.status(400).json({ success: false, error: err.message || 'Erro ao salvar configurações de entrega.' });
@@ -1588,7 +1633,7 @@ apiRouter.put('/delivery/rules/reorder', authenticate, requireFeature('shopping_
 });
 
 // Admin CEP Lookup
-apiRouter.get('/delivery/cep/:cep', authenticate, requireFeature('shopping_cart'), async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/delivery/cep/:cep', authenticate, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const data = await lookupPostalCodeServer(req.params.cep);
     return res.json({ success: true, data });
@@ -1598,15 +1643,19 @@ apiRouter.get('/delivery/cep/:cep', authenticate, requireFeature('shopping_cart'
 });
 
 // Admin Geocode Origin Address
-apiRouter.post('/delivery/geocode-origin', authenticate, requireFeature('shopping_cart'), async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/delivery/geocode-origin', authenticate, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const addressInput = req.body?.address || req.body || {};
     // Force fresh geocoding without using stale coordinates
-    const result = await geocodeAddressServer({
-      ...addressInput,
-      latitude: null,
-      longitude: null,
-    });
+    const result = await geocodeAddressServer(
+      {
+        ...addressInput,
+        latitude: null,
+        longitude: null,
+      },
+      null,
+      { forceRefresh: true }
+    );
 
     if (!result.success || typeof result.latitude !== 'number' || typeof result.longitude !== 'number') {
       return res.status(400).json({
@@ -1624,7 +1673,11 @@ apiRouter.post('/delivery/geocode-origin', authenticate, requireFeature('shoppin
         longitude: result.longitude,
         formattedAddress: result.formattedAddress,
         precision: result.precision,
+        locationType: result.locationType,
+        placeId: result.placeId || null,
+        isApproximate: Boolean(result.isApproximate),
         provider: result.provider,
+        geocodedAt: result.geocodedAt,
       },
       message: 'Coordenadas geográficas obtidas com sucesso!',
     });
@@ -1632,6 +1685,86 @@ apiRouter.post('/delivery/geocode-origin', authenticate, requireFeature('shoppin
     return res.status(400).json({
       success: false,
       error: err.message || 'Falha ao geocodificar endereço de origem.',
+    });
+  }
+});
+
+// Refresh Official Company Location from Minha Empresa (with cache invalidation & route sync)
+apiRouter.post('/delivery/refresh-company-origin', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const body = req.body || {};
+
+    // If address fields were provided in the request, persist them to `public.tenants` first
+    if (
+      body.street !== undefined ||
+      body.cep !== undefined ||
+      body.city !== undefined ||
+      body.state !== undefined
+    ) {
+      await repo.updateTenant(
+        tenantId,
+        {
+          cep: body.cep,
+          street: body.street,
+          number: body.number,
+          complement: body.complement,
+          neighborhood: body.neighborhood,
+          city: body.city,
+          state: body.state,
+        },
+        req.user!
+      );
+    }
+
+    const syncedOrigin = await orderRepo.syncOriginAddressFromTenantProfile(tenantId, {
+      ...body,
+      forceGeocodeRefresh: true,
+    });
+
+    if (!syncedOrigin || typeof syncedOrigin.latitude !== 'number' || typeof syncedOrigin.longitude !== 'number') {
+      return res.status(400).json({
+        success: false,
+        error:
+          'Endereço não localizado no serviço de mapas. Verifique o logradouro, número, bairro, cidade, UF e CEP ou ajuste o pino manualmente.',
+        data: {
+          originAddress: syncedOrigin,
+          visualState: 'not_found',
+        },
+      });
+    }
+
+    const routeSync = await deliveryHubRepo.syncActiveRoutesWithCompanyOrigin(
+      tenantId,
+      syncedOrigin,
+      req.user!
+    );
+
+    const visualState = syncedOrigin.isApproximate
+      ? 'approximate'
+      : 'updated';
+
+    return res.json({
+      success: true,
+      data: {
+        originAddress: syncedOrigin,
+        activeRoutesUpdated: routeSync.updatedRoutesCount,
+        skippedUnconfirmedRoutes: routeSync.skippedUnconfirmed,
+        visualState,
+      },
+      message: syncedOrigin.isApproximate
+        ? 'Localização aproximada encontrada (apenas rua/bairro/CEP). Confirme ou ajuste o pino manualmente antes de recalcular as rotas.'
+        : `Localização atualizada e sincronizada com sucesso${
+            routeSync.updatedRoutesCount > 0
+              ? ` (${routeSync.updatedRoutesCount} rota(s) ativa(s) recalculada(s))`
+              : ''
+          }!`,
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      error: err.message || 'Falha ao consultar serviço de mapas.',
+      data: { visualState: 'service_error' },
     });
   }
 });
@@ -3408,6 +3541,20 @@ apiRouter.patch('/delivery-hub/routes/:routeId/reorder', authenticate, requireNo
     });
   } catch (err: any) {
     return res.status(400).json({ success: false, error: err.message || 'Erro ao reordenar paradas da rota.' });
+  }
+});
+
+apiRouter.post('/delivery-hub/routes/:routeId/recalculate', authenticate, requireNonProfessional, requireFeature('delivery'), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const route = await deliveryHubRepo.recalculateRoute(tenantId, req.params.routeId, req.user!);
+    return res.json({
+      success: true,
+      data: route,
+      message: `Rota ${route.routeCode} recalculada e sincronizada com sucesso!`,
+    });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message || 'Erro ao recalcular rota.' });
   }
 });
 

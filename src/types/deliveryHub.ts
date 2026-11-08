@@ -230,6 +230,8 @@ export interface DeliveryNotification {
 export interface DispatchOrderItem extends Order {
   dispatchStatus: OrderDispatchStatus;
   geocodeStatus: GeocodeStatus;
+  geocodePrecision?: string | null;
+  isApproximate?: boolean;
   latitude: number | null;
   longitude: number | null;
   neighborhood: string;

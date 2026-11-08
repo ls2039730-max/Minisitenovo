@@ -111,6 +111,14 @@ export interface Tenant {
   state?: string;
   latitude?: number | null;
   longitude?: number | null;
+  geocodeStatus?: 'geocoded' | 'pending' | 'manual' | null;
+  geocodePrecision?: string | null;
+  placeId?: string | null;
+  geocodedAt?: string | null;
+  formattedAddress?: string | null;
+  isApproximate?: boolean;
+  activeRoutesUpdated?: number;
+  skippedUnconfirmedRoutes?: boolean;
   notes?: string;
   deletedAt?: string | null;
   createdAt: string;

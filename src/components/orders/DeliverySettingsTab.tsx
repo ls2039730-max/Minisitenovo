@@ -40,6 +40,7 @@ import {
 import { api } from '../../services/api';
 import { postalCodeService } from '../../services/postalCodeService';
 import { DeliveryRuleModal } from './DeliveryRuleModal';
+import { AddressVerificationMapCard } from '../common/AddressVerificationMapCard';
 
 interface DeliverySettingsTabProps {
   tenantId: string;
@@ -74,6 +75,9 @@ export const DeliverySettingsTab: React.FC<DeliverySettingsTabProps> = ({ tenant
   // Origin CEP & Geocoding state
   const [isLookingUpOriginCep, setIsLookingUpOriginCep] = useState(false);
   const [isGeocodingOrigin, setIsGeocodingOrigin] = useState(false);
+  const [hasUnsavedOriginEdit, setHasUnsavedOriginEdit] = useState(false);
+  const [previousOriginWasManual, setPreviousOriginWasManual] = useState(false);
+  const [originSyncErrorState, setOriginSyncErrorState] = useState<'not_found' | 'service_error' | null>(null);
   const [geocodeStatus, setGeocodeStatus] = useState<{
     type: 'success' | 'error';
     message: string;
@@ -132,9 +136,28 @@ export const DeliverySettingsTab: React.FC<DeliverySettingsTabProps> = ({ tenant
     }
   };
 
+  const updateOriginField = (patch: Partial<DeliveryOriginAddress>) => {
+    setOriginAddress((prev) => {
+      if (prev.geocodeStatus === 'manual') {
+        setPreviousOriginWasManual(true);
+      }
+      setHasUnsavedOriginEdit(true);
+      setOriginSyncErrorState(null);
+      return {
+        ...prev,
+        ...patch,
+        latitude: null,
+        longitude: null,
+        geocodeStatus: 'pending',
+        geocodePrecision: null,
+        isApproximate: false,
+      };
+    });
+  };
+
   const handleOriginCepChange = async (rawCep: string) => {
     const clean = postalCodeService.cleanCep(rawCep);
-    setOriginAddress((prev) => ({ ...prev, cep: clean }));
+    updateOriginField({ cep: clean });
     if (clean.length === 8) {
       try {
         setIsLookingUpOriginCep(true);
@@ -147,8 +170,9 @@ export const DeliverySettingsTab: React.FC<DeliverySettingsTabProps> = ({ tenant
             neighborhood: res.neighborhood || prev.neighborhood,
             city: res.city || prev.city,
             state: res.state || prev.state,
-            latitude: res.latitude ?? prev.latitude,
-            longitude: res.longitude ?? prev.longitude,
+            latitude: null,
+            longitude: null,
+            geocodeStatus: 'pending',
           }));
         }
       } finally {
@@ -159,32 +183,52 @@ export const DeliverySettingsTab: React.FC<DeliverySettingsTabProps> = ({ tenant
 
   const handleGeocodeOrigin = async () => {
     setGeocodeStatus(null);
+    setOriginSyncErrorState(null);
     if (!originAddress.street?.trim() || !originAddress.city?.trim() || !originAddress.state?.trim()) {
+      setOriginSyncErrorState('not_found');
       setGeocodeStatus({
         type: 'error',
-        message: 'Preencha pelo menos Logradouro, Cidade e UF do estabelecimento antes de geocodificar.',
+        message: 'Preencha pelo menos Logradouro, Cidade e UF do estabelecimento antes de atualizar a localização no mapa.',
       });
       return;
     }
 
     try {
       setIsGeocodingOrigin(true);
-      const geo = await api.geocodeOriginAddress(originAddress);
-      setOriginAddress((prev) => ({
-        ...prev,
-        latitude: geo.latitude,
-        longitude: geo.longitude,
-      }));
-      setGeocodeStatus({
-        type: 'success',
-        message: `Coordenadas obtidas com sucesso: (${geo.latitude.toFixed(6)}, ${geo.longitude.toFixed(6)})`,
-      });
+      const result = await api.refreshCompanyOriginLocation(originAddress);
+      const nextOrigin = result.originAddress;
+      setOriginAddress(nextOrigin);
+      setHasUnsavedOriginEdit(false);
+      setPreviousOriginWasManual(false);
+
+      if (hasValidCoordinates(nextOrigin.latitude, nextOrigin.longitude)) {
+        setOriginSyncErrorState(null);
+        setGeocodeStatus({
+          type: 'success',
+          message:
+            result.message ||
+            `Localização atualizada com sucesso: (${Number(nextOrigin.latitude).toFixed(6)}, ${Number(nextOrigin.longitude).toFixed(6)})`,
+        });
+      } else {
+        setOriginSyncErrorState('not_found');
+        setGeocodeStatus({
+          type: 'error',
+          message:
+            'Endereço não localizado automaticamente. Verifique os dados ou ajuste o pino manualmente.',
+        });
+      }
     } catch (err: any) {
+      const msg =
+        err.message ||
+        'Não foi possível geocodificar o endereço informado. Verifique os dados do endereço e tente novamente.';
+      if (msg.toLowerCase().includes('não localizado') || msg.toLowerCase().includes('não foi possível')) {
+        setOriginSyncErrorState('not_found');
+      } else {
+        setOriginSyncErrorState('service_error');
+      }
       setGeocodeStatus({
         type: 'error',
-        message:
-          err.message ||
-          'Não foi possível geocodificar o endereço informado. Verifique os dados do endereço e tente novamente.',
+        message: msg,
       });
     } finally {
       setIsGeocodingOrigin(false);
@@ -232,6 +276,8 @@ export const DeliverySettingsTab: React.FC<DeliverySettingsTabProps> = ({ tenant
       if (updated.originAddress) {
         setOriginAddress(updated.originAddress);
       }
+      setHasUnsavedOriginEdit(false);
+      setPreviousOriginWasManual(false);
       if (updated.kmConfig) {
         setKmConfig({ ...DEFAULT_KM_CONFIG, ...updated.kmConfig });
       }
@@ -448,7 +494,7 @@ export const DeliverySettingsTab: React.FC<DeliverySettingsTabProps> = ({ tenant
               <input
                 type="text"
                 value={originAddress.street}
-                onChange={(e) => setOriginAddress({ ...originAddress, street: e.target.value })}
+                onChange={(e) => updateOriginField({ street: e.target.value })}
                 placeholder="Ex: Avenida Independência"
                 className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white font-medium text-slate-800"
               />
@@ -461,7 +507,7 @@ export const DeliverySettingsTab: React.FC<DeliverySettingsTabProps> = ({ tenant
               <input
                 type="text"
                 value={originAddress.number}
-                onChange={(e) => setOriginAddress({ ...originAddress, number: e.target.value })}
+                onChange={(e) => updateOriginField({ number: e.target.value })}
                 placeholder="103"
                 className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white font-bold text-slate-800"
               />
@@ -472,7 +518,7 @@ export const DeliverySettingsTab: React.FC<DeliverySettingsTabProps> = ({ tenant
               <input
                 type="text"
                 value={originAddress.complement || ''}
-                onChange={(e) => setOriginAddress({ ...originAddress, complement: e.target.value })}
+                onChange={(e) => updateOriginField({ complement: e.target.value })}
                 placeholder="Loja 1, Galpão, etc."
                 className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white font-medium text-slate-800"
               />
@@ -485,9 +531,7 @@ export const DeliverySettingsTab: React.FC<DeliverySettingsTabProps> = ({ tenant
               <input
                 type="text"
                 value={originAddress.neighborhood}
-                onChange={(e) =>
-                  setOriginAddress({ ...originAddress, neighborhood: e.target.value })
-                }
+                onChange={(e) => updateOriginField({ neighborhood: e.target.value })}
                 placeholder="Ex: Unamar"
                 className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white font-medium text-slate-800"
               />
@@ -500,7 +544,7 @@ export const DeliverySettingsTab: React.FC<DeliverySettingsTabProps> = ({ tenant
               <input
                 type="text"
                 value={originAddress.city}
-                onChange={(e) => setOriginAddress({ ...originAddress, city: e.target.value })}
+                onChange={(e) => updateOriginField({ city: e.target.value })}
                 placeholder="Cabo Frio"
                 className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white font-medium text-slate-800"
               />
@@ -514,9 +558,7 @@ export const DeliverySettingsTab: React.FC<DeliverySettingsTabProps> = ({ tenant
                 type="text"
                 maxLength={2}
                 value={originAddress.state}
-                onChange={(e) =>
-                  setOriginAddress({ ...originAddress, state: e.target.value.toUpperCase() })
-                }
+                onChange={(e) => updateOriginField({ state: e.target.value.toUpperCase() })}
                 placeholder="RJ"
                 className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white font-bold text-slate-800 uppercase"
               />
@@ -538,6 +580,9 @@ export const DeliverySettingsTab: React.FC<DeliverySettingsTabProps> = ({ tenant
                     setOriginAddress({
                       ...originAddress,
                       latitude: e.target.value !== '' ? parseFloat(e.target.value) : null,
+                      geocodeStatus: 'manual',
+                      geocodePrecision: 'manual',
+                      isApproximate: false,
                     })
                   }
                   placeholder="-22.630984"
@@ -556,6 +601,9 @@ export const DeliverySettingsTab: React.FC<DeliverySettingsTabProps> = ({ tenant
                     setOriginAddress({
                       ...originAddress,
                       longitude: e.target.value !== '' ? parseFloat(e.target.value) : null,
+                      geocodeStatus: 'manual',
+                      geocodePrecision: 'manual',
+                      isApproximate: false,
                     })
                   }
                   placeholder="-42.001668"
@@ -578,8 +626,8 @@ export const DeliverySettingsTab: React.FC<DeliverySettingsTabProps> = ({ tenant
                 )}
                 <span>
                   {isGeocodingOrigin
-                    ? 'Obtendo coordenadas...'
-                    : 'Geocodificar Endereço (Obter Coordenadas)'}
+                    ? 'Atualizando localização...'
+                    : 'Atualizar localização no mapa'}
                 </span>
               </button>
             </div>
@@ -601,6 +649,59 @@ export const DeliverySettingsTab: React.FC<DeliverySettingsTabProps> = ({ tenant
               <span>{geocodeStatus.message}</span>
             </div>
           )}
+
+          {/* Seção: Localização da empresa no mapa */}
+          <AddressVerificationMapCard
+            title="Localização da empresa no mapa"
+            formattedAddress={formatAddressSummary(originAddress)}
+            queriedAddress={originAddress.formattedAddress}
+            latitude={originAddress.latitude}
+            longitude={originAddress.longitude}
+            geocodeStatus={
+              originAddress.geocodeStatus ||
+              (hasValidCoordinates(originAddress.latitude, originAddress.longitude)
+                ? 'geocoded'
+                : 'pending')
+            }
+            geocodePrecision={originAddress.geocodePrecision}
+            geocodedAt={originAddress.geocodedAt}
+            isApproximate={originAddress.isApproximate}
+            hasUnsavedAddressEdit={hasUnsavedOriginEdit}
+            previousPinWasManual={previousOriginWasManual}
+            syncErrorState={originSyncErrorState}
+            markerLabel="Origem do Estabelecimento"
+            markerType="company"
+            isGeocoding={isGeocodingOrigin}
+            onGeocodeNow={handleGeocodeOrigin}
+            primaryActionLabel="Atualizar localização no mapa"
+            secondaryActionLabel="Ajustar pino manualmente"
+            onSaveManualCoordinates={async (manualLat, manualLng) => {
+              const nowIso = new Date().toISOString();
+              const nextOrigin: DeliveryOriginAddress = {
+                ...originAddress,
+                latitude: manualLat,
+                longitude: manualLng,
+                geocodeStatus: 'manual',
+                geocodePrecision: 'manual',
+                geocodedAt: nowIso,
+                isApproximate: false,
+              };
+              setOriginAddress(nextOrigin);
+              setHasUnsavedOriginEdit(false);
+              setPreviousOriginWasManual(false);
+              setOriginSyncErrorState(null);
+              const updated = await api.updateDeliverySettings({
+                originAddress: nextOrigin,
+              });
+              if (updated.originAddress) {
+                setOriginAddress(updated.originAddress);
+              }
+              setGeocodeStatus({
+                type: 'success',
+                message: `Localização ajustada manualmente e sincronizada em todo o sistema (${manualLat.toFixed(6)}, ${manualLng.toFixed(6)})!`,
+              });
+            }}
+          />
         </div>
 
         {/* CARD 2: MÉTODO DE COBRANÇA DE ENTREGA (3 MODALIDADES) */}

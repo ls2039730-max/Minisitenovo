@@ -86,6 +86,7 @@ export const DeliveryHubManager: React.FC<{ tenant?: Tenant }> = () => {
   // Multi-selection of orders for route creation (Etapa 2)
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [focusedOrderId, setFocusedOrderId] = useState<string | null>(null);
+  const [focusRequestSeq, setFocusRequestSeq] = useState<number>(0);
   const [mobileSplitMode, setMobileSplitMode] = useState<'both' | 'map' | 'list'>('both');
 
   // Route Builder Modal State (Etapa 2 & 5)
@@ -337,12 +338,126 @@ export const DeliveryHubManager: React.FC<{ tenant?: Tenant }> = () => {
         text:
           res.message ||
           (res.geocoded
-            ? 'Coordenadas localizadas com sucesso!'
+            ? 'Coordenadas recalculadas do endereço e sincronizadas na rota com sucesso!'
             : 'Não foi possível localizar coordenadas exatas. Use o ajuste manual se desejar.'),
       });
       await loadOverview();
+      if (res.geocoded) {
+        setFocusedOrderId(orderId);
+        setFocusRequestSeq((s) => s + 1);
+      }
     } catch (err: any) {
       setFeedback({ type: 'error', text: err.message || 'Erro ao geocodificar.' });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRecalculateRoute = async (routeId: string) => {
+    setActionLoading(`recalc-route-${routeId}`);
+    try {
+      const res = await api.recalculateDeliveryRoute(routeId);
+      setFeedback({
+        type: 'success',
+        text: res.message || `Rota ${res.route.routeCode} recalculada e sincronizada com sucesso!`,
+      });
+      await loadOverview();
+    } catch (err: any) {
+      setFeedback({ type: 'error', text: err.message || 'Erro ao recalcular rota.' });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleConfirmSuggestedOrigin = async (suggestedOrigin: {
+    cep: string;
+    street: string;
+    number: string;
+    complement?: string | null;
+    neighborhood: string;
+    city: string;
+    state: string;
+  }) => {
+    setActionLoading('confirm-origin');
+    try {
+      await api.updateDeliverySettings({
+        originAddress: {
+          ...suggestedOrigin,
+          country: 'Brasil',
+          latitude: null,
+          longitude: null,
+          geocodeStatus: 'pending',
+        },
+      });
+      setFeedback({
+        type: 'success',
+        text: `Endereço de origem confirmado e atualizado para ${suggestedOrigin.street}, ${suggestedOrigin.number} — ${suggestedOrigin.neighborhood}, ${suggestedOrigin.city}/${suggestedOrigin.state}!`,
+      });
+      await loadOverview();
+    } catch (err: any) {
+      setFeedback({
+        type: 'error',
+        text: err.message || 'Erro ao atualizar endereço de origem da empresa.',
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleViewOrderOnMap = async (order: DispatchOrderItem, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    if (mobileSplitMode === 'list') {
+      setMobileSplitMode('both');
+    }
+
+    const hasValidCoords =
+      typeof order.latitude === 'number' &&
+      typeof order.longitude === 'number' &&
+      Number.isFinite(order.latitude) &&
+      Number.isFinite(order.longitude) &&
+      !(order.latitude === 0 && order.longitude === 0);
+
+    if (hasValidCoords) {
+      setFocusedOrderId(order.id);
+      setFocusRequestSeq((s) => s + 1);
+      return;
+    }
+
+    // Order has no coordinates yet: geocode automatically before focusing on map,
+    // never reusing another order's or the company's coordinates.
+    setActionLoading(`geocode-${order.id}`);
+    try {
+      const res = await api.retryOrderGeocode(order.id);
+      await loadOverview();
+      const newLat = res.order?.deliveryAddress?.latitude;
+      const newLng = res.order?.deliveryAddress?.longitude;
+      if (res.geocoded && newLat !== null && newLat !== undefined && newLng !== null && newLng !== undefined) {
+        setFocusedOrderId(order.id);
+        setFocusRequestSeq((s) => s + 1);
+        setFeedback({
+          type: 'success',
+          text: `Endereço do pedido ${order.formattedOrderNumber} localizado e centralizado no mapa!`,
+        });
+      } else {
+        setFocusedOrderId(null);
+        setFeedback({
+          type: 'error',
+          text:
+            res.message ||
+            `Não foi possível localizar coordenadas exatas para o pedido ${order.formattedOrderNumber}. Informe ou ajuste manualmente.`,
+        });
+        setEditingLocationOrder(order);
+        setManualLat('');
+        setManualLng('');
+      }
+    } catch (err: any) {
+      setFocusedOrderId(null);
+      setFeedback({
+        type: 'error',
+        text: err.message || 'Não foi possível localizar o endereço do pedido no mapa.',
+      });
     } finally {
       setActionLoading(null);
     }
@@ -764,6 +879,67 @@ export const DeliveryHubManager: React.FC<{ tenant?: Tenant }> = () => {
         </div>
       )}
 
+      {/* Company Origin Divergence / Confirmation Banner (Non-Automatic Verification) */}
+      {overview?.originAddress &&
+        (() => {
+          const oa = overview.originAddress;
+          const cleanCep = (oa.cep || '').replace(/\D/g, '');
+          const isTamoiosCepWithWrongCity =
+            cleanCep.startsWith('2892') &&
+            (oa.city || '').toLowerCase().trim() !== 'cabo frio';
+          if (!isTamoiosCepWithWrongCity && !oa.isApproximate) return null;
+
+          const suggestedOrigin = isTamoiosCepWithWrongCity
+            ? {
+                cep: '28928-000',
+                street: oa.street || 'Avenida Independência',
+                number: oa.number || '5019',
+                complement: oa.complement || null,
+                neighborhood: 'Unamar (Tamoios)',
+                city: 'Cabo Frio',
+                state: oa.state || 'RJ',
+              }
+            : null;
+
+          return (
+            <div className="p-4 rounded-2xl border border-amber-300 bg-amber-50 text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-1 text-xs">
+                  <div className="font-bold text-amber-900">
+                    Confirmação necessária no endereço de origem da empresa
+                  </div>
+                  <p className="text-amber-800 leading-relaxed">
+                    Endereço atual cadastrado:{' '}
+                    <strong>
+                      {oa.street}, {oa.number} — {oa.neighborhood}, {oa.city}/{oa.state} (CEP{' '}
+                      {oa.cep})
+                    </strong>
+                    .{' '}
+                    {isTamoiosCepWithWrongCity
+                      ? 'A faixa de CEP informada e os pedidos de entrega correspondem a Unamar (Tamoios), Cabo Frio - RJ. Deseja confirmar a correção para Unamar (Tamoios), Cabo Frio - RJ (CEP 28928-000)?'
+                      : 'A localização atual do estabelecimento está marcada como aproximada (centro do bairro/CEP). Confirme o endereço exato nas configurações de entrega.'}
+                  </p>
+                </div>
+              </div>
+              {suggestedOrigin && (
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    disabled={actionLoading === 'confirm-origin'}
+                    onClick={() => handleConfirmSuggestedOrigin(suggestedOrigin)}
+                    className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition cursor-pointer"
+                  >
+                    {actionLoading === 'confirm-origin'
+                      ? 'Confirmando...'
+                      : 'Confirmar Unamar (Cabo Frio - RJ)'}
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
       {/* =====================================================================
           TAB 1: MAPA DE ENTREGAS & FILA DE DESPACHO (Etapas 1, 2 e 3)
       ===================================================================== */}
@@ -943,7 +1119,11 @@ export const DeliveryHubManager: React.FC<{ tenant?: Tenant }> = () => {
                 selectedOrderIds={selectedOrderIds}
                 onToggleSelectOrder={handleToggleSelectOrder}
                 focusedOrderId={focusedOrderId}
-                onFocusOrder={(id) => setFocusedOrderId(id)}
+                focusRequestSeq={focusRequestSeq}
+                onFocusOrder={(id) => {
+                  setFocusedOrderId(id);
+                  if (id) setFocusRequestSeq((s) => s + 1);
+                }}
                 liveRoutePreview={routePreview}
                 liveRouteLoading={routePreviewLoading}
                 onOpenRouteModal={() => handleOpenCreateRouteModal()}
@@ -1016,12 +1196,12 @@ export const DeliveryHubManager: React.FC<{ tenant?: Tenant }> = () => {
                     return (
                       <div
                         key={order.id}
-                        onClick={() => setFocusedOrderId(order.id)}
+                        onClick={() => handleViewOrderOnMap(order)}
                         className={`p-3.5 transition cursor-pointer ${
                           isSelected
                             ? 'bg-indigo-50/75 hover:bg-indigo-50'
                             : isFocused
-                            ? 'bg-slate-100/80'
+                            ? 'bg-slate-100/80 ring-1 ring-inset ring-indigo-300'
                             : 'hover:bg-slate-50/90'
                         }`}
                       >
@@ -1074,6 +1254,11 @@ export const DeliveryHubManager: React.FC<{ tenant?: Tenant }> = () => {
                                     Localização pendente
                                   </span>
                                 )}
+                                {order.geocodeStatus !== 'pending' && order.isApproximate && (
+                                  <span className="px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                    Aproximado
+                                  </span>
+                                )}
                               </div>
                               <span className="font-extrabold text-xs text-slate-900 shrink-0">
                                 {formatCurrency(order.total)}
@@ -1082,15 +1267,25 @@ export const DeliveryHubManager: React.FC<{ tenant?: Tenant }> = () => {
 
                             <div className="text-xs font-bold text-slate-800 flex items-center justify-between gap-2">
                               <span className="break-words">{order.customerName}</span>
-                              {order.latitude !== null && order.longitude !== null && (
-                                <span className="text-[10px] font-semibold text-indigo-600 inline-flex items-center gap-0.5 shrink-0">
-                                  <MapPin className="w-3 h-3" />
-                                  Ver no mapa
-                                </span>
-                              )}
+                              <button
+                                type="button"
+                                onClick={(e) => handleViewOrderOnMap(order, e)}
+                                disabled={actionLoading === `geocode-${order.id}`}
+                                className="px-2 py-0.5 rounded-md bg-indigo-50 hover:bg-indigo-100 text-[10px] font-bold text-indigo-700 inline-flex items-center gap-1 shrink-0 transition cursor-pointer"
+                                title="Centralizar e visualizar este pedido no mapa operacional"
+                              >
+                                <MapPin className="w-3 h-3" />
+                                {actionLoading === `geocode-${order.id}`
+                                  ? 'Localizando...'
+                                  : 'Visualizar no mapa'}
+                              </button>
                             </div>
 
-                            <div className="text-xs text-slate-600 break-words leading-snug bg-white/80 rounded-lg px-2.5 py-1.5 border border-slate-200/70">
+                            <div
+                              onClick={(e) => handleViewOrderOnMap(order, e)}
+                              className="text-xs text-slate-600 break-words leading-snug bg-white/80 hover:bg-indigo-50/40 rounded-lg px-2.5 py-1.5 border border-slate-200/70 transition"
+                              title="Clique para visualizar este endereço no mapa"
+                            >
                               <strong className="text-slate-800">{order.neighborhood}</strong> —{' '}
                               {order.addressSummary}
                             </div>
@@ -1115,32 +1310,47 @@ export const DeliveryHubManager: React.FC<{ tenant?: Tenant }> = () => {
                               </div>
                             )}
 
-                            {order.geocodeStatus === 'pending' && (
-                              <div
-                                className="flex items-center gap-2 pt-1"
-                                onClick={(e) => e.stopPropagation()}
+                            <div
+                              className="flex flex-wrap items-center gap-2 pt-1"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                type="button"
+                                disabled={actionLoading === `geocode-${order.id}`}
+                                onClick={() => handleRetryGeocode(order.id)}
+                                className="text-[11px] font-bold text-indigo-600 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                                title="Executar nova geocodificação do endereço com forceRefresh e sincronizar paradas da rota"
                               >
-                                <button
-                                  type="button"
-                                  onClick={() => handleRetryGeocode(order.id)}
-                                  className="text-[11px] font-bold text-indigo-600 hover:underline"
-                                >
-                                  Tentar localizar no mapa
-                                </button>
-                                <span className="text-slate-300">•</span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingLocationOrder(order);
-                                    setManualLat('');
-                                    setManualLng('');
-                                  }}
-                                  className="text-[11px] font-bold text-amber-700 hover:underline"
-                                >
-                                  Informar coordenadas
-                                </button>
-                              </div>
-                            )}
+                                <RefreshCw
+                                  className={`w-3 h-3 ${
+                                    actionLoading === `geocode-${order.id}` ? 'animate-spin' : ''
+                                  }`}
+                                />
+                                {actionLoading === `geocode-${order.id}`
+                                  ? 'Recalculando...'
+                                  : order.geocodeStatus === 'pending'
+                                  ? 'Tentar localizar no mapa'
+                                  : 'Recalcular do endereço'}
+                              </button>
+                              <span className="text-slate-300">•</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingLocationOrder(order);
+                                  setManualLat(
+                                    typeof order.latitude === 'number' ? String(order.latitude) : ''
+                                  );
+                                  setManualLng(
+                                    typeof order.longitude === 'number'
+                                      ? String(order.longitude)
+                                      : ''
+                                  );
+                                }}
+                                className="text-[11px] font-bold text-amber-700 hover:underline cursor-pointer"
+                              >
+                                Informar coordenadas
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1358,6 +1568,23 @@ export const DeliveryHubManager: React.FC<{ tenant?: Tenant }> = () => {
                             ))}
                         </select>
                       )}
+
+                      <button
+                        type="button"
+                        onClick={() => handleRecalculateRoute(route.id)}
+                        disabled={actionLoading === `recalc-route-${route.id}`}
+                        className="px-3 py-2 rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold inline-flex items-center gap-1.5 transition cursor-pointer"
+                        title="Sincronizar coordenadas atualizadas dos pedidos e recalcular distâncias a partir da origem da empresa"
+                      >
+                        <RefreshCw
+                          className={`w-3.5 h-3.5 ${
+                            actionLoading === `recalc-route-${route.id}` ? 'animate-spin' : ''
+                          }`}
+                        />
+                        {actionLoading === `recalc-route-${route.id}`
+                          ? 'Recalculando...'
+                          : 'Recalcular rota'}
+                      </button>
 
                       <button
                         type="button"

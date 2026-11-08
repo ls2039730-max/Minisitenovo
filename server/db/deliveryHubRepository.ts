@@ -11,12 +11,15 @@ import {
   calculateMultiStopRoadRouteServer,
   calculateRouteDistanceServer,
   geocodeAddressServer,
+  invalidateGeocodeCache,
 } from '../services/routingService.js';
 import {
   calculateHaversineDistanceKm,
   formatAddressSummary,
   hasValidCoordinates,
 } from '../../src/utils/deliveryFeeCalculator.js';
+import { isExactGeocodePrecision } from '../../src/utils/addressCoordinateValidator.js';
+import { DeliveryOriginAddress } from '../../src/types/order.js';
 import { buildWhatsAppUrl } from '../../src/utils/whatsappMessageBuilder.js';
 import { buildPublicTenantUrl } from '../../src/utils/url.js';
 import { User } from '../../src/types/saas.js';
@@ -622,21 +625,27 @@ export class DeliveryHubRepository {
     tenantId: string,
     filters?: { driverId?: string; status?: DeliveryRouteStatus | 'active' | 'all' }
   ): Promise<DeliveryRoute[]> {
-    const [{ data: rawRoutes }, { data: rawStops }, { data: rawDrivers }, { data: rawNotifs }] =
-      await Promise.all([
-        this.queryTable<any[]>('delivery_routes', (b) =>
-          b.select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false })
-        ),
-        this.queryTable<any[]>('delivery_route_stops', (b) =>
-          b.select('*').eq('tenant_id', tenantId).order('stop_sequence', { ascending: true })
-        ),
-        this.queryTable<any[]>('delivery_drivers', (b) =>
-          b.select('*').eq('tenant_id', tenantId)
-        ),
-        this.queryTable<any[]>('delivery_notifications', (b) =>
-          b.select('*').eq('tenant_id', tenantId)
-        ),
-      ]);
+    const [
+      { data: rawRoutes },
+      { data: rawStops },
+      { data: rawDrivers },
+      { data: rawNotifs },
+      canonicalOrigin,
+    ] = await Promise.all([
+      this.queryTable<any[]>('delivery_routes', (b) =>
+        b.select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false })
+      ),
+      this.queryTable<any[]>('delivery_route_stops', (b) =>
+        b.select('*').eq('tenant_id', tenantId).order('stop_sequence', { ascending: true })
+      ),
+      this.queryTable<any[]>('delivery_drivers', (b) =>
+        b.select('*').eq('tenant_id', tenantId)
+      ),
+      this.queryTable<any[]>('delivery_notifications', (b) =>
+        b.select('*').eq('tenant_id', tenantId)
+      ),
+      orderRepo.resolveTenantOriginAddress(tenantId),
+    ]);
 
     const driverMap = new Map<string, any>();
     (rawDrivers || []).forEach((d: any) => driverMap.set(d.id, d));
@@ -725,7 +734,10 @@ export class DeliveryHubRepository {
         failedStops,
         totalDistanceKm: Number(r.total_distance_km || 0),
         estimatedDurationMin: Number(r.estimated_duration_min || 0),
-        originAddress: r.origin_address || null,
+        originAddress:
+          ['created', 'assigned', 'accepted', 'in_progress'].includes(r.status) && canonicalOrigin
+            ? canonicalOrigin
+            : r.origin_address || canonicalOrigin || null,
         qrToken: r.qr_token,
         qrClaimUrl: `/?routeQr=${encodeURIComponent(r.qr_token)}`,
         qrExpiresAt: r.qr_expires_at,
@@ -813,10 +825,16 @@ export class DeliveryHubRepository {
               addr.latitude = Number(geo.latitude);
               addr.longitude = Number(geo.longitude);
               addr.geocodeStatus = 'geocoded';
+              addr.geocodePrecision = geo.precision || 'rooftop';
+              addr.isApproximate = Boolean(geo.isApproximate);
               await orderRepo.updateOrderCoordinates(tenantId, order.id, {
                 latitude: addr.latitude,
                 longitude: addr.longitude,
                 geocodeStatus: 'geocoded',
+                geocodePrecision: geo.precision || 'rooftop',
+                placeId: geo.placeId || null,
+                formattedAddress: geo.formattedAddress || null,
+                isApproximate: Boolean(geo.isApproximate),
               });
             }
           } catch {
@@ -909,6 +927,8 @@ export class DeliveryHubRepository {
           ...o,
           dispatchStatus,
           geocodeStatus,
+          geocodePrecision: addr?.geocodePrecision || (geocodeStatus === 'manual' ? 'manual' : null),
+          isApproximate: Boolean(addr?.isApproximate),
           latitude,
           longitude,
           neighborhood,
@@ -1360,14 +1380,19 @@ export class DeliveryHubRepository {
     }
 
     const addr = existing.deliveryAddress;
-    const coords = await geocodeAddressServer({
-      cep: addr.cep,
-      street: addr.street,
-      number: addr.number,
-      neighborhood: addr.neighborhood,
-      city: addr.city,
-      state: addr.state,
-    });
+    invalidateGeocodeCache(addr);
+    const coords = await geocodeAddressServer(
+      {
+        cep: addr.cep,
+        street: addr.street,
+        number: addr.number,
+        neighborhood: addr.neighborhood,
+        city: addr.city,
+        state: addr.state,
+      },
+      null,
+      { forceRefresh: true }
+    );
 
     if (coords && hasValidCoordinates(coords.latitude, coords.longitude)) {
       const updated = await orderRepo.updateOrderCoordinates(
@@ -1377,10 +1402,31 @@ export class DeliveryHubRepository {
           latitude: Number(coords.latitude),
           longitude: Number(coords.longitude),
           geocodeStatus: 'geocoded',
+          geocodePrecision: coords.precision || 'rooftop',
+          placeId: coords.placeId || null,
+          formattedAddress: coords.formattedAddress || null,
+          isApproximate: Boolean(coords.isApproximate),
         },
         actor
       );
+      // Sync updated coordinates to any active route stops for this order and recalculate route metrics
+      await this.queryTable('delivery_route_stops', (b) =>
+        b
+          .update({
+            latitude: Number(coords.latitude),
+            longitude: Number(coords.longitude),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('tenant_id', tenantId)
+          .eq('order_id', orderId)
+      );
+      await this.syncAndRecalculateRoutesForOrder(tenantId, orderId, actor);
       return { order: updated, geocoded: true };
+    }
+
+    // If order already had manual coordinates, do not wipe them out on failed automatic geocode
+    if (addr.geocodeStatus === 'manual' && hasValidCoordinates(addr.latitude, addr.longitude)) {
+      return { order: existing, geocoded: true };
     }
 
     // Never invent coordinates if geocoding fails
@@ -1391,6 +1437,7 @@ export class DeliveryHubRepository {
         latitude: null,
         longitude: null,
         geocodeStatus: 'pending',
+        geocodePrecision: null,
       },
       actor
     );
@@ -1416,13 +1463,15 @@ export class DeliveryHubRepository {
       throw new Error('Informe coordenadas válidas de latitude e longitude.');
     }
 
-    return orderRepo.updateOrderCoordinates(
+    const updated = await orderRepo.updateOrderCoordinates(
       tenantId,
       orderId,
       {
         latitude: Number(payload.latitude),
         longitude: Number(payload.longitude),
         geocodeStatus: 'manual',
+        geocodePrecision: 'manual',
+        isApproximate: false,
         street: payload.street,
         number: payload.number,
         neighborhood: payload.neighborhood,
@@ -1432,6 +1481,272 @@ export class DeliveryHubRepository {
       },
       actor
     );
+
+    // Sync updated coordinates and address fields to any route stops for this order
+    const stopPatch: Record<string, any> = {
+      latitude: updated.deliveryAddress?.latitude ?? Number(payload.latitude),
+      longitude: updated.deliveryAddress?.longitude ?? Number(payload.longitude),
+      updated_at: new Date().toISOString(),
+    };
+    if (payload.street !== undefined) stopPatch.street = payload.street.trim();
+    if (payload.number !== undefined) stopPatch.number = payload.number.trim();
+    if (payload.neighborhood !== undefined) stopPatch.neighborhood = payload.neighborhood.trim();
+    if (payload.city !== undefined) stopPatch.city = payload.city.trim();
+    if (payload.state !== undefined) stopPatch.state = payload.state.trim().toUpperCase();
+    if (payload.cep !== undefined) stopPatch.cep = payload.cep.replace(/\D/g, '');
+    if (updated.deliveryAddress) {
+      stopPatch.address_summary = formatAddressSummary(updated.deliveryAddress);
+    }
+
+    await this.queryTable('delivery_route_stops', (b) =>
+      b.update(stopPatch).eq('tenant_id', tenantId).eq('order_id', orderId)
+    );
+
+    await this.syncAndRecalculateRoutesForOrder(tenantId, orderId, actor);
+
+    return updated;
+  }
+
+  /**
+   * Synchronizes all route stops with the latest coordinates from their orders
+   * and recalculates route distances, ETAs, and origin address for any route containing `orderId`.
+   */
+  public async syncAndRecalculateRoutesForOrder(
+    tenantId: string,
+    orderId: string,
+    actor?: User
+  ): Promise<void> {
+    const { data: matchingStops } = await this.queryTable<any[]>('delivery_route_stops', (b) =>
+      b.select('route_id').eq('tenant_id', tenantId).eq('order_id', orderId)
+    );
+    const routeIds = Array.from(
+      new Set((matchingStops || []).map((s: any) => String(s.route_id)).filter(Boolean))
+    );
+    for (const rId of routeIds) {
+      try {
+        await this.recalculateRoute(tenantId, rId, actor);
+      } catch {
+        // Ignore individual route sync errors
+      }
+    }
+  }
+
+  /**
+   * Synchronizes every stop in a route with its order's current coordinates (never reusing stale route coordinates)
+   * and recalculates distances, durations, and route totals starting from the company's official origin address.
+   */
+  public async recalculateRoute(
+    tenantId: string,
+    routeId: string,
+    actor?: User
+  ): Promise<DeliveryRoute> {
+    const [route, originAddress] = await Promise.all([
+      this.getRouteById(tenantId, routeId),
+      orderRepo.resolveTenantOriginAddress(tenantId),
+    ]);
+    if (!route) {
+      throw new Error('Rota não encontrada.');
+    }
+
+    const orderedStops = [...route.stops].sort((a, b) => a.stopSequence - b.stopSequence);
+    const syncedStops = await Promise.all(
+      orderedStops.map(async (stop) => {
+        const ord = await orderRepo.getOrderById(tenantId, stop.orderId);
+        const ordAddr = ord?.deliveryAddress;
+        const lat =
+          ordAddr && hasValidCoordinates(ordAddr.latitude, ordAddr.longitude)
+            ? Number(ordAddr.latitude)
+            : stop.latitude ?? null;
+        const lng =
+          ordAddr && hasValidCoordinates(ordAddr.latitude, ordAddr.longitude)
+            ? Number(ordAddr.longitude)
+            : stop.longitude ?? null;
+        return {
+          stop,
+          lat,
+          lng,
+          ordAddr,
+        };
+      })
+    );
+
+    const basePreview = this.optimizeStopOrderSync(
+      syncedStops.map(({ stop, lat, lng }) => ({
+        id: stop.orderId,
+        orderNumber: stop.orderNumber,
+        formattedOrderNumber: stop.formattedOrderNumber,
+        customerName: stop.customerName,
+        neighborhood: stop.neighborhood,
+        addressSummary: stop.addressSummary,
+        latitude: lat,
+        longitude: lng,
+        geocodeStatus: hasValidCoordinates(lat, lng) ? 'geocoded' : 'pending',
+      })),
+      originAddress || route.originAddress || null,
+      true // preserve stop sequence
+    );
+
+    // Enrich with real road driving distances if origin + stops have valid coordinates
+    const effectiveOrigin = originAddress || route.originAddress || null;
+    const waypoints: Array<{ latitude: number; longitude: number }> = [];
+    const hasOrigin = hasValidCoordinates(effectiveOrigin?.latitude, effectiveOrigin?.longitude);
+    if (hasOrigin) {
+      waypoints.push({
+        latitude: Number(effectiveOrigin!.latitude),
+        longitude: Number(effectiveOrigin!.longitude),
+      });
+    }
+
+    const geocodedIndices: number[] = [];
+    basePreview.orderedStops.forEach((s, idx) => {
+      if (hasValidCoordinates(s.latitude, s.longitude)) {
+        waypoints.push({
+          latitude: Number(s.latitude),
+          longitude: Number(s.longitude),
+        });
+        geocodedIndices.push(idx);
+      }
+    });
+
+    let finalStops = basePreview.orderedStops;
+    let totalDistanceKm = basePreview.totalDistanceKm;
+    let estimatedDurationMin = basePreview.estimatedDurationMin;
+
+    if (waypoints.length >= 2) {
+      const roadRoute = await calculateMultiStopRoadRouteServer(waypoints);
+      if (roadRoute.success && roadRoute.legDistancesKm.length > 0) {
+        let cumulativeEta = 0;
+        let totalDist = 0;
+        finalStops = basePreview.orderedStops.map((stop, idx) => {
+          const geoPos = geocodedIndices.indexOf(idx);
+          const legIdx = hasOrigin ? geoPos : geoPos - 1;
+          if (geoPos !== -1 && legIdx >= 0 && legIdx < roadRoute.legDistancesKm.length) {
+            const distKm = roadRoute.legDistancesKm[legIdx];
+            const durMin = roadRoute.legDurationsMin[legIdx];
+            totalDist = Math.round((totalDist + distKm) * 100) / 100;
+            cumulativeEta += durMin;
+            return {
+              ...stop,
+              distanceFromPrevKm: distKm,
+              durationFromPrevMin: durMin,
+              cumulativeEtaMin: cumulativeEta,
+            };
+          }
+          totalDist = Math.round((totalDist + stop.distanceFromPrevKm) * 100) / 100;
+          cumulativeEta += stop.durationFromPrevMin;
+          return {
+            ...stop,
+            cumulativeEtaMin: cumulativeEta,
+          };
+        });
+        totalDistanceKm = totalDist || roadRoute.totalDistanceKm;
+        estimatedDurationMin = cumulativeEta || roadRoute.totalDurationMin;
+      }
+    }
+
+    const now = new Date().toISOString();
+    for (let i = 0; i < syncedStops.length; i++) {
+      const { stop, lat, lng, ordAddr } = syncedStops[i];
+      const calc = finalStops[i];
+      const stopPatch: Record<string, any> = {
+        stop_sequence: i + 1,
+        latitude: lat,
+        longitude: lng,
+        distance_from_prev_km: calc.distanceFromPrevKm,
+        duration_from_prev_min: calc.durationFromPrevMin,
+        cumulative_eta_min: calc.cumulativeEtaMin,
+        updated_at: now,
+      };
+      if (ordAddr) {
+        stopPatch.street = ordAddr.street;
+        stopPatch.number = ordAddr.number;
+        stopPatch.neighborhood = ordAddr.neighborhood;
+        stopPatch.city = ordAddr.city;
+        stopPatch.state = ordAddr.state;
+        stopPatch.cep = ordAddr.cep;
+        stopPatch.address_summary = formatAddressSummary(ordAddr);
+      }
+      await this.queryTable('delivery_route_stops', (b) =>
+        b.update(stopPatch).eq('id', stop.id).eq('tenant_id', tenantId)
+      );
+    }
+
+    const routePatch: Record<string, any> = {
+      total_distance_km: totalDistanceKm,
+      estimated_duration_min: estimatedDurationMin,
+      updated_at: now,
+    };
+    if (originAddress) {
+      routePatch.origin_address = originAddress;
+    }
+
+    await this.queryTable('delivery_routes', (b) =>
+      b.update(routePatch).eq('id', routeId).eq('tenant_id', tenantId)
+    );
+
+    if (actor) {
+      await this.logEvent({
+        tenantId,
+        routeId,
+        actorUserId: actor.id,
+        actorName: actor.name,
+        eventType: 'ROUTE_REORDERED',
+        previousStatus: route.status,
+        newStatus: route.status,
+        metadata: {
+          action: 'ROUTE_RECALCULATED',
+          totalDistanceKm,
+          estimatedDurationMin,
+        },
+      });
+    }
+
+    return (await this.getRouteById(tenantId, routeId))!;
+  }
+
+  /**
+   * Synchronizes all active routes (`created`, `assigned`, `accepted`, `in_progress`) of `tenantId`
+   * when the company's official origin address changes.
+   * - Updates ONLY the origin of active routes and recalculates distances, durations, and geometries.
+   * - Preserves stop sequence, orders, drivers, and never modifies customer order coordinates.
+   * - If the new location is approximate/unconfirmed (`!isExact`), does NOT recalculate routes as if it were exact,
+   *   returning `skippedUnconfirmed: true` so the UI prompts for confirmation.
+   */
+  public async syncActiveRoutesWithCompanyOrigin(
+    tenantId: string,
+    originAddress: DeliveryOriginAddress | null,
+    actor?: User
+  ): Promise<{ updatedRoutesCount: number; skippedUnconfirmed: boolean }> {
+    if (
+      !originAddress ||
+      !hasValidCoordinates(originAddress.latitude, originAddress.longitude)
+    ) {
+      return { updatedRoutesCount: 0, skippedUnconfirmed: true };
+    }
+
+    const isExact = isExactGeocodePrecision(
+      originAddress.geocodePrecision,
+      originAddress.geocodeStatus,
+      originAddress.isApproximate
+    );
+
+    if (!isExact) {
+      // Do not recalculate active routes as if an approximate location were exact
+      return { updatedRoutesCount: 0, skippedUnconfirmed: true };
+    }
+
+    const activeRoutes = await this.listRoutes(tenantId, { status: 'active' });
+    let updatedRoutesCount = 0;
+    for (const route of activeRoutes) {
+      try {
+        await this.recalculateRoute(tenantId, route.id, actor);
+        updatedRoutesCount++;
+      } catch {
+        // Ignore individual route recalculation error
+      }
+    }
+
+    return { updatedRoutesCount, skippedUnconfirmed: false };
   }
 
   // ==========================================

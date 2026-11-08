@@ -15,6 +15,7 @@ import {
   DeliveryPricingMode,
   DeliveryQuoteRequest,
   DeliveryQuoteResponse,
+  GeocodePrecision,
   PaymentMethodConfig,
   ValidatedCartResponse,
   ValidatedCartItem,
@@ -33,8 +34,14 @@ import {
   parseFormattedAddressString,
 } from '../../src/utils/deliveryFeeCalculator.js';
 import {
+  computeAddressFingerprint,
+  didAddressTextChange,
+  validateAndNormalizeCoordinates,
+} from '../../src/utils/addressCoordinateValidator.js';
+import {
   calculateRouteDistanceServer,
   geocodeAddressServer,
+  invalidateGeocodeCache,
   lookupPostalCodeServer,
 } from '../services/routingService.js';
 import { buildWhatsAppOrderMessage, buildWhatsAppUrl } from '../../src/utils/whatsappMessageBuilder.js';
@@ -70,6 +77,11 @@ interface ExtendedOrderDeliveryMeta {
   latitude?: number | null;
   longitude?: number | null;
   geocodeStatus?: 'geocoded' | 'pending' | 'manual' | null;
+  geocodePrecision?: GeocodePrecision | null;
+  placeId?: string | null;
+  geocodedAt?: string | null;
+  formattedAddress?: string | null;
+  isApproximate?: boolean;
 }
 
 interface TenantDeliveryExtendedConfig {
@@ -168,6 +180,210 @@ export class OrderRepository {
    * 3. Site Editor's `location` section (`site_sections.settings.address`) if present for this tenant
    * Never uses another tenant's address or a hardcoded fallback.
    */
+  /**
+   * Synchronizes the official company address from `public.tenants` (Minha Empresa)
+   * with `deliveryExtendedConfig.originAddress` and `site_sections`, invalidating stale
+   * coordinates whenever the address text changes and geocoding the updated address.
+   */
+  public async syncOriginAddressFromTenantProfile(
+    tenantId: string,
+    payload?: {
+      cep?: string;
+      street?: string;
+      number?: string;
+      complement?: string | null;
+      neighborhood?: string;
+      city?: string;
+      state?: string;
+      latitude?: number | null;
+      longitude?: number | null;
+      geocodeStatus?: 'geocoded' | 'pending' | 'manual' | null;
+      forceManualPinSave?: boolean;
+      forceGeocodeRefresh?: boolean;
+    }
+  ): Promise<DeliveryOriginAddress | null> {
+    const ext = await this.getExtendedConfig(tenantId);
+    const { data: tenantRow } = await supabaseAdmin
+      .from('tenants')
+      .select('cep, street, number, complement, neighborhood, city, state')
+      .eq('id', tenantId)
+      .single();
+
+    const mergedRaw = {
+      cep: normalizeCep(payload?.cep !== undefined ? payload.cep : tenantRow?.cep),
+      street: String(payload?.street !== undefined ? payload.street : tenantRow?.street || '').trim(),
+      number: String(
+        payload?.number !== undefined ? payload.number || 'S/N' : tenantRow?.number || 'S/N'
+      ).trim(),
+      complement:
+        payload?.complement !== undefined
+          ? payload.complement?.trim() || null
+          : tenantRow?.complement?.trim() || null,
+      neighborhood: String(
+        payload?.neighborhood !== undefined ? payload.neighborhood : tenantRow?.neighborhood || ''
+      ).trim(),
+      city: String(payload?.city !== undefined ? payload.city : tenantRow?.city || '').trim(),
+      state: String(payload?.state !== undefined ? payload.state : tenantRow?.state || '')
+        .trim()
+        .toUpperCase(),
+    };
+
+    if (!mergedRaw.street || !mergedRaw.city || !mergedRaw.state) {
+      return ext.originAddress || null;
+    }
+
+    const prevOrigin = ext.originAddress;
+    const textChanged = didAddressTextChange(prevOrigin, mergedRaw);
+    const nowIso = new Date().toISOString();
+
+    interface SyncOriginPayload {
+      cep?: string;
+      street?: string;
+      number?: string;
+      complement?: string | null;
+      neighborhood?: string;
+      city?: string;
+      state?: string;
+      latitude?: number | null;
+      longitude?: number | null;
+      geocodeStatus?: 'geocoded' | 'pending' | 'manual' | null;
+      forceManualPinSave?: boolean;
+      forceGeocodeRefresh?: boolean;
+    }
+    const p = (payload || {}) as SyncOriginPayload;
+
+    const explicitCoordCheck =
+      p.latitude !== undefined && p.longitude !== undefined
+        ? validateAndNormalizeCoordinates(p.latitude, p.longitude)
+        : null;
+
+    const nextOrigin: DeliveryOriginAddress = {
+      ...mergedRaw,
+      country: 'Brasil',
+      latitude: null,
+      longitude: null,
+      geocodeStatus: 'pending',
+      geocodePrecision: null,
+      placeId: null,
+      geocodedAt: null,
+      formattedAddress: formatAddressSummary(mergedRaw),
+      isApproximate: false,
+      addressFingerprint: computeAddressFingerprint(mergedRaw),
+    };
+
+    const isSameAsPrevCoords = Boolean(
+      prevOrigin &&
+        explicitCoordCheck?.valid &&
+        typeof prevOrigin.latitude === 'number' &&
+        typeof prevOrigin.longitude === 'number' &&
+        Math.abs(explicitCoordCheck.latitude! - prevOrigin.latitude) < 1e-7 &&
+        Math.abs(explicitCoordCheck.longitude! - prevOrigin.longitude) < 1e-7
+    );
+
+    // Only accept manual coordinates if:
+    // - the address text did NOT change and caller passed manual status or different coordinates, OR
+    // - the caller explicitly confirmed a new manual pin (`forceManualPinSave: true`) with coordinates different from the stale ones.
+    const acceptExplicitManual = Boolean(
+      explicitCoordCheck &&
+        explicitCoordCheck.valid &&
+        !p.forceGeocodeRefresh &&
+        ((!textChanged &&
+          (p.geocodeStatus === 'manual' ||
+            (prevOrigin && !isSameAsPrevCoords))) ||
+          (textChanged && p.forceManualPinSave && !isSameAsPrevCoords))
+    );
+
+    if (acceptExplicitManual && explicitCoordCheck) {
+      nextOrigin.latitude = explicitCoordCheck.latitude;
+      nextOrigin.longitude = explicitCoordCheck.longitude;
+      nextOrigin.geocodeStatus = 'manual';
+      nextOrigin.geocodePrecision = 'manual';
+      nextOrigin.placeId = null;
+      nextOrigin.geocodedAt = nowIso;
+      nextOrigin.formattedAddress = formatAddressSummary(mergedRaw);
+      nextOrigin.isApproximate = false;
+    } else if (!textChanged && !p.forceGeocodeRefresh && prevOrigin) {
+      const prevCheck = validateAndNormalizeCoordinates(prevOrigin.latitude, prevOrigin.longitude);
+      if (prevCheck.valid) {
+        nextOrigin.latitude = prevCheck.latitude;
+        nextOrigin.longitude = prevCheck.longitude;
+        nextOrigin.geocodeStatus = prevOrigin.geocodeStatus || 'geocoded';
+        nextOrigin.geocodePrecision = prevOrigin.geocodePrecision || 'rooftop';
+        nextOrigin.placeId = prevOrigin.placeId || null;
+        nextOrigin.geocodedAt = prevOrigin.geocodedAt || nowIso;
+        nextOrigin.formattedAddress = prevOrigin.formattedAddress || formatAddressSummary(nextOrigin);
+        nextOrigin.isApproximate = Boolean(prevOrigin.isApproximate);
+      }
+    }
+
+    // If address text changed, force refresh requested, or coordinates are missing, invalidate cache and geocode fresh
+    if (
+      textChanged ||
+      p.forceGeocodeRefresh ||
+      !hasValidCoordinates(nextOrigin.latitude, nextOrigin.longitude)
+    ) {
+      if (textChanged || p.forceGeocodeRefresh) {
+        invalidateGeocodeCache(prevOrigin);
+        invalidateGeocodeCache(nextOrigin);
+      }
+      if (!acceptExplicitManual) {
+        const geo = await geocodeAddressServer(
+          { ...nextOrigin, latitude: null, longitude: null },
+          null,
+          { forceRefresh: true }
+        );
+        if (geo.success && typeof geo.latitude === 'number' && typeof geo.longitude === 'number') {
+          nextOrigin.latitude = geo.latitude;
+          nextOrigin.longitude = geo.longitude;
+          nextOrigin.geocodeStatus = 'geocoded';
+          nextOrigin.geocodePrecision = geo.precision || 'rooftop';
+          nextOrigin.placeId = geo.placeId || null;
+          nextOrigin.geocodedAt = geo.geocodedAt || nowIso;
+          nextOrigin.formattedAddress = geo.formattedAddress || formatAddressSummary(nextOrigin);
+          nextOrigin.isApproximate = Boolean(geo.isApproximate);
+        } else {
+          nextOrigin.latitude = null;
+          nextOrigin.longitude = null;
+          nextOrigin.geocodeStatus = 'pending';
+          nextOrigin.geocodePrecision = null;
+          nextOrigin.isApproximate = false;
+        }
+      }
+    }
+
+    await this.saveExtendedConfig(tenantId, { originAddress: nextOrigin });
+
+    // Also sync formatted address to `site_sections` (`location` section) if one exists
+    const formattedSummary = formatAddressSummary(nextOrigin);
+    if (formattedSummary) {
+      const { data: locRows } = await supabaseAdmin
+        .from('site_sections')
+        .select('id, settings')
+        .eq('tenant_id', tenantId)
+        .eq('section_type', 'location');
+      if (locRows && locRows.length > 0) {
+        for (const row of locRows) {
+          const nextSettings = { ...(row.settings || {}), address: formattedSummary };
+          await supabaseAdmin
+            .from('site_sections')
+            .update({ settings: nextSettings, updated_at: nowIso })
+            .eq('id', row.id)
+            .eq('tenant_id', tenantId);
+        }
+      }
+    }
+
+    return nextOrigin;
+  }
+
+  /**
+   * Resolves the establishment's official origin address from:
+   * 1. Native columns in `public.tenants` synchronized with `deliveryExtendedConfig.originAddress`
+   * 2. Saved extended delivery `originAddress`
+   * 3. Site Editor's `location` section (`site_sections.settings.address`) if present for this tenant
+   * Never uses another tenant's address or a hardcoded fallback.
+   * Automatically detects if `public.tenants` address changed and invalidates stale coordinates.
+   */
   public async resolveTenantOriginAddress(
     tenantId: string,
     extConfig?: TenantDeliveryExtendedConfig
@@ -180,8 +396,72 @@ export class OrderRepository {
       .single();
 
     let origin: DeliveryOriginAddress | null = null;
+    let shouldInvalidateCoords = false;
 
-    if (ext.originAddress && isOriginAddressValid(ext.originAddress)) {
+    const tenantHasValidAddr = Boolean(
+      tenantRow && tenantRow.street?.trim() && tenantRow.city?.trim() && tenantRow.state?.trim()
+    );
+    const extHasValidAddr = Boolean(ext.originAddress && isOriginAddressValid(ext.originAddress));
+
+    if (tenantHasValidAddr && extHasValidAddr) {
+      // Check if `public.tenants` was edited and now differs from `ext.originAddress`
+      const tenantCandidate: DeliveryOriginAddress = {
+        cep: normalizeCep(tenantRow!.cep),
+        street: tenantRow!.street.trim(),
+        number: (tenantRow!.number || 'S/N').trim(),
+        complement: tenantRow!.complement?.trim() || null,
+        neighborhood: (tenantRow!.neighborhood || '').trim(),
+        city: tenantRow!.city.trim(),
+        state: tenantRow!.state.trim().toUpperCase(),
+        country: 'Brasil',
+      };
+
+      if (didAddressTextChange(ext.originAddress, tenantCandidate)) {
+        // `public.tenants` has a newer/different official company address than `ext.originAddress`!
+        // Invalidate the stale coordinates from `ext.originAddress` and re-geocode `tenantCandidate`.
+        shouldInvalidateCoords = true;
+        invalidateGeocodeCache(ext.originAddress);
+        invalidateGeocodeCache(tenantCandidate);
+        origin = {
+          ...tenantCandidate,
+          latitude: null,
+          longitude: null,
+          geocodeStatus: 'pending',
+          geocodePrecision: null,
+          placeId: null,
+          geocodedAt: null,
+          formattedAddress: formatAddressSummary(tenantCandidate),
+          isApproximate: false,
+          addressFingerprint: computeAddressFingerprint(tenantCandidate),
+        };
+      } else {
+        const coordCheck = validateAndNormalizeCoordinates(
+          ext.originAddress!.latitude,
+          ext.originAddress!.longitude
+        );
+        origin = {
+          ...tenantCandidate,
+          latitude: coordCheck.valid ? coordCheck.latitude : null,
+          longitude: coordCheck.valid ? coordCheck.longitude : null,
+          geocodeStatus: coordCheck.valid
+            ? ext.originAddress!.geocodeStatus || 'geocoded'
+            : 'pending',
+          geocodePrecision: coordCheck.valid
+            ? ext.originAddress!.geocodePrecision || 'rooftop'
+            : null,
+          placeId: ext.originAddress!.placeId || null,
+          geocodedAt: ext.originAddress!.geocodedAt || null,
+          formattedAddress:
+            ext.originAddress!.formattedAddress || formatAddressSummary(tenantCandidate),
+          isApproximate: Boolean(ext.originAddress!.isApproximate),
+          addressFingerprint: computeAddressFingerprint(tenantCandidate),
+        };
+      }
+    } else if (extHasValidAddr && ext.originAddress) {
+      const coordCheck = validateAndNormalizeCoordinates(
+        ext.originAddress.latitude,
+        ext.originAddress.longitude
+      );
       origin = {
         cep: normalizeCep(ext.originAddress.cep),
         street: ext.originAddress.street.trim(),
@@ -190,12 +470,21 @@ export class OrderRepository {
         neighborhood: (ext.originAddress.neighborhood || '').trim(),
         city: ext.originAddress.city.trim(),
         state: ext.originAddress.state.trim().toUpperCase(),
-        latitude:
-          typeof ext.originAddress.latitude === 'number' ? ext.originAddress.latitude : null,
-        longitude:
-          typeof ext.originAddress.longitude === 'number' ? ext.originAddress.longitude : null,
+        country: 'Brasil',
+        latitude: coordCheck.valid ? coordCheck.latitude : null,
+        longitude: coordCheck.valid ? coordCheck.longitude : null,
+        geocodeStatus: coordCheck.valid ? ext.originAddress.geocodeStatus || 'geocoded' : 'pending',
+        geocodePrecision: coordCheck.valid
+          ? ext.originAddress.geocodePrecision || 'rooftop'
+          : null,
+        placeId: ext.originAddress.placeId || null,
+        geocodedAt: ext.originAddress.geocodedAt || null,
+        formattedAddress:
+          ext.originAddress.formattedAddress || formatAddressSummary(ext.originAddress),
+        isApproximate: Boolean(ext.originAddress.isApproximate),
+        addressFingerprint: computeAddressFingerprint(ext.originAddress),
       };
-    } else if (tenantRow && tenantRow.street && tenantRow.city && tenantRow.state) {
+    } else if (tenantHasValidAddr && tenantRow) {
       origin = {
         cep: normalizeCep(tenantRow.cep),
         street: tenantRow.street.trim(),
@@ -204,8 +493,16 @@ export class OrderRepository {
         neighborhood: (tenantRow.neighborhood || '').trim(),
         city: tenantRow.city.trim(),
         state: tenantRow.state.trim().toUpperCase(),
-        latitude: ext.originAddress?.latitude ?? null,
-        longitude: ext.originAddress?.longitude ?? null,
+        country: 'Brasil',
+        latitude: null,
+        longitude: null,
+        geocodeStatus: 'pending',
+        geocodePrecision: null,
+        placeId: null,
+        geocodedAt: null,
+        formattedAddress: null,
+        isApproximate: false,
+        addressFingerprint: computeAddressFingerprint(tenantRow),
       };
     } else {
       // Check if tenant has a location section configured in site_sections
@@ -220,10 +517,16 @@ export class OrderRepository {
       if (rawLocationAddress && typeof rawLocationAddress === 'string') {
         const parsed = parseFormattedAddressString(rawLocationAddress);
         if (parsed && isOriginAddressValid(parsed)) {
-          origin = parsed;
+          origin = {
+            ...parsed,
+            country: 'Brasil',
+            geocodeStatus: 'pending',
+            addressFingerprint: computeAddressFingerprint(parsed),
+          };
         }
       } else if (rawLocationAddress && typeof rawLocationAddress === 'object') {
         const addrObj = rawLocationAddress as Record<string, any>;
+        const coordCheck = validateAndNormalizeCoordinates(addrObj.latitude, addrObj.longitude);
         const candidate: DeliveryOriginAddress = {
           cep: normalizeCep(addrObj.cep || addrObj.zip || ''),
           street: String(addrObj.street || '').trim(),
@@ -232,14 +535,11 @@ export class OrderRepository {
           neighborhood: String(addrObj.neighborhood || '').trim(),
           city: String(addrObj.city || '').trim(),
           state: String(addrObj.state || '').trim().toUpperCase(),
-          latitude:
-            typeof addrObj.latitude === 'number' && Number.isFinite(addrObj.latitude)
-              ? addrObj.latitude
-              : null,
-          longitude:
-            typeof addrObj.longitude === 'number' && Number.isFinite(addrObj.longitude)
-              ? addrObj.longitude
-              : null,
+          country: 'Brasil',
+          latitude: coordCheck.valid ? coordCheck.latitude : null,
+          longitude: coordCheck.valid ? coordCheck.longitude : null,
+          geocodeStatus: coordCheck.valid ? 'geocoded' : 'pending',
+          addressFingerprint: computeAddressFingerprint(addrObj),
         };
         if (isOriginAddressValid(candidate)) {
           origin = candidate;
@@ -268,15 +568,25 @@ export class OrderRepository {
         .eq('id', tenantId);
     }
 
-    // Automatically geocode if coordinates are missing
-    if (!hasValidCoordinates(origin)) {
-      const geo = await geocodeAddressServer(origin);
+    // Automatically geocode if coordinates are missing or invalidated by an address change
+    if (shouldInvalidateCoords || !hasValidCoordinates(origin.latitude, origin.longitude)) {
+      const geo = await geocodeAddressServer(
+        { ...origin, latitude: null, longitude: null },
+        null,
+        { forceRefresh: shouldInvalidateCoords }
+      );
       if (geo.success && typeof geo.latitude === 'number' && typeof geo.longitude === 'number') {
         origin.latitude = geo.latitude;
         origin.longitude = geo.longitude;
-        await this.saveExtendedConfig(tenantId, { originAddress: origin });
+        origin.geocodeStatus = 'geocoded';
+        origin.geocodePrecision = geo.precision || 'rooftop';
+        origin.placeId = geo.placeId || null;
+        origin.geocodedAt = geo.geocodedAt || new Date().toISOString();
+        origin.formattedAddress = geo.formattedAddress || formatAddressSummary(origin);
+        origin.isApproximate = Boolean(geo.isApproximate);
       }
-    } else if (!ext.originAddress) {
+      await this.saveExtendedConfig(tenantId, { originAddress: origin });
+    } else if (!ext.originAddress || shouldInvalidateCoords) {
       await this.saveExtendedConfig(tenantId, { originAddress: origin });
     }
 
@@ -462,6 +772,7 @@ export class OrderRepository {
         extPatch.originAddress = null;
       } else {
         const oa = payload.originAddress;
+        const coordCheck = validateAndNormalizeCoordinates(oa.latitude, oa.longitude);
         const normalizedOrigin: DeliveryOriginAddress = {
           cep: normalizeCep(oa.cep),
           street: (oa.street || '').trim(),
@@ -470,49 +781,75 @@ export class OrderRepository {
           neighborhood: (oa.neighborhood || '').trim(),
           city: (oa.city || '').trim(),
           state: (oa.state || '').trim().toUpperCase(),
-          latitude:
-            typeof oa.latitude === 'number' && Number.isFinite(oa.latitude)
-              ? oa.latitude
-              : null,
-          longitude:
-            typeof oa.longitude === 'number' && Number.isFinite(oa.longitude)
-              ? oa.longitude
-              : null,
+          country: 'Brasil',
+          latitude: coordCheck.valid ? coordCheck.latitude : null,
+          longitude: coordCheck.valid ? coordCheck.longitude : null,
+          geocodeStatus: oa.geocodeStatus || (coordCheck.valid ? 'geocoded' : 'pending'),
+          geocodePrecision: oa.geocodePrecision || null,
+          placeId: oa.placeId || null,
+          geocodedAt: oa.geocodedAt || now,
+          formattedAddress: oa.formattedAddress || formatAddressSummary(oa),
+          isApproximate: Boolean(oa.isApproximate),
+          addressFingerprint: computeAddressFingerprint(oa),
         };
 
         // If coordinates were not provided or address changed, geocode automatically
         const prevOrigin = existing.originAddress;
-        const addressChanged =
-          !prevOrigin ||
-          normalizeCep(prevOrigin.cep) !== normalizedOrigin.cep ||
-          prevOrigin.street !== normalizedOrigin.street ||
-          prevOrigin.number !== normalizedOrigin.number ||
-          prevOrigin.neighborhood !== normalizedOrigin.neighborhood ||
-          prevOrigin.city !== normalizedOrigin.city ||
-          prevOrigin.state !== normalizedOrigin.state;
+        const addressChanged = didAddressTextChange(prevOrigin, normalizedOrigin);
+        const isSameAsPrevCoords = Boolean(
+          prevOrigin &&
+            coordCheck.valid &&
+            typeof prevOrigin.latitude === 'number' &&
+            typeof prevOrigin.longitude === 'number' &&
+            Math.abs(coordCheck.latitude! - prevOrigin.latitude) < 1e-7 &&
+            Math.abs(coordCheck.longitude! - prevOrigin.longitude) < 1e-7
+        );
 
-        if (
+        const callerPassedExplicitManualCoords =
+          coordCheck.valid &&
+          !addressChanged &&
+          (oa.geocodeStatus === 'manual' ||
+            oa.geocodePrecision === 'manual' ||
+            (prevOrigin && !isSameAsPrevCoords));
+
+        if (callerPassedExplicitManualCoords) {
+          normalizedOrigin.geocodeStatus = 'manual';
+          normalizedOrigin.geocodePrecision = 'manual';
+          normalizedOrigin.isApproximate = false;
+          normalizedOrigin.geocodedAt = now;
+        } else if (
           isOriginAddressValid(normalizedOrigin) &&
-          (!hasValidCoordinates(normalizedOrigin) || addressChanged) &&
-          (oa.latitude === undefined || oa.latitude === null || addressChanged)
+          (!coordCheck.valid || addressChanged)
         ) {
-          // If caller explicitly passed new coordinates, keep them; otherwise geocode
-          const callerPassedNewCoords =
-            hasValidCoordinates(oa) &&
-            (!prevOrigin ||
-              oa.latitude !== prevOrigin.latitude ||
-              oa.longitude !== prevOrigin.longitude);
-
-          if (!callerPassedNewCoords) {
-            const geo = await geocodeAddressServer({
+          if (addressChanged) {
+            invalidateGeocodeCache(prevOrigin);
+            invalidateGeocodeCache(normalizedOrigin);
+          }
+          const geo = await geocodeAddressServer(
+            {
               ...normalizedOrigin,
               latitude: null,
               longitude: null,
-            });
-            if (geo.success && typeof geo.latitude === 'number' && typeof geo.longitude === 'number') {
-              normalizedOrigin.latitude = geo.latitude;
-              normalizedOrigin.longitude = geo.longitude;
-            }
+            },
+            null,
+            { forceRefresh: true }
+          );
+          if (geo.success && typeof geo.latitude === 'number' && typeof geo.longitude === 'number') {
+            normalizedOrigin.latitude = geo.latitude;
+            normalizedOrigin.longitude = geo.longitude;
+            normalizedOrigin.geocodeStatus = 'geocoded';
+            normalizedOrigin.geocodePrecision = geo.precision || 'rooftop';
+            normalizedOrigin.placeId = geo.placeId || null;
+            normalizedOrigin.geocodedAt = geo.geocodedAt || now;
+            normalizedOrigin.formattedAddress =
+              geo.formattedAddress || formatAddressSummary(normalizedOrigin);
+            normalizedOrigin.isApproximate = Boolean(geo.isApproximate);
+          } else if (addressChanged) {
+            normalizedOrigin.latitude = null;
+            normalizedOrigin.longitude = null;
+            normalizedOrigin.geocodeStatus = 'pending';
+            normalizedOrigin.geocodePrecision = null;
+            normalizedOrigin.isApproximate = false;
           }
         }
 
@@ -1596,18 +1933,19 @@ export class OrderRepository {
       let resolvedLat: number | null = null;
       let resolvedLng: number | null = null;
       let resolvedGeocodeStatus: 'geocoded' | 'pending' | 'manual' = 'pending';
+      let resolvedGeocodePrecision: GeocodePrecision | null = null;
+      let resolvedPlaceId: string | null = null;
+      let resolvedGeocodedAt: string | null = null;
+      let resolvedFormattedAddress: string | null = null;
+      let resolvedIsApproximate = false;
 
-      if (
-        quote.destinationCoordinates &&
-        hasValidCoordinates(quote.destinationCoordinates.latitude, quote.destinationCoordinates.longitude)
-      ) {
-        resolvedLat = Number(quote.destinationCoordinates.latitude);
-        resolvedLng = Number(quote.destinationCoordinates.longitude);
+      const explicitAddrCheck = validateAndNormalizeCoordinates(addr.latitude, addr.longitude);
+      if (explicitAddrCheck.valid) {
+        resolvedLat = explicitAddrCheck.latitude;
+        resolvedLng = explicitAddrCheck.longitude;
         resolvedGeocodeStatus = 'geocoded';
-      } else if (hasValidCoordinates(addr.latitude, addr.longitude)) {
-        resolvedLat = Number(addr.latitude);
-        resolvedLng = Number(addr.longitude);
-        resolvedGeocodeStatus = 'geocoded';
+        resolvedGeocodePrecision = 'rooftop';
+        resolvedGeocodedAt = new Date().toISOString();
       } else {
         try {
           const geocoded = await geocodeAddressServer({
@@ -1622,6 +1960,22 @@ export class OrderRepository {
             resolvedLat = Number(geocoded.latitude);
             resolvedLng = Number(geocoded.longitude);
             resolvedGeocodeStatus = 'geocoded';
+            resolvedGeocodePrecision = geocoded.precision || 'rooftop';
+            resolvedPlaceId = geocoded.placeId || null;
+            resolvedGeocodedAt = geocoded.geocodedAt || new Date().toISOString();
+            resolvedFormattedAddress = geocoded.formattedAddress || null;
+            resolvedIsApproximate = Boolean(geocoded.isApproximate);
+          } else if (
+            quote.destinationCoordinates &&
+            hasValidCoordinates(
+              quote.destinationCoordinates.latitude,
+              quote.destinationCoordinates.longitude
+            )
+          ) {
+            resolvedLat = Number(quote.destinationCoordinates.latitude);
+            resolvedLng = Number(quote.destinationCoordinates.longitude);
+            resolvedGeocodeStatus = 'geocoded';
+            resolvedGeocodedAt = new Date().toISOString();
           }
         } catch {
           // Geocoding failed — keep as 'pending' without inventing coordinates
@@ -1653,6 +2007,11 @@ export class OrderRepository {
         latitude: resolvedLat,
         longitude: resolvedLng,
         geocodeStatus: resolvedGeocodeStatus,
+        geocodePrecision: resolvedGeocodePrecision,
+        placeId: resolvedPlaceId,
+        geocodedAt: resolvedGeocodedAt,
+        formattedAddress: resolvedFormattedAddress,
+        isApproximate: resolvedIsApproximate,
       };
     }
 
@@ -1927,7 +2286,8 @@ export class OrderRepository {
           : meta.longitude !== undefined && meta.longitude !== null
           ? Number(meta.longitude)
           : null;
-      const hasCoords = hasValidCoordinates(rawLat, rawLng);
+      const coordCheck = validateAndNormalizeCoordinates(rawLat, rawLng);
+      const hasCoords = coordCheck.valid;
       const geocodeStatus =
         rawAddr?.geocode_status ||
         meta.geocodeStatus ||
@@ -1944,6 +2304,7 @@ export class OrderRepository {
             neighborhood: rawAddr.neighborhood,
             city: rawAddr.city,
             state: rawAddr.state,
+            country: 'Brasil',
             reference: rawAddr.reference,
             deliveryRuleId: rawAddr.delivery_rule_id,
             pricingMode: rawAddr.pricing_mode ?? meta.pricingMode ?? null,
@@ -1953,9 +2314,15 @@ export class OrderRepository {
                 : meta.distanceKm ?? null,
             appliedRuleName: rawAddr.applied_rule_name ?? meta.appliedRuleName ?? null,
             deliveryBreakdown: rawAddr.delivery_breakdown ?? meta.deliveryBreakdown ?? null,
-            latitude: hasCoords ? rawLat : null,
-            longitude: hasCoords ? rawLng : null,
+            latitude: hasCoords ? coordCheck.latitude : null,
+            longitude: hasCoords ? coordCheck.longitude : null,
             geocodeStatus,
+            geocodePrecision:
+              geocodeStatus === 'manual' ? 'manual' : meta.geocodePrecision ?? null,
+            placeId: meta.placeId ?? null,
+            geocodedAt: meta.geocodedAt ?? null,
+            formattedAddress: meta.formattedAddress ?? null,
+            isApproximate: Boolean(meta.isApproximate),
           }
         : null;
 
@@ -2063,7 +2430,8 @@ export class OrderRepository {
                 : meta.longitude !== undefined && meta.longitude !== null
                 ? Number(meta.longitude)
                 : null;
-            const hasCoords = hasValidCoordinates(rawLat, rawLng);
+            const coordCheck = validateAndNormalizeCoordinates(rawLat, rawLng);
+            const hasCoords = coordCheck.valid;
             const geocodeStatus =
               rawAddr.geocode_status ||
               meta.geocodeStatus ||
@@ -2078,6 +2446,7 @@ export class OrderRepository {
               neighborhood: rawAddr.neighborhood,
               city: rawAddr.city,
               state: rawAddr.state,
+              country: 'Brasil',
               reference: rawAddr.reference,
               deliveryRuleId: rawAddr.delivery_rule_id,
               pricingMode: rawAddr.pricing_mode ?? meta.pricingMode ?? null,
@@ -2087,9 +2456,15 @@ export class OrderRepository {
                   : meta.distanceKm ?? null,
               appliedRuleName: rawAddr.applied_rule_name ?? meta.appliedRuleName ?? null,
               deliveryBreakdown: rawAddr.delivery_breakdown ?? meta.deliveryBreakdown ?? null,
-              latitude: hasCoords ? rawLat : null,
-              longitude: hasCoords ? rawLng : null,
+              latitude: hasCoords ? coordCheck.latitude : null,
+              longitude: hasCoords ? coordCheck.longitude : null,
               geocodeStatus,
+              geocodePrecision:
+                geocodeStatus === 'manual' ? 'manual' : meta.geocodePrecision ?? null,
+              placeId: meta.placeId ?? null,
+              geocodedAt: meta.geocodedAt ?? null,
+              formattedAddress: meta.formattedAddress ?? null,
+              isApproximate: Boolean(meta.isApproximate),
             };
           })()
         : null,
@@ -2437,6 +2812,10 @@ export class OrderRepository {
       latitude: number | null;
       longitude: number | null;
       geocodeStatus: 'geocoded' | 'pending' | 'manual';
+      geocodePrecision?: GeocodePrecision | null;
+      placeId?: string | null;
+      formattedAddress?: string | null;
+      isApproximate?: boolean;
       street?: string;
       number?: string;
       neighborhood?: string;
@@ -2454,10 +2833,16 @@ export class OrderRepository {
     const ext = await this.getExtendedConfig(tenantId);
     const prevMeta = ext.ordersMeta?.[orderId] || {};
 
-    const validCoords = hasValidCoordinates(coords.latitude, coords.longitude);
-    const finalLat = validCoords ? Number(coords.latitude) : null;
-    const finalLng = validCoords ? Number(coords.longitude) : null;
+    const coordCheck = validateAndNormalizeCoordinates(coords.latitude, coords.longitude);
+    const validCoords = coordCheck.valid;
+    const finalLat = validCoords ? coordCheck.latitude : null;
+    const finalLng = validCoords ? coordCheck.longitude : null;
     const finalStatus = validCoords ? coords.geocodeStatus : 'pending';
+    const finalPrecision: GeocodePrecision | null = validCoords
+      ? coords.geocodeStatus === 'manual'
+        ? 'manual'
+        : coords.geocodePrecision || prevMeta.geocodePrecision || 'rooftop'
+      : null;
 
     // Update order_delivery_addresses if present
     const patch: Record<string, any> = {
@@ -2496,6 +2881,19 @@ export class OrderRepository {
           latitude: finalLat,
           longitude: finalLng,
           geocodeStatus: finalStatus,
+          geocodePrecision: finalPrecision,
+          placeId: coords.placeId !== undefined ? coords.placeId : prevMeta.placeId ?? null,
+          geocodedAt: validCoords ? new Date().toISOString() : null,
+          formattedAddress:
+            coords.formattedAddress !== undefined
+              ? coords.formattedAddress
+              : prevMeta.formattedAddress ?? null,
+          isApproximate:
+            coords.isApproximate !== undefined
+              ? coords.isApproximate
+              : finalStatus === 'manual'
+              ? false
+              : Boolean(prevMeta.isApproximate),
         },
       },
     });
@@ -2508,7 +2906,12 @@ export class OrderRepository {
         action: 'ORDER_COORDINATES_UPDATE' as any,
         entity: 'orders',
         entityId: orderId,
-        metadata: { latitude: finalLat, longitude: finalLng, geocodeStatus: finalStatus },
+        metadata: {
+          latitude: finalLat,
+          longitude: finalLng,
+          geocodeStatus: finalStatus,
+          geocodePrecision: finalPrecision,
+        },
       });
     }
 

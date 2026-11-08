@@ -80,15 +80,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (session.resolvedFeatures) {
         setResolvedFeatures(session.resolvedFeatures);
       }
-    } catch (err) {
+    } catch (err: any) {
       if (manualAuthActionRef.current) return;
-      console.warn('Session verification failed, clearing credentials:', err);
-      api.clearToken();
-      setUser(null);
-      setTenant(null);
-      setLinkedProfessional(null);
-      setLinkedDriver(null);
-      setIsImpersonating(false);
+      const msg = String(err?.message || '');
+      const isTransientTimeout =
+        err?.name === 'TimeoutError' ||
+        err?.name === 'AbortError' ||
+        msg.includes('Tempo limite esgotado') ||
+        msg.includes('Failed to fetch') ||
+        msg.includes('NetworkError');
+      if (!isTransientTimeout) {
+        api.clearToken();
+        setUser(null);
+        setTenant(null);
+        setLinkedProfessional(null);
+        setLinkedDriver(null);
+        setIsImpersonating(false);
+      }
     } finally {
       if (!manualAuthActionRef.current) {
         setLoading(false);
@@ -160,27 +168,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const lastRefreshRef = React.useRef<number>(0);
+  const inFlightRefreshRef = React.useRef<Promise<void> | null>(null);
 
   const refreshSession = React.useCallback(async () => {
-    try {
-      const token = api.getToken();
-      if (!token) return;
-      lastRefreshRef.current = Date.now();
-      const session = await api.getCurrentSession();
-      if (session?.user) {
-        setUser(session.user);
-        setTenant(session.tenant || null);
-        setLinkedProfessional(session.linkedProfessional || null);
-        setLinkedDriver(session.linkedDriver || null);
-        setIsImpersonating(!!session.isImpersonating);
-        setOriginalAdminUserName(session.originalAdminUserName);
-        if (session.resolvedFeatures) {
-          setResolvedFeatures(session.resolvedFeatures);
-        }
-      }
-    } catch (e) {
-      console.error('Failed to refresh session:', e);
+    if (inFlightRefreshRef.current) {
+      return inFlightRefreshRef.current;
     }
+
+    const runRefresh = (async () => {
+      try {
+        const token = api.getToken();
+        if (!token) return;
+        lastRefreshRef.current = Date.now();
+        const session = await api.getCurrentSession();
+        if (session?.user) {
+          setUser(session.user);
+          setTenant(session.tenant || null);
+          setLinkedProfessional(session.linkedProfessional || null);
+          setLinkedDriver(session.linkedDriver || null);
+          setIsImpersonating(!!session.isImpersonating);
+          setOriginalAdminUserName(session.originalAdminUserName);
+          if (session.resolvedFeatures) {
+            setResolvedFeatures(session.resolvedFeatures);
+          }
+        }
+      } catch (e: any) {
+        // Ignore transient network/timeout errors during background polling
+        const msg = String(e?.message || '');
+        if (
+          e?.name === 'TimeoutError' ||
+          e?.name === 'AbortError' ||
+          msg.includes('Tempo limite esgotado') ||
+          msg.includes('Failed to fetch') ||
+          msg.includes('NetworkError')
+        ) {
+          return;
+        }
+        console.warn('Session refresh notice:', msg || e);
+      } finally {
+        inFlightRefreshRef.current = null;
+      }
+    })();
+
+    inFlightRefreshRef.current = runRefresh;
+    return runRefresh;
   }, []);
 
   // Automatically sync tenant features and session when window regains focus or tab becomes visible

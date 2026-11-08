@@ -139,11 +139,11 @@ class ApiService {
         throw new DOMException('Requisição cancelada.', 'AbortError');
       }
 
-      // Add 8-second client-side timeout so browser never hangs indefinitely
+      // Add 15-second client-side timeout so browser never hangs indefinitely
       const timeoutController = new AbortController();
       const timeoutId = setTimeout(() => {
         timeoutController.abort(new DOMException('Tempo limite esgotado.', 'TimeoutError'));
-      }, 8000);
+      }, 15000);
 
       const onCallerAbort = () => {
         timeoutController.abort(options.signal?.reason || new DOMException('Requisição cancelada.', 'AbortError'));
@@ -174,11 +174,17 @@ class ApiService {
         if (err.name === 'AbortError' || options.signal?.aborted) {
           throw err;
         }
+        const isTimeoutOrNetwork =
+          err.name === 'TimeoutError' ||
+          err.message === 'Tempo limite esgotado.' ||
+          err.message === 'Failed to fetch' ||
+          (typeof err.message === 'string' &&
+            (err.message.includes('NetworkError') || err.message.includes('fetch')));
         // If it's an HTTP error (4xx/5xx returned by server with a message), do not retry
-        if (err.message && err.message !== 'Failed to fetch' && !err.message.includes('NetworkError') && !err.message.includes('fetch')) {
+        if (err.message && !isTimeoutOrNetwork) {
           throw err;
         }
-        // Transient network failure or server restart, retry if attempts remain
+        // Transient network failure, cold start timeout, or server restart: retry if attempts remain
         if (attempt < retries) {
           await new Promise((resolve) => setTimeout(resolve, 350 * Math.pow(2, attempt)));
         }
@@ -834,6 +840,10 @@ class ApiService {
     formattedAddress?: string;
     precision?: string;
     provider?: string;
+    isApproximate?: boolean;
+    geocodeStatus?: 'geocoded' | 'pending' | 'manual' | null;
+    geocodePrecision?: string | null;
+    geocodedAt?: string | null;
   }> {
     const res = await this.request<{
       success: boolean;
@@ -843,12 +853,42 @@ class ApiService {
         formattedAddress?: string;
         precision?: string;
         provider?: string;
+        isApproximate?: boolean;
+        geocodeStatus?: 'geocoded' | 'pending' | 'manual' | null;
+        geocodePrecision?: string | null;
+        geocodedAt?: string | null;
       };
     }>('/api/delivery/geocode-origin', {
       method: 'POST',
       body: JSON.stringify({ address }),
     });
     return res.data;
+  }
+
+  async refreshCompanyOriginLocation(
+    address?: Partial<DeliveryOriginAddress>
+  ): Promise<{
+    originAddress: DeliveryOriginAddress;
+    activeRoutesUpdated: number;
+    skippedUnconfirmedRoutes: boolean;
+    message?: string;
+  }> {
+    const res = await this.request<{
+      success: boolean;
+      data: DeliveryOriginAddress;
+      activeRoutesUpdated?: number;
+      skippedUnconfirmedRoutes?: boolean;
+      message?: string;
+    }>('/api/delivery/refresh-company-origin', {
+      method: 'POST',
+      body: JSON.stringify(address || {}),
+    });
+    return {
+      originAddress: res.data,
+      activeRoutesUpdated: res.activeRoutesUpdated ?? 0,
+      skippedUnconfirmedRoutes: Boolean(res.skippedUnconfirmedRoutes),
+      message: res.message,
+    };
   }
 
   async simulateDeliveryFee(payload: {
@@ -1651,6 +1691,17 @@ class ApiService {
       method: 'POST',
     });
     return { ...res.data, message: res.message };
+  }
+
+  async recalculateDeliveryRoute(routeId: string): Promise<{ route: DeliveryRoute; message?: string }> {
+    const res = await this.request<{
+      success: boolean;
+      data: DeliveryRoute;
+      message?: string;
+    }>(`/api/delivery-hub/routes/${encodeURIComponent(routeId)}/recalculate`, {
+      method: 'POST',
+    });
+    return { route: res.data, message: res.message };
   }
 
   async updateOrderManualLocation(
