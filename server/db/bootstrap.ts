@@ -572,7 +572,7 @@ export async function bootstrapDatabaseIfNeeded(): Promise<void> {
       ]);
     }
 
-    // 6. Ensure all Auth users have a tenant_users relationship
+    // 6. Ensure only explicitly allowlisted Super Admin accounts have their SUPER_ADMIN relation
     const { data: allUsersRes } = await supabaseAdmin.auth.admin.listUsers();
     if (allUsersRes?.users && allUsersRes.users.length > 0) {
       const { data: allTu } = await supabaseAdmin.from('tenant_users').select('*');
@@ -581,25 +581,22 @@ export async function bootstrapDatabaseIfNeeded(): Promise<void> {
       for (const u of allUsersRes.users) {
         if (!tuMap.has(u.id)) {
           const emailLower = u.email?.toLowerCase().trim() || '';
-          const isSuperAdminEmail =
+          const isExplicitSuperAdmin =
             emailLower === 'admin@localhub.com' ||
-            emailLower === 'ls2039730@gmail.com' ||
-            emailLower.includes('superadmin') ||
-            emailLower.includes('admin');
+            emailLower === 'ls2039730@gmail.com';
 
-          const role = isSuperAdminEmail ? 'SUPER_ADMIN' : 'CLIENT_ADMIN';
-          const tenant_id = isSuperAdminEmail ? null : tenant1Id;
-
-          console.log(`[BOOTSTRAP] Linking unattached user ${emailLower} as ${role}...`);
-          await supabaseAdmin.from('tenant_users').insert({
-            id: crypto.randomUUID(),
-            tenant_id,
-            user_id: u.id,
-            role,
-            status: 'active',
-            created_at: now,
-            updated_at: now,
-          });
+          if (isExplicitSuperAdmin) {
+            console.log(`[BOOTSTRAP] Linking allowlisted Super Admin ${emailLower}...`);
+            await supabaseAdmin.from('tenant_users').insert({
+              id: crypto.randomUUID(),
+              tenant_id: null,
+              user_id: u.id,
+              role: 'SUPER_ADMIN',
+              status: 'active',
+              created_at: now,
+              updated_at: now,
+            });
+          }
         }
       }
     }

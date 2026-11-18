@@ -207,6 +207,37 @@ class LocalSupabaseStore {
               (this as any)[key] = parsed[key];
             }
           }
+
+          // Sanitize residual temporary test accounts (@audit.local) from interrupted test runs
+          const auditUserIds = new Set(
+            this.auth_users
+              .filter((u: any) => String(u.email || '').toLowerCase().endsWith('@audit.local'))
+              .map((u: any) => u.id)
+          );
+          if (auditUserIds.size > 0) {
+            this.auth_users = this.auth_users.filter((u: any) => !auditUserIds.has(u.id));
+            this.tenant_users = this.tenant_users.filter((tu: any) => !auditUserIds.has(tu.user_id));
+            this.tenants = this.tenants.filter(
+              (t: any) => !String(t.email || '').toLowerCase().endsWith('@audit.local')
+            );
+          }
+
+          // Ensure canonical passwords on seeded homologation users
+          const canonicalPasswords: Record<string, string> = {
+            'admin@localhub.com': 'admin123',
+            'ls2039730@gmail.com': 'admin123',
+            'contato@barbeariaprime.com': 'cliente123',
+            'maria@bistro.com': 'cliente123',
+            'central@drogaria.com': 'cliente123',
+            'carlos@barbeariaprime.com': 'pro123',
+            'semvinculo@barbeariaprime.com': 'pro123',
+          };
+          for (const u of this.auth_users) {
+            const emailKey = String(u.email || '').toLowerCase().trim();
+            if (!u.password && canonicalPasswords[emailKey]) {
+              u.password = canonicalPasswords[emailKey];
+            }
+          }
         }
       }
     } catch (e: any) {
@@ -1512,23 +1543,46 @@ class PostgrestQueryBuilder {
   }
 
   or(conditionsStr: string) {
-    // Supports conditions like "status.eq.pending,status.eq.confirmed"
+    // Supports conditions like "status.eq.pending,email.ilike.user@domain.com"
     const parts = conditionsStr.split(',');
     this.filters.push((item) => {
       return parts.some((part) => {
-        const [col, op, val] = part.split('.');
+        const firstDot = part.indexOf('.');
+        const secondDot = firstDot !== -1 ? part.indexOf('.', firstDot + 1) : -1;
+        if (firstDot === -1 || secondDot === -1) return false;
+        const col = part.slice(0, firstDot).trim();
+        const op = part.slice(firstDot + 1, secondDot).trim();
+        const val = part.slice(secondDot + 1).trim();
+
         if (op === 'eq') return item[col] === val;
         if (op === 'neq') return item[col] !== val;
-        if (op === 'is' && val === 'null') return item[col] === null;
-        return true;
+        if (op === 'ilike') {
+          const itemStr = String(item[col] ?? '').toLowerCase().trim();
+          const targetStr = val.toLowerCase().trim();
+          if (!targetStr) return false;
+          if (!targetStr.includes('%')) {
+            return itemStr === targetStr;
+          }
+          const escaped = targetStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*');
+          return new RegExp(`^${escaped}$`, 'i').test(itemStr);
+        }
+        if (op === 'is' && val === 'null') return item[col] === null || item[col] === undefined;
+        return false;
       });
     });
     return this;
   }
 
   ilike(column: string, pattern: string) {
-    const regex = new RegExp(pattern.replace(/%/g, '.*'), 'i');
-    this.filters.push((item) => regex.test(item[column] || ''));
+    const cleanPattern = String(pattern || '').trim();
+    if (!cleanPattern.includes('%')) {
+      const lower = cleanPattern.toLowerCase();
+      this.filters.push((item) => String(item[column] ?? '').toLowerCase().trim() === lower);
+      return this;
+    }
+    const escaped = cleanPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*');
+    const regex = new RegExp(`^${escaped}$`, 'i');
+    this.filters.push((item) => regex.test(String(item[column] ?? '')));
     return this;
   }
 

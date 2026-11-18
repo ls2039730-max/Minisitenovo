@@ -88,6 +88,16 @@ import {
 
 class ApiService {
   private memoryToken: string | null = null;
+  private activeControllers = new Set<AbortController>();
+
+  public abortAllPendingRequests(): void {
+    for (const ctrl of this.activeControllers) {
+      try {
+        ctrl.abort(new DOMException('Sessão encerrada ou substituída.', 'AbortError'));
+      } catch {}
+    }
+    this.activeControllers.clear();
+  }
 
   public getToken(): string | null {
     if (this.memoryToken) return this.memoryToken;
@@ -115,12 +125,15 @@ class ApiService {
 
   public clearToken(): void {
     this.memoryToken = null;
-    try {
-      localStorage.removeItem('saas_token');
-    } catch {}
-    try {
-      sessionStorage.removeItem('saas_token');
-    } catch {}
+    const keysToClear = ['saas_token', 'saas_current_tenant', 'saas_user', 'saas_session'];
+    for (const key of keysToClear) {
+      try {
+        localStorage.removeItem(key);
+      } catch {}
+      try {
+        sessionStorage.removeItem(key);
+      } catch {}
+    }
   }
 
   private getHeaders(): HeadersInit {
@@ -141,6 +154,7 @@ class ApiService {
 
       // Add 15-second client-side timeout so browser never hangs indefinitely
       const timeoutController = new AbortController();
+      this.activeControllers.add(timeoutController);
       const timeoutId = setTimeout(() => {
         timeoutController.abort(new DOMException('Tempo limite esgotado.', 'TimeoutError'));
       }, 15000);
@@ -166,6 +180,9 @@ class ApiService {
 
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
+          if (res.status === 401) {
+            this.clearToken();
+          }
           throw new Error(data.error || 'Ocorreu um erro no servidor.');
         }
         return data as T;
@@ -190,6 +207,7 @@ class ApiService {
         }
       } finally {
         clearTimeout(timeoutId);
+        this.activeControllers.delete(timeoutController);
         if (options.signal) {
           options.signal.removeEventListener('abort', onCallerAbort);
         }
@@ -216,22 +234,39 @@ class ApiService {
     linkedProfessional?: Professional | null;
     linkedDriver?: DeliveryDriver | null;
   }> {
-    const res = await this.request<{
-      success: boolean;
-      token: string;
-      user: User;
-      tenant?: Tenant | null;
-      resolvedFeatures?: Record<FeatureKey, boolean> | null;
-      linkedProfessional?: Professional | null;
-      linkedDriver?: DeliveryDriver | null;
-    }>('/api/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    });
-    if (res.token) {
+    // 1. Cancel any pending requests from a previous session and clear any existing local tokens
+    const previousToken = this.getToken();
+    this.abortAllPendingRequests();
+    this.clearToken();
+
+    try {
+      const res = await this.request<{
+        success: boolean;
+        token: string;
+        user: User;
+        tenant?: Tenant | null;
+        resolvedFeatures?: Record<FeatureKey, boolean> | null;
+        linkedProfessional?: Professional | null;
+        linkedDriver?: DeliveryDriver | null;
+      }>(
+        '/api/auth/login',
+        {
+          method: 'POST',
+          headers: previousToken ? { Authorization: `Bearer ${previousToken}` } : undefined,
+          body: JSON.stringify({ email, password }),
+        },
+        0
+      );
+      if (!res.success || !res.token || !res.user) {
+        this.clearToken();
+        throw new Error('Credenciais inválidas. Verifique seu e-mail e senha.');
+      }
       this.setToken(res.token);
+      return res;
+    } catch (err) {
+      this.clearToken();
+      throw err;
     }
-    return res;
   }
 
   async getCurrentSession(): Promise<{
@@ -247,8 +282,17 @@ class ApiService {
   }
 
   async logout(): Promise<void> {
-    await this.request('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    const tokenToRevoke = this.getToken();
+    this.abortAllPendingRequests();
     this.clearToken();
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(tokenToRevoke ? { Authorization: `Bearer ${tokenToRevoke}` } : {}),
+      },
+    }).catch(() => {});
   }
 
   async selfAssignTenant(): Promise<{ user: User; tenant?: Tenant | null }> {

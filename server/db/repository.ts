@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { supabaseAdmin, localStore, getSupabaseAuthClient, isRealSupabaseConfigured } from '../supabaseAdmin.js';
 import { bootstrapDatabaseIfNeeded } from './bootstrap.js';
+import { revokeAllUserSessions } from '../auth/tokenService.js';
 import {
   Tenant,
   User,
@@ -12,6 +13,16 @@ import {
 } from '../../src/types/saas.js';
 import { validateSlug, getServerBaseDomain, getTenantSubdomain } from '../tenantResolver.js';
 import { SYSTEM_FEATURES } from '../../src/utils/features.js';
+
+const PLATFORM_SUPER_ADMIN_ALLOWLIST = new Set<string>([
+  'admin@localhub.com',
+  'ls2039730@gmail.com',
+]);
+
+export function isAllowlistedSuperAdminEmail(email?: string | null): boolean {
+  if (!email) return false;
+  return PLATFORM_SUPER_ADMIN_ALLOWLIST.has(email.toLowerCase().trim());
+}
 
 export class SaasRepository {
   private userSessionCache = new Map<string, { user: User; expiresAt: number }>();
@@ -110,34 +121,40 @@ export class SaasRepository {
   // AUTHENTICATION & USERS (Supabase Auth)
   // ==========================================
   public async authenticateUser(email: string, password: string): Promise<User | null> {
-    const cleanEmail = email.toLowerCase().trim();
+    if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
+      return null;
+    }
 
-    // Pre-check local/hybrid explicit password accounts (e.g. DELIVERY_DRIVER) before any bootstrap or auto-heal
-    const preCheckLocalUser = localStore.auth_users.find(
-      (u: any) => u.email?.toLowerCase().trim() === cleanEmail
-    );
-    if (preCheckLocalUser && preCheckLocalUser.password) {
-      if (preCheckLocalUser.password !== password) {
-        return null;
-      }
+    const cleanEmail = email.toLowerCase().trim();
+    if (!cleanEmail || !password) {
+      return null;
     }
 
     // Ensure initial demo data exists in database
     await bootstrapDatabaseIfNeeded();
 
+    // Check if the user exists in localStore with an explicit password
+    const localExplicitUser = localStore.auth_users.find(
+      (u: any) => u.email?.toLowerCase().trim() === cleanEmail
+    );
+    if (localExplicitUser && typeof localExplicitUser.password === 'string' && localExplicitUser.password.length > 0) {
+      if (localExplicitUser.password !== password) {
+        return null;
+      }
+    }
+
     let authUser: any = null;
     const authClient = getSupabaseAuthClient();
 
     if (authClient) {
-      // 1. Authenticate with real Supabase Auth
+      // 1. Authenticate strictly with real Supabase Auth (NEVER auto-create users or overwrite passwords!)
       let { data: signInData, error: signInError } = await authClient.auth.signInWithPassword({
         email: cleanEmail,
         password,
       });
 
-      // Auto-heal 'Email not confirmed' by confirming the user via Supabase service_role admin API
+      // Only if 'Email not confirmed' for an already-existing user, confirm email WITHOUT modifying password and retry
       if (signInError && signInError.message?.toLowerCase().includes('email not confirmed')) {
-        console.log(`[AUTH] 'Email not confirmed' detected for ${cleanEmail}. Auto-confirming via service role...`);
         try {
           const { data: usersData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 } as any);
           const target = usersData?.users?.find(
@@ -147,7 +164,6 @@ export class SaasRepository {
             await supabaseAdmin.auth.admin.updateUserById(target.id, {
               email_confirm: true,
             });
-            console.log(`[AUTH] Successfully auto-confirmed email for ${cleanEmail}. Retrying login...`);
             const retryRes = await authClient.auth.signInWithPassword({
               email: cleanEmail,
               password,
@@ -156,149 +172,58 @@ export class SaasRepository {
             signInError = retryRes.error;
           }
         } catch (confirmErr: any) {
-          console.log('[AUTH] Auto-confirm note:', confirmErr.message);
+          console.warn('[AUTH] Email confirmation check failed:', confirmErr.message);
         }
       }
 
-      // First check if this is a local/hybrid user with explicit password (e.g. DELIVERY_DRIVER)
-      const localExplicitUser =
-        preCheckLocalUser ||
-        localStore.auth_users.find(
-          (u: any) => u.email?.toLowerCase().trim() === cleanEmail
-        );
-      if (localExplicitUser && localExplicitUser.password) {
-        if (localExplicitUser.password !== password) {
-          return null;
-        }
-        if (signInError || !signInData?.user) {
-          authUser = localExplicitUser;
-          signInError = null;
-        }
-      }
+      // Sign out from the ephemeral server auth client immediately so no session is retained in server memory
+      await authClient.auth.signOut().catch(() => {});
 
-      if ((signInError || !signInData?.user) && !authUser) {
-        console.log('[AUTH] Supabase signIn attempt note:', signInError?.message);
-
-        // Auto-heal accounts in real Supabase when password mismatch or initial login fails
-        const cleanEmailLower = cleanEmail.toLowerCase();
-        const isSuperAdmin =
-          cleanEmailLower === 'admin@localhub.com' ||
-          cleanEmailLower === 'ls2039730@gmail.com' ||
-          cleanEmailLower.includes('superadmin') ||
-          (cleanEmailLower.startsWith('admin@') && !cleanEmailLower.includes('barbearia'));
-
-        const isDemoClient =
-          cleanEmailLower === 'contato@barbeariaprime.com' ||
-          cleanEmailLower.includes('demo');
-
-        try {
-          console.log(`[AUTH] Auto-healing / verifying account (${cleanEmail}) in real Supabase...`);
-          const { data: usersData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 } as any);
-          let target = usersData?.users?.find(
-            (u: any) => u.email?.toLowerCase().trim() === cleanEmailLower
-          );
-
-          // Never auto-heal or overwrite passwords for DELIVERY_DRIVER accounts
-          if (target && target.user_metadata?.role === 'DELIVERY_DRIVER') {
-            return null;
-          }
-
-          if (!target) {
-            const { data: ownedTenant } = await supabaseAdmin
-              .from('tenants')
-              .select('id, name')
-              .or(`owner_email.ilike.${cleanEmailLower},email.ilike.${cleanEmailLower}`)
-              .is('deleted_at', null)
-              .limit(1);
-
-            console.log(`[AUTH] Creating account ${cleanEmail} in Supabase Auth via admin API...`);
-            const createRes = await supabaseAdmin.auth.admin.createUser({
-              email: cleanEmail,
-              password,
-              email_confirm: true,
-              user_metadata: {
-                name: isSuperAdmin
-                  ? 'Administrador da Plataforma'
-                  : ownedTenant && ownedTenant.length > 0
-                  ? `Admin ${ownedTenant[0].name}`
-                  : 'Administrador da Empresa',
-                phone: '(11) 99999-0000',
-              },
-            });
-            target = createRes.data?.user;
-          } else if (target) {
-            console.log(`[AUTH] Syncing password & confirming email for ${cleanEmail} via admin API...`);
-            const updateRes = await supabaseAdmin.auth.admin.updateUserById(target.id, {
-              password,
-              email_confirm: true,
-            });
-            if (updateRes.data?.user) {
-              target = updateRes.data.user;
-            }
-          }
-
-          if (target) {
-            // Retry signing in with newly synced password
-            const retryRes = await authClient.auth.signInWithPassword({
-              email: cleanEmail,
-              password,
-            });
-            if (retryRes.data?.user) {
-              signInData = retryRes.data;
-              signInError = null;
-              authUser = retryRes.data.user;
-            } else {
-              // Backend service role confirmed target user & synced credentials; grant target authUser directly
-              authUser = target;
-              signInError = null;
-            }
-          }
-        } catch (healErr: any) {
-          console.log('[AUTH] Auto-heal notice:', healErr.message);
-        }
-
-        if (signInError && !authUser) {
-          return null;
-        }
-      }
-
-      if (!authUser && signInData?.user) {
+      if (!signInError && signInData?.user) {
         authUser = signInData.user;
+      } else if (
+        localExplicitUser &&
+        typeof localExplicitUser.password === 'string' &&
+        localExplicitUser.password.length > 0 &&
+        localExplicitUser.password === password
+      ) {
+        // Hybrid/local seeded user whose password matched strictly
+        authUser = localExplicitUser;
+      } else {
+        // Authentication failed: NEVER create user, NEVER overwrite password, NEVER fallback to another user!
+        return null;
       }
     } else {
-      // 2. Simulated store fallback
+      // 2. Local / Simulated store strict authentication
       const { data: usersData } = await supabaseAdmin.auth.admin.listUsers();
-      authUser = usersData?.users?.find(
+      const candidate = usersData?.users?.find(
         (u: any) => u.email?.toLowerCase().trim() === cleanEmail
       );
 
-      if (!authUser) {
-        const isSuperAdmin =
-          cleanEmail === 'admin@localhub.com' ||
-          cleanEmail === 'ls2039730@gmail.com' ||
-          cleanEmail.includes('superadmin') ||
-          cleanEmail.includes('admin');
-
-        const createRes = await supabaseAdmin.auth.admin.createUser({
-          email: cleanEmail,
-          password,
-          email_confirm: true,
-          user_metadata: {
-            name: isSuperAdmin ? 'Administrador da Plataforma' : 'Administrador da Empresa',
-          },
-        });
-        authUser = createRes.data?.user;
-      } else {
-        (authUser as any).password = password;
+      // Strict check: user MUST exist and have a matching password
+      if (!candidate || typeof candidate.password !== 'string' || !candidate.password || candidate.password !== password) {
+        return null;
       }
+
+      authUser = candidate;
     }
 
-    if (!authUser) return null;
+    if (!authUser || !authUser.id) return null;
 
+    // 3. Verify explicit tenant_users relationship (NEVER fallback to first active tenant!)
     const tu = await this.resolveOrEnsureTenantUser(authUser);
-    const role: UserRole = tu ? tu.role : 'CLIENT_ADMIN';
-    const tenantId: string | null = tu ? tu.tenant_id : null;
-    const status = tu ? tu.status : 'active';
+    if (!tu) {
+      return null;
+    }
+
+    const role: UserRole = tu.role;
+    const tenantId: string | null = tu.tenant_id ?? null;
+    const status = tu.status || 'active';
+
+    // Non-SuperAdmin users MUST belong to a specific tenantId
+    if (role !== 'SUPER_ADMIN' && !tenantId) {
+      return null;
+    }
 
     const resolvedUser: User = {
       id: authUser.id,
@@ -311,12 +236,13 @@ export class SaasRepository {
       createdAt: authUser.created_at,
     };
 
+    this.invalidateUserCache(resolvedUser.id);
     this.cacheUser(resolvedUser);
     return resolvedUser;
   }
 
   private async resolveOrEnsureTenantUser(authUser: any) {
-    if (!authUser) return null;
+    if (!authUser || !authUser.id) return null;
 
     let { data: tuList } = await supabaseAdmin
       .from('tenant_users')
@@ -347,111 +273,108 @@ export class SaasRepository {
 
     if (!tu) {
       const emailLower = authUser.email?.toLowerCase().trim() || '';
-      const isSuperAdminEmail =
-        emailLower === 'admin@localhub.com' ||
-        emailLower === 'ls2039730@gmail.com' ||
-        emailLower.includes('superadmin') ||
-        (emailLower.startsWith('admin@') && !emailLower.includes('barbearia'));
+      if (!emailLower) return null;
 
-      let role: UserRole = isSuperAdminEmail ? 'SUPER_ADMIN' : 'CLIENT_ADMIN';
+      const isSuperAdminEmail = isAllowlistedSuperAdminEmail(emailLower);
+
+      let role: UserRole | null = isSuperAdminEmail ? 'SUPER_ADMIN' : null;
       let tenantId: string | null = null;
 
       if (!isSuperAdminEmail) {
-        // Check if there is an existing delivery driver record for this user or email
+        // 1. Check if there is an explicit delivery driver record for this user ID or email
         try {
           const localDriver = localStore.delivery_drivers.find(
             (d: any) =>
               d.user_id === authUser.id ||
               String(d.email || '').toLowerCase().trim() === emailLower
           );
-          if (localDriver) {
+          if (localDriver && localDriver.tenant_id) {
             role = 'DELIVERY_DRIVER';
             tenantId = localDriver.tenant_id;
           } else {
             const { data: drivers } = await supabaseAdmin
               .from('delivery_drivers')
-              .select('id, tenant_id')
-              .or(`email.ilike.${emailLower},user_id.eq.${authUser.id}`)
-              .limit(1);
-            if (drivers && drivers.length > 0) {
+              .select('id, tenant_id, email, user_id')
+              .or(`email.ilike.${emailLower},user_id.eq.${authUser.id}`);
+            const exactDriver = (drivers || []).find(
+              (d: any) =>
+                d.user_id === authUser.id ||
+                String(d.email || '').toLowerCase().trim() === emailLower
+            );
+            if (exactDriver && exactDriver.tenant_id) {
               role = 'DELIVERY_DRIVER';
-              tenantId = drivers[0].tenant_id;
-            } else if (authUser.user_metadata?.role === 'DELIVERY_DRIVER') {
+              tenantId = exactDriver.tenant_id;
+            } else if (authUser.user_metadata?.role === 'DELIVERY_DRIVER' && authUser.user_metadata?.tenant_id) {
               role = 'DELIVERY_DRIVER';
-              tenantId = authUser.user_metadata?.tenant_id || null;
+              tenantId = authUser.user_metadata.tenant_id;
             }
           }
         } catch {
-          if (authUser.user_metadata?.role === 'DELIVERY_DRIVER') {
+          if (authUser.user_metadata?.role === 'DELIVERY_DRIVER' && authUser.user_metadata?.tenant_id) {
             role = 'DELIVERY_DRIVER';
-            tenantId = authUser.user_metadata?.tenant_id || null;
+            tenantId = authUser.user_metadata.tenant_id;
           }
         }
 
-        // Check if there is an existing professional record for this user or email
-        if (role !== 'DELIVERY_DRIVER') {
+        // 2. Check if there is an explicit professional record for this user ID or email
+        if (!role) {
           try {
             const { data: profs } = await supabaseAdmin
               .from('professionals')
-              .select('id, tenant_id')
-              .or(`email.ilike.${emailLower},user_id.eq.${authUser.id}`)
-              .limit(1);
+              .select('id, tenant_id, email, user_id')
+              .or(`email.ilike.${emailLower},user_id.eq.${authUser.id}`);
+            const exactProf = (profs || []).find(
+              (p: any) =>
+                p.user_id === authUser.id ||
+                String(p.email || '').toLowerCase().trim() === emailLower
+            );
 
-            if (profs && profs.length > 0) {
+            if (exactProf && exactProf.tenant_id) {
               role = 'PROFESSIONAL';
-              tenantId = profs[0].tenant_id;
+              tenantId = exactProf.tenant_id;
               await supabaseAdmin
                 .from('professionals')
                 .update({ user_id: authUser.id })
-                .eq('id', profs[0].id);
-            } else if (authUser.user_metadata?.role === 'PROFESSIONAL') {
-              role = 'PROFESSIONAL';
+                .eq('id', exactProf.id);
             }
           } catch (profLookupErr) {
             console.warn('[AUTH] Could not check professional records:', profLookupErr);
           }
         }
 
-        if (!tenantId) {
+        // 3. Check if this user is the explicit registered owner_email or email of a non-deleted tenant
+        if (!role && !tenantId) {
           const { data: ownedTenants } = await supabaseAdmin
             .from('tenants')
-            .select('id')
+            .select('id, email, owner_email')
             .or(`owner_email.ilike.${emailLower},email.ilike.${emailLower}`)
             .is('deleted_at', null)
             .limit(1);
 
-          if (ownedTenants && ownedTenants.length > 0) {
-            tenantId = ownedTenants[0].id;
-          } else {
-          const { data: defaultTenants } = await supabaseAdmin
-            .from('tenants')
-            .select('id')
-            .eq('status', 'ativo')
-            .limit(1);
+          const exactMatch = (ownedTenants || []).find(
+            (t: any) =>
+              String(t.owner_email || '').toLowerCase().trim() === emailLower ||
+              String(t.email || '').toLowerCase().trim() === emailLower
+          );
 
-          if (defaultTenants && defaultTenants.length > 0) {
-            tenantId = defaultTenants[0].id;
-          } else {
-            const { data: anyTenants } = await supabaseAdmin
-              .from('tenants')
-              .select('id')
-              .limit(1);
-            if (anyTenants && anyTenants.length > 0) {
-              tenantId = anyTenants[0].id;
-            }
+          if (exactMatch) {
+            role = 'CLIENT_ADMIN';
+            tenantId = exactMatch.id;
           }
         }
-      }
-    }
 
-      console.log(`[AUTH] Auto-linking tenant_user for ${emailLower} as ${role} (tenantId: ${tenantId})...`);
+        // SECURITY HARDENING: NEVER fallback to defaultTenants or anyTenants!
+        if (!role || !tenantId) {
+          return null;
+        }
+      }
 
       const now = new Date().toISOString();
       const insertData = {
         id: crypto.randomUUID(),
         tenant_id: tenantId,
         user_id: authUser.id,
-        role,
+        role: role!,
         status: 'active',
         created_at: now,
         updated_at: now,
@@ -505,19 +428,21 @@ export class SaasRepository {
 
   public async findUserById(
     id: string,
-    fallbackClaims?: {
+    _fallbackClaims?: {
       email?: string;
       name?: string;
       role?: string;
       tenantId?: string | null;
     }
   ): Promise<User | null> {
+    if (!id || typeof id !== 'string') return null;
+
     const cached = this.userSessionCache.get(id);
     if (cached && cached.expiresAt > Date.now()) {
       return cached.user;
     }
 
-    // Fast path: query getUserById and tenant_users in parallel
+    // Query getUserById and tenant_users in parallel
     const [authUserRes, tuRes] = await Promise.all([
       supabaseAdmin.auth.admin.getUserById(id).catch(() => ({ data: null, error: true })),
       supabaseAdmin
@@ -529,7 +454,30 @@ export class SaasRepository {
     ]);
 
     let authUser: any = !authUserRes.error && authUserRes.data?.user ? authUserRes.data.user : null;
-    const tuList: any[] | null = tuRes?.data || null;
+    if (!authUser) {
+      authUser = localStore.auth_users.find((u: any) => u.id === id) || null;
+    }
+
+    if (!authUser) {
+      try {
+        const { data: usersData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 } as any);
+        authUser = usersData?.users?.find((u: any) => u.id === id) || null;
+      } catch {}
+    }
+
+    // SECURITY HARDENING: If the user does not exist in auth.users, reject immediately!
+    if (!authUser || !authUser.id) {
+      return null;
+    }
+
+    let tuList: any[] | null = tuRes?.data || null;
+    if ((!tuList || tuList.length === 0) && localStore.tenant_users.length > 0) {
+      const localMatches = localStore.tenant_users.filter((r: any) => r.user_id === id);
+      if (localMatches.length > 0) {
+        tuList = localMatches;
+      }
+    }
+
     const directTu =
       tuList && tuList.length > 0
         ? tuList.find((r: any) => r.status === 'active') ||
@@ -537,60 +485,27 @@ export class SaasRepository {
           tuList[0]
         : null;
 
-    // If we have a valid signed JWT with fallbackClaims (or direct tenant_users row) and getUserById didn't match,
-    // construct the verified session user immediately without downloading 1000 users via listUsers()
-    if (!authUser && (directTu || fallbackClaims?.email)) {
-      const emailLower = (fallbackClaims?.email || '').toLowerCase().trim();
-      const isSuperAdminEmail =
-        emailLower === 'admin@localhub.com' ||
-        emailLower === 'ls2039730@gmail.com' ||
-        emailLower.includes('superadmin') ||
-        (emailLower.startsWith('admin@') && !emailLower.includes('barbearia'));
-
-      const resolvedRole = (
-        directTu?.role ||
-        fallbackClaims?.role ||
-        (isSuperAdminEmail ? 'SUPER_ADMIN' : 'CLIENT_ADMIN')
-      ) as UserRole;
-
-      const fastUser: User = {
-        id,
-        name: fallbackClaims?.name || fallbackClaims?.email?.split('@')[0] || 'Usuário',
-        email: fallbackClaims?.email || 'usuario@localhub.com',
-        role: resolvedRole,
-        tenantId: directTu ? directTu.tenant_id : (fallbackClaims?.tenantId ?? null),
-        status: directTu ? directTu.status : 'active',
-        createdAt: directTu?.created_at || new Date().toISOString(),
-      };
-      this.cacheUser(fastUser, id);
-      return fastUser;
-    }
-
-    if (!authUser) {
-      try {
-        const { data: usersData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 } as any);
-        authUser = usersData?.users?.find((u: any) => u.id === id);
-        if (!authUser && fallbackClaims?.email) {
-          const cleanFallbackEmail = fallbackClaims.email.toLowerCase().trim();
-          authUser = usersData?.users?.find((u: any) => u.email?.toLowerCase().trim() === cleanFallbackEmail);
-        }
-      } catch {}
-    }
-
-    if (!authUser) {
+    const tu = directTu || (await this.resolveOrEnsureTenantUser(authUser));
+    if (!tu) {
       return null;
     }
 
-    const tu = directTu || (await this.resolveOrEnsureTenantUser(authUser));
+    const role: UserRole = tu.role;
+    const tenantId: string | null = tu.tenant_id ?? null;
+    const status = tu.status || 'active';
+
+    if (role !== 'SUPER_ADMIN' && !tenantId) {
+      return null;
+    }
 
     const resolvedUser: User = {
       id: authUser.id,
-      name: authUser.user_metadata?.name || fallbackClaims?.name || authUser.email?.split('@')[0] || 'Usuário',
+      name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Usuário',
       email: authUser.email!,
       phone: authUser.user_metadata?.phone || undefined,
-      role: tu ? tu.role : ((fallbackClaims?.role as UserRole) || 'CLIENT_ADMIN'),
-      tenantId: tu ? tu.tenant_id : (fallbackClaims?.tenantId ?? null),
-      status: tu ? tu.status : 'active',
+      role,
+      tenantId,
+      status,
       createdAt: authUser.created_at,
     };
 
@@ -599,6 +514,7 @@ export class SaasRepository {
   }
 
   public async findUserByEmail(email: string): Promise<User | null> {
+    if (!email || typeof email !== 'string') return null;
     const cleanEmail = email.toLowerCase().trim();
     const { data: usersData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 } as any);
     const authUser = usersData?.users?.find(
@@ -607,15 +523,16 @@ export class SaasRepository {
     if (!authUser) return null;
 
     const tu = await this.resolveOrEnsureTenantUser(authUser);
+    if (!tu) return null;
 
     return {
       id: authUser.id,
       name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Usuário',
       email: authUser.email!,
       phone: authUser.user_metadata?.phone || undefined,
-      role: tu ? tu.role : 'CLIENT_ADMIN',
-      tenantId: tu ? tu.tenant_id : null,
-      status: tu ? tu.status : 'active',
+      role: tu.role,
+      tenantId: tu.tenant_id ?? null,
+      status: tu.status || 'active',
       createdAt: authUser.created_at,
     };
   }
@@ -836,6 +753,9 @@ export class SaasRepository {
     });
 
     this.invalidateUserCache(userId);
+    if (data.status === 'inactive' || data.password || data.role) {
+      revokeAllUserSessions(userId);
+    }
     const updated = await this.findUserById(userId);
     return updated!;
   }
@@ -846,6 +766,7 @@ export class SaasRepository {
     }
 
     this.invalidateUserCache(userId);
+    revokeAllUserSessions(userId);
     await supabaseAdmin
       .from('tenant_users')
       .delete()

@@ -367,7 +367,14 @@ const AppContent: React.FC = () => {
 
   // Ensure initial landing state is recorded in browser history & seeded so Back returns to root inside the app
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setTenants([]);
+      setPlans([]);
+      setSelectedTenantId(null);
+      setAdminTab('dashboard');
+      setClientTab('home');
+      return;
+    }
 
     if (isProfessional && clientTab !== 'appointments') {
       navigateClientTab('appointments', true);
@@ -1054,25 +1061,10 @@ const AppContent: React.FC = () => {
         </div>
         <h2 className="text-xl font-bold text-white mb-1">Nenhum estabelecimento vinculado</h2>
         <p className="text-xs text-slate-400 mb-6 leading-relaxed">
-          Seu usuário ({user?.email}) está autenticado, mas ainda não possui uma empresa ou estabelecimento vinculado.
+          Seu usuário ({user?.email}) não possui um estabelecimento vinculado no momento. Solicite ao administrador da plataforma que associe sua conta à empresa correspondente.
         </p>
 
         <div className="space-y-3">
-          <button
-            onClick={async () => {
-              try {
-                await api.selfAssignTenant();
-                await refreshSession();
-              } catch (e: any) {
-                alert(e.message || 'Erro ao vincular estabelecimento.');
-              }
-            }}
-            className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl text-xs transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
-          >
-            <Building2 className="w-4 h-4" />
-            Vincular ao Estabelecimento Padrão
-          </button>
-
           <button
             onClick={async () => {
               await logout();

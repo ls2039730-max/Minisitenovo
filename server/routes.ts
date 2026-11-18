@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
-import { supabaseAdmin, isRealSupabaseConfigured } from './supabaseAdmin.js';
-import { repo } from './db/repository.js';
+import { supabaseAdmin, isRealSupabaseConfigured, getSupabaseAuthClient } from './supabaseAdmin.js';
+import { repo, isAllowlistedSuperAdminEmail } from './db/repository.js';
 import { siteRepo } from './db/siteRepository.js';
 import { productRepo } from './db/productRepository.js';
 import { orderRepo } from './db/orderRepository.js';
@@ -9,7 +9,12 @@ import { serviceRepo } from './db/serviceRepository.js';
 import { appointmentRepo } from './db/appointmentRepository.js';
 import { restaurantRepo } from './db/restaurantRepository.js';
 import { deliveryHubRepo } from './db/deliveryHubRepository.js';
-import { generateSessionToken, verifySessionToken, JwtSessionPayload } from './auth/tokenService.js';
+import {
+  generateSessionToken,
+  verifySessionToken,
+  revokeSessionToken,
+  JwtSessionPayload,
+} from './auth/tokenService.js';
 import { SYSTEM_FEATURES } from '../src/utils/features.js';
 import { User, Tenant, TenantStatus, FeatureKey } from '../src/types/saas.js';
 import { Professional, ProfessionalPayload } from '../src/types/service.js';
@@ -37,7 +42,7 @@ export async function authenticate(req: AuthenticatedRequest, res: Response, nex
   // 1. Check Authorization header
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
-    token = authHeader.substring(7);
+    token = authHeader.substring(7).trim();
   }
 
   // 2. Check HttpOnly cookie
@@ -54,18 +59,55 @@ export async function authenticate(req: AuthenticatedRequest, res: Response, nex
 
   const decoded = verifySessionToken(token);
   if (!decoded) {
+    res.clearCookie('saas_auth_token', getAuthCookieOptions(req, 0));
+    res.clearCookie('saas_auth_token', { path: '/' });
     return res.status(401).json({
       success: false,
-      error: 'Sessão inválida ou expirada. Por favor, autentique-se novamente.',
+      error: 'Sessão inválida, revogada ou expirada. Por favor, autentique-se novamente.',
     });
   }
 
   const user = await repo.findUserById(decoded.userId, decoded);
   if (!user || user.status === 'inactive') {
+    res.clearCookie('saas_auth_token', getAuthCookieOptions(req, 0));
+    res.clearCookie('saas_auth_token', { path: '/' });
     return res.status(401).json({
       success: false,
       error: 'Usuário não encontrado ou desativado pelo administrador.',
     });
+  }
+
+  // Enforce tenant claim consistency for non-impersonating tenant users
+  if (
+    !decoded.isImpersonating &&
+    user.role !== 'SUPER_ADMIN' &&
+    (!user.tenantId || (decoded.tenantId && decoded.tenantId !== user.tenantId))
+  ) {
+    res.clearCookie('saas_auth_token', getAuthCookieOptions(req, 0));
+    res.clearCookie('saas_auth_token', { path: '/' });
+    return res.status(401).json({
+      success: false,
+      error: 'Sessão inválida para o estabelecimento atual. Faça login novamente.',
+    });
+  }
+
+  // Global cross-tenant guard for non-SuperAdmin or impersonating sessions:
+  // If any request supplies a foreign tenantId in body, query, or x-tenant-id header, reject with 403 immediately
+  if (user.role !== 'SUPER_ADMIN' || decoded.isImpersonating) {
+    const allowedTenantId = decoded.isImpersonating ? decoded.impersonatedTenantId : user.tenantId;
+    const requestedForeignTenant =
+      (req.body?.tenantId && typeof req.body.tenantId === 'string' ? req.body.tenantId : null) ||
+      (req.body?.tenant_id && typeof req.body.tenant_id === 'string' ? req.body.tenant_id : null) ||
+      (req.query?.tenantId && typeof req.query.tenantId === 'string' ? (req.query.tenantId as string) : null) ||
+      (req.query?.tenant_id && typeof req.query.tenant_id === 'string' ? (req.query.tenant_id as string) : null) ||
+      (req.headers['x-tenant-id'] && typeof req.headers['x-tenant-id'] === 'string' ? (req.headers['x-tenant-id'] as string) : null);
+
+    if (requestedForeignTenant && requestedForeignTenant !== allowedTenantId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Acesso negado: você não tem permissão para visualizar ou alterar dados de outro estabelecimento.',
+      });
+    }
   }
 
   req.user = user;
@@ -92,7 +134,15 @@ function getAuthCookieOptions(req: Request, maxAgeMs = 8 * 60 * 60 * 1000) {
 // Helper: get effective tenant ID strictly verified
 export function getEffectiveTenantId(req: AuthenticatedRequest): string {
   if (req.sessionPayload?.isImpersonating && req.sessionPayload.impersonatedTenantId) {
-    return req.sessionPayload.impersonatedTenantId;
+    const allowedTenantId = req.sessionPayload.impersonatedTenantId;
+    const attemptedTenantId =
+      (req.body?.tenantId && typeof req.body.tenantId === 'string' ? req.body.tenantId : null) ||
+      (req.query?.tenantId && typeof req.query.tenantId === 'string' ? (req.query.tenantId as string) : null) ||
+      (req.headers['x-tenant-id'] && typeof req.headers['x-tenant-id'] === 'string' ? (req.headers['x-tenant-id'] as string) : null);
+    if (attemptedTenantId && attemptedTenantId !== allowedTenantId) {
+      throw new Error('Acesso negado: em modo de visualização administrativa você só pode acessar o tenant selecionado.');
+    }
+    return allowedTenantId;
   }
   // Super Admin can switch or manage any tenant
   if (req.user?.role === 'SUPER_ADMIN') {
@@ -105,7 +155,10 @@ export function getEffectiveTenantId(req: AuthenticatedRequest): string {
     if (req.headers['x-tenant-id'] && typeof req.headers['x-tenant-id'] === 'string') {
       return req.headers['x-tenant-id'] as string;
     }
-    return req.user?.tenantId || 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    if (req.user?.tenantId) {
+      return req.user.tenantId;
+    }
+    throw new Error('Tenant não especificado para a operação administrativa.');
   }
   // Regular tenant users: strictly locked to their authenticated tenantId!
   if (req.user?.tenantId) {
@@ -322,13 +375,39 @@ apiRouter.get('/resolve-tenant', async (req: Request, res: Response) => {
 
 apiRouter.post('/auth/login', async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
+    // 1. Always revoke and clear any previous session token/cookie before attempting a new login
+    const prevAuthHeader = req.headers.authorization;
+    if (prevAuthHeader && prevAuthHeader.startsWith('Bearer ')) {
+      const prevHeaderToken = prevAuthHeader.substring(7).trim();
+      const prevDecoded = revokeSessionToken(prevHeaderToken);
+      if (prevDecoded?.userId) repo.invalidateUserCache(prevDecoded.userId);
+    }
+    if (req.cookies && req.cookies.saas_auth_token) {
+      const prevDecoded = revokeSessionToken(req.cookies.saas_auth_token);
+      if (prevDecoded?.userId) repo.invalidateUserCache(prevDecoded.userId);
+    }
+    res.clearCookie('saas_auth_token', getAuthCookieOptions(req, 0));
+    res.clearCookie('saas_auth_token', { path: '/' });
+
+    const { email, password } = req.body || {};
+    if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
       return res.status(400).json({ success: false, error: 'E-mail e senha são obrigatórios.' });
     }
 
     const user = await repo.authenticateUser(email, password);
     if (!user) {
+      await repo.logAudit({
+        actorUserId: null,
+        actorUserName: email.toLowerCase().trim(),
+        tenantId: null,
+        action: 'AUTH_LOGIN_FAILED',
+        entity: 'auth',
+        entityId: null,
+        metadata: {
+          attemptedEmail: email.toLowerCase().trim(),
+          reason: 'INVALID_CREDENTIALS_OR_UNLINKED_USER',
+        },
+      });
       return res.status(401).json({ success: false, error: 'Credenciais inválidas. Verifique seu e-mail e senha.' });
     }
 
@@ -369,6 +448,16 @@ apiRouter.post('/auth/login', async (req: Request, res: Response) => {
     if (user.role === 'DELIVERY_DRIVER' && user.tenantId) {
       linkedDriver = await deliveryHubRepo.getDriverByUserId(user.tenantId, user.id, user.email);
     }
+
+    await repo.logAudit({
+      actorUserId: user.id,
+      actorUserName: user.name,
+      tenantId: user.tenantId,
+      action: 'AUTH_LOGIN_SUCCESS',
+      entity: 'auth',
+      entityId: user.id,
+      metadata: { role: user.role },
+    });
 
     // Set secure cookie compatible with both standalone domains and embedded iframes
     res.cookie('saas_auth_token', token, getAuthCookieOptions(req, 8 * 60 * 60 * 1000));
@@ -423,58 +512,48 @@ apiRouter.get('/auth/me', authenticate, async (req: AuthenticatedRequest, res: R
   });
 });
 
-apiRouter.post('/auth/logout', (req: Request, res: Response) => {
+apiRouter.post('/auth/logout', async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const headerToken = authHeader.substring(7).trim();
+    const decoded = revokeSessionToken(headerToken);
+    if (decoded?.userId) {
+      repo.invalidateUserCache(decoded.userId);
+    }
+  }
+
+  if (req.cookies && req.cookies.saas_auth_token) {
+    const decoded = revokeSessionToken(req.cookies.saas_auth_token);
+    if (decoded?.userId) {
+      repo.invalidateUserCache(decoded.userId);
+    }
+  }
+
+  const authClient = getSupabaseAuthClient();
+  if (authClient) {
+    await authClient.auth.signOut().catch(() => {});
+  }
+
   res.clearCookie('saas_auth_token', getAuthCookieOptions(req, 0));
   res.clearCookie('saas_auth_token', { path: '/' });
   return res.json({ success: true, message: 'Sessão encerrada com sucesso.' });
 });
 
-apiRouter.post('/auth/self-assign-tenant', authenticate, requireNonProfessional, async (req: AuthenticatedRequest, res: Response) => {
+apiRouter.post('/auth/self-assign-tenant', authenticate, requireSuperAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const user = req.user!;
-    if (user.tenantId && user.role !== 'SUPER_ADMIN') {
+    if (!isAllowlistedSuperAdminEmail(user.email)) {
       return res.status(403).json({
         success: false,
-        error: 'Usuário já possui um estabelecimento vinculado.',
+        error: 'Acesso negado: vínculo automático de estabelecimento desativado por segurança.',
       });
     }
-    const emailLower = user.email.toLowerCase().trim();
-    const isSuperAdminEmail =
-      emailLower === 'admin@localhub.com' ||
-      emailLower === 'ls2039730@gmail.com' ||
-      emailLower.includes('superadmin') ||
-      emailLower.includes('admin');
-
-    const targetRole = isSuperAdminEmail ? 'SUPER_ADMIN' : 'CLIENT_ADMIN';
-    let targetTenantId: string | null = null;
-
-    if (!isSuperAdminEmail) {
-      const { data: activeTenants } = await supabaseAdmin
-        .from('tenants')
-        .select('id')
-        .is('deleted_at', null)
-        .limit(1);
-
-      if (activeTenants && activeTenants.length > 0) {
-        targetTenantId = activeTenants[0].id;
-      }
-    }
-
-    await repo.linkUserTenant(user.id, targetTenantId, targetRole);
-    const updatedUser = await repo.findUserById(user.id);
-    let updatedTenant = null;
-    if (updatedUser?.tenantId) {
-      updatedTenant = await repo.getTenantById(updatedUser.tenantId, updatedUser);
-    }
-
-    return res.json({
-      success: true,
-      user: updatedUser,
-      tenant: updatedTenant,
-      message: 'Estabelecimento vinculado com sucesso.',
+    return res.status(403).json({
+      success: false,
+      error: 'Acesso negado: o vínculo de usuários a empresas deve ser feito exclusivamente pelo painel de gestão de usuários.',
     });
   } catch (err: any) {
-    return res.status(500).json({ success: false, error: err.message || 'Erro ao vincular estabelecimento.' });
+    return res.status(403).json({ success: false, error: err.message || 'Operação não permitida.' });
   }
 });
 
@@ -950,6 +1029,9 @@ apiRouter.post('/upload', authenticate, requireNonProfessional, async (req: Auth
     const fileUrl = await storageService.uploadFile(buffer, fileName, mimeType || 'image/png', effectiveTenantId);
     return res.json({ success: true, url: fileUrl });
   } catch (err: any) {
+    if (String(err?.message || '').includes('Acesso negado')) {
+      return res.status(403).json({ success: false, error: err.message });
+    }
     console.error('[STORAGE] Upload error:', err);
     return res.status(500).json({ success: false, error: 'Falha ao processar upload de arquivo.' });
   }
@@ -1038,6 +1120,9 @@ apiRouter.get('/site/preview/:slug', authenticate, requireFeature('site_editor')
     const result = await siteRepo.getPublicSiteBySlug(slug, { isDraftPreview: true, requester: req.user! });
     return res.json(result);
   } catch (err: any) {
+    if (String(err?.message || '').includes('Acesso negado')) {
+      return res.status(403).json({ success: false, error: err.message });
+    }
     return res.status(400).json({ success: false, error: err.message || 'Erro ao carregar visualização de rascunho.' });
   }
 });

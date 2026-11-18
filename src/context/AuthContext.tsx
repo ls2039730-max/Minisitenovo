@@ -108,36 +108,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initSession();
   }, []);
 
-  const login = async (email: string, pass: string) => {
-    manualAuthActionRef.current = true;
-    const data = await api.login(email, pass);
-    setUser(data.user);
-    setTenant(data.tenant || null);
-    setLinkedProfessional(data.linkedProfessional || null);
-    setLinkedDriver(data.linkedDriver || null);
+  const clearLocalAuthState = React.useCallback(() => {
+    setUser(null);
+    setTenant(null);
+    setLinkedProfessional(null);
+    setLinkedDriver(null);
     setIsImpersonating(false);
     setOriginalAdminUserName(undefined);
-    if (data.resolvedFeatures) {
-      setResolvedFeatures(data.resolvedFeatures);
-    } else {
-      await refreshSession();
+    setResolvedFeatures({} as any);
+  }, []);
+
+  const login = async (email: string, pass: string) => {
+    manualAuthActionRef.current = true;
+    // 1. Immediately wipe any previous session state in memory and storage before attempting authentication
+    api.clearToken();
+    clearLocalAuthState();
+
+    try {
+      const data = await api.login(email, pass);
+      setUser(data.user);
+      setTenant(data.tenant || null);
+      setLinkedProfessional(data.linkedProfessional || null);
+      setLinkedDriver(data.linkedDriver || null);
+      setIsImpersonating(false);
+      setOriginalAdminUserName(undefined);
+      if (data.resolvedFeatures) {
+        setResolvedFeatures(data.resolvedFeatures);
+      } else {
+        await refreshSession();
+      }
+      setLoading(false);
+      return data;
+    } catch (err) {
+      // Ensure zero residual session or tenant state on login failure
+      api.clearToken();
+      clearLocalAuthState();
+      setLoading(false);
+      throw err;
     }
-    setLoading(false);
-    return data;
   };
 
   const logout = async () => {
     manualAuthActionRef.current = true;
     setLoading(true);
+    clearLocalAuthState();
     try {
       await api.logout();
-      setUser(null);
-      setTenant(null);
-      setLinkedProfessional(null);
-      setLinkedDriver(null);
-      setIsImpersonating(false);
-      setOriginalAdminUserName(undefined);
     } finally {
+      clearLocalAuthState();
+      if (typeof window !== 'undefined') {
+        try {
+          window.history.replaceState({ loggedOut: true }, '', '/');
+        } catch {}
+      }
       setLoading(false);
     }
   };
@@ -178,7 +201,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const runRefresh = (async () => {
       try {
         const token = api.getToken();
-        if (!token) return;
+        if (!token) {
+          clearLocalAuthState();
+          return;
+        }
         lastRefreshRef.current = Date.now();
         const session = await api.getCurrentSession();
         if (session?.user) {
@@ -191,6 +217,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (session.resolvedFeatures) {
             setResolvedFeatures(session.resolvedFeatures);
           }
+        } else {
+          api.clearToken();
+          clearLocalAuthState();
         }
       } catch (e: any) {
         // Ignore transient network/timeout errors during background polling
@@ -204,7 +233,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ) {
           return;
         }
-        console.warn('Session refresh notice:', msg || e);
+        // Authentication / session invalidation error: immediately clear session state
+        api.clearToken();
+        clearLocalAuthState();
       } finally {
         inFlightRefreshRef.current = null;
       }
@@ -212,7 +243,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     inFlightRefreshRef.current = runRefresh;
     return runRefresh;
-  }, []);
+  }, [clearLocalAuthState]);
 
   // Automatically sync tenant features and session when window regains focus or tab becomes visible
   useEffect(() => {
